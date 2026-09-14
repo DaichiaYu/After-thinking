@@ -1,4 +1,5 @@
 workflow_version: "0.1"
+analysis_status: active
 
 workspace:
   analysis_repository: "owner/repository"
@@ -22,6 +23,8 @@ stages:
     output_path: "analysis/01-scope-origin.md"
     source_revision: null
     applied_corrections: []
+    exit_criteria_met: false
+    nonblocking_uncertainties: []
   stage_2:
     execution_status: pending
     review_policy: mandatory
@@ -29,6 +32,8 @@ stages:
     output_path: "analysis/02-topic-map.md"
     source_revision: null
     applied_corrections: []
+    exit_criteria_met: false
+    nonblocking_uncertainties: []
   stage_3:
     execution_status: pending
     review_policy: risk_based
@@ -36,6 +41,8 @@ stages:
     output_path: "analysis/03-claims.yaml"
     source_revision: null
     applied_corrections: []
+    exit_criteria_met: false
+    nonblocking_uncertainties: []
   stage_4:
     execution_status: pending
     review_policy: risk_based
@@ -43,6 +50,8 @@ stages:
     output_path: "analysis/04-cognitive-structure.md"
     source_revision: null
     applied_corrections: []
+    exit_criteria_met: false
+    nonblocking_uncertainties: []
   stage_5:
     execution_status: pending
     review_policy: risk_based
@@ -50,6 +59,8 @@ stages:
     output_path: "analysis/05-gaps.yaml"
     source_revision: null
     applied_corrections: []
+    exit_criteria_met: false
+    nonblocking_uncertainties: []
   stage_6:
     execution_status: pending
     review_policy: none
@@ -57,7 +68,12 @@ stages:
     output_path: "analysis/06-next-directions.md"
     source_revision: null
     applied_corrections: []
+    exit_criteria_met: false
+    nonblocking_uncertainties: []
 
 correction_state:
   registry_path: "corrections.yaml"
   unresolved_conflicts: []
+
+# Set analysis_status to `complete` after Stage 6 is usable.
+# Completion does not require publication, publishable material, gaps, or next directions.

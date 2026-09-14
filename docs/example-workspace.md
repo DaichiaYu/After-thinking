@@ -1,7 +1,5 @@
 # Example workspace
 
-A user selects `example-user/thinking-workspace` and discussion ID `ai-writing-drift`.
+Initialize a discussion with the four starter files in `templates/`: conversation JSONL, source metadata, state, and corrections.
 
-The resolved path is `discussions/ai-writing-drift/`.
-
-Copy the structures from `templates/state.yaml`, `templates/corrections.yaml`, and `templates/source-metadata.yaml` into that discussion folder, then write Stage outputs to the canonical paths defined in `workspace-write-contract.md`.
+Store the conversation template as `source/conversation.jsonl`. Follow `source-format.md` for source records and `workspace-write-contract.md` for Stage output paths.

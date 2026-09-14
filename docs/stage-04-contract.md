@@ -2,8 +2,11 @@
 
 ## Input
 - Source
-- Confirmed Stage 2
-- Confirmed Stage 3
+- Usable Stage 2
+- Usable Stage 3
+- Applicable active corrections
+
+Stage 4 must not require Stage 3 to be `confirmed` when Stage 3 review was legitimately `not_required`.
 
 ## Output
 寫入 `analysis/04-cognitive-structure.md`：
@@ -12,12 +15,15 @@
 - 可觀察到的 reasoning patterns
 - Evidence references
 - 高推論內容的 confidence
+- Run metadata：source revision、workflow version、applied corrections
 
-## Save
-完成後預設設為 `completed`。
+## Save / Review
+預設：
+- execution: `completed`
+- review policy: `none`
+- review: `not_required`
 
-## Checkpoint
-通常不要求人工確認；若某個模式缺乏足夠已確認節點支撐、描述開始接近人格推斷，或與 Stage 3 的 claim 狀態不一致，改設 `needs_review`。
+若高推論內容需要人工確認，可將 review 升級為 `pending`；只有使用者確認後才可標記 `confirmed`。
 
 ## Rollback
-若只是本階段過度推論，修正 Stage 4 並將 Stage 5–6 標為 `stale`。若問題來自 Topic 或 Claim，回到 Stage 2 或 3。
+若只是本階段過度推論，修正 Stage 4 並將 Stage 5–6 標為 stale。若問題來自 Topic 或 Claim，回到 Stage 2 或 3。

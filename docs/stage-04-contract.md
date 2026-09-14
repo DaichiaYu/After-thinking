@@ -6,24 +6,16 @@
 - Usable Stage 3
 - Applicable active corrections
 
-Stage 4 must not require Stage 3 to be `confirmed` when Stage 3 review was legitimately `not_required`.
+Stage 4 does not require Stage 3 to be `confirmed` when Stage 3 review was legitimately `not_required`.
 
 ## Output
-寫入 `analysis/04-cognitive-structure.md`：
-- Core concepts
-- 反覆出現的概念區分
-- 可觀察到的 reasoning patterns
-- Evidence references
-- 高推論內容的 confidence
-- Run metadata：source revision、workflow version、applied corrections
+Write `analysis/04-cognitive-structure.md` with core concepts, recurring distinctions, observable reasoning patterns, evidence references, confidence for high-inference content, and run metadata.
 
-## Save / Review
-預設：
+## Review
 - execution: `completed`
-- review policy: `none`
-- review: `not_required`
+- review policy: `risk_based`
 
-若高推論內容需要人工確認，可將 review 升級為 `pending`；只有使用者確認後才可標記 `confirmed`。
+If no high-inference item needs user judgment, set review to `not_required`. If review is needed, keep it `pending`; explicit user review may then set it to `confirmed`.
 
 ## Rollback
-若只是本階段過度推論，修正 Stage 4 並將 Stage 5–6 標為 stale。若問題來自 Topic 或 Claim，回到 Stage 2 或 3。
+If the problem is Stage 4 over-inference, correct Stage 4 and mark Stages 5–6 stale. If the problem comes from Topic or Claim structure, return to Stage 2 or 3.

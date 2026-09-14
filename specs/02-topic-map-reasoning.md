@@ -32,7 +32,7 @@
 只記真正造成認知變化的節點。每個轉折至少包含：
 - `Before`：作者原本怎麼想。
 - `Trigger`：什麼內容造成轉折。
-- `Source of trigger`：作者自己、GPT、外部資料或其他來源。
+- `Source of trigger`：作者自己、AI assistant、外部資料或其他來源。
 - `Response`：作者如何回應。
 - `After`：轉折後怎麼想。
 - `Why`：為什麼改變。
@@ -52,4 +52,4 @@
 2. 哪些節點是真轉折，哪些只是措辭變化。
 3. 是否有漏掉作者認為重要的支線。
 
-確認後才進入第 3 階段。
+Stage 2 的 review policy 為 `mandatory`。只有使用者明確確認後才標為 `confirmed` 並進入第 3 階段。

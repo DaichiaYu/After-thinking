@@ -1,0 +1,74 @@
+# After-thinking discussion state template
+workflow_version: "0.1"
+
+workspace:
+  analysis_repository: "owner/repository"
+  analysis_root: "discussions/"
+  discussion_id: "example-discussion"
+  discussion_path: "discussions/example-discussion/"
+
+source:
+  revision: 1
+  conversation_path: "source/conversation.md"
+  metadata_path: "source/metadata.yaml"
+
+current_stage: 1
+next_action: "run_stage_1"
+
+stages:
+  stage_1:
+    execution_status: pending
+    review_policy: mandatory
+    review_status: pending
+    output_path: "analysis/01-scope-origin.md"
+    source_revision: null
+    applied_corrections: []
+
+  stage_2:
+    execution_status: pending
+    review_policy: mandatory
+    review_status: pending
+    output_path: "analysis/02-topic-map.md"
+    source_revision: null
+    applied_corrections: []
+
+  stage_3:
+    execution_status: pending
+    review_policy: risk_based
+    review_status: pending
+    output_path: "analysis/03-claims.yaml"
+    source_revision: null
+    applied_corrections: []
+
+  stage_4:
+    execution_status: pending
+    review_policy: none
+    review_status: not_required
+    output_path: "analysis/04-cognitive-structure.md"
+    source_revision: null
+    applied_corrections: []
+
+  stage_5:
+    execution_status: pending
+    review_policy: none
+    review_status: not_required
+    output_path: "analysis/05-gaps.yaml"
+    source_revision: null
+    applied_corrections: []
+
+  stage_6:
+    execution_status: pending
+    review_policy: none
+    review_status: not_required
+    output_path: "analysis/06-next-directions.md"
+    source_revision: null
+    applied_corrections: []
+
+correction_state:
+  registry_path: "corrections.yaml"
+  unresolved_conflicts: []
+
+# A downstream Stage may use an upstream Stage only when:
+# - execution_status == completed
+# - review_status is confirmed or not_required
+# - there is no unresolved correction conflict

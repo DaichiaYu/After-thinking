@@ -1,10 +1,6 @@
 source_revision: 1
 source_type: conversation
 source_files:
-  - path: source/conversation.md
+  - path: source/conversation.jsonl
     role: primary
-id_prefixes:
-  author: U
-  assistant: A
-  external: E
 notes: null

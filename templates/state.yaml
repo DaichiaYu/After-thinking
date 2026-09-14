@@ -1,4 +1,3 @@
-# After-thinking discussion state template
 workflow_version: "0.1"
 
 workspace:
@@ -9,7 +8,7 @@ workspace:
 
 source:
   revision: 1
-  conversation_path: "source/conversation.md"
+  conversation_path: "source/conversation.jsonl"
   metadata_path: "source/metadata.yaml"
 
 current_stage: 1
@@ -23,7 +22,6 @@ stages:
     output_path: "analysis/01-scope-origin.md"
     source_revision: null
     applied_corrections: []
-
   stage_2:
     execution_status: pending
     review_policy: mandatory
@@ -31,7 +29,6 @@ stages:
     output_path: "analysis/02-topic-map.md"
     source_revision: null
     applied_corrections: []
-
   stage_3:
     execution_status: pending
     review_policy: risk_based
@@ -39,7 +36,6 @@ stages:
     output_path: "analysis/03-claims.yaml"
     source_revision: null
     applied_corrections: []
-
   stage_4:
     execution_status: pending
     review_policy: risk_based
@@ -47,7 +43,6 @@ stages:
     output_path: "analysis/04-cognitive-structure.md"
     source_revision: null
     applied_corrections: []
-
   stage_5:
     execution_status: pending
     review_policy: risk_based
@@ -55,7 +50,6 @@ stages:
     output_path: "analysis/05-gaps.yaml"
     source_revision: null
     applied_corrections: []
-
   stage_6:
     execution_status: pending
     review_policy: none
@@ -67,8 +61,3 @@ stages:
 correction_state:
   registry_path: "corrections.yaml"
   unresolved_conflicts: []
-
-# A downstream Stage may use an upstream Stage only when:
-# - execution_status == completed
-# - review_status is confirmed or not_required
-# - there is no unresolved correction conflict

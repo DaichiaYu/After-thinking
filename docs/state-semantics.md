@@ -1,6 +1,6 @@
 # State semantics
 
-This document separates workflow execution progress from human review results.
+Workflow progress and human review are separate dimensions.
 
 | Dimension | Values |
 |---|---|
@@ -8,8 +8,19 @@ This document separates workflow execution progress from human review results.
 | review_policy | mandatory, risk_based, none |
 | review_status | pending, confirmed, not_required |
 
-The term `confirmed` means that a user explicitly reviewed the result. A stage that does not require review uses `not_required` instead.
+`confirmed` means explicit user review.
 
-A stage is considered usable by a later stage when its execution is completed, its review result is either confirmed or not_required, and there is no unresolved correction conflict.
+A Stage is usable when execution is completed, review is confirmed or not_required, and no correction conflict remains unresolved.
 
-Stage 1 and Stage 2 use mandatory review. Stage 3 uses risk-based review. If Stage 3 contains no high-risk items, it may finish as completed plus not_required. If high-risk items exist, the review remains pending until the user resolves them.
+Default review policies:
+
+- Stage 1: mandatory
+- Stage 2: mandatory
+- Stage 3: risk_based
+- Stage 4: risk_based
+- Stage 5: risk_based
+- Stage 6: none
+
+For a risk-based Stage, start with review pending. After execution, use not_required when no item needs user judgment; otherwise keep pending until the user reviews it. Only explicit user review produces confirmed.
+
+A Stage with review policy none uses not_required.

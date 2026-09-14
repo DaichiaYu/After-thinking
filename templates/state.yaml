@@ -42,16 +42,16 @@ stages:
 
   stage_4:
     execution_status: pending
-    review_policy: none
-    review_status: not_required
+    review_policy: risk_based
+    review_status: pending
     output_path: "analysis/04-cognitive-structure.md"
     source_revision: null
     applied_corrections: []
 
   stage_5:
     execution_status: pending
-    review_policy: none
-    review_status: not_required
+    review_policy: risk_based
+    review_status: pending
     output_path: "analysis/05-gaps.yaml"
     source_revision: null
     applied_corrections: []

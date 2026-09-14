@@ -1,6 +1,12 @@
 source_revision: 1
 source_type: conversation
+source_format: jsonl
 source_files:
   - path: source/conversation.jsonl
     role: primary
+message_id_scheme: "msg-000001"
+allowed_speakers:
+  - author
+  - assistant
+  - external
 notes: null

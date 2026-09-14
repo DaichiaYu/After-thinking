@@ -1,11 +1,11 @@
-# Discussion Workspace 儲存模型
+# Discussion Workspace Storage
 
-每次實際分析應寫入使用者指定的分析工作區倉庫。
+Actual analysis is stored in the analysis repository selected by the user.
 
 ```text
 discussions/<discussion-id>/
 ├─ source/
-│  ├─ conversation.md
+│  ├─ conversation.jsonl
 │  └─ metadata.yaml
 ├─ state.yaml
 ├─ corrections.yaml
@@ -19,34 +19,16 @@ discussions/<discussion-id>/
 └─ revisions/
 ```
 
-## Source
-原始證據使用穩定 ID：`U001`、`A001`、`E001` 等。分析開始後不應被 AI 靜默改寫。
+`source/conversation.jsonl` is the canonical raw source. See `source-format.md`. Each item has a stable role-independent message ID such as `msg-000001`; speaker is stored separately.
 
-## State
-`state.yaml` 保存流程狀態、source revision、stale 狀態與下一步，不保存大量分析正文。
+`state.yaml` stores workflow and review state, source revision, stale state, correction application, and next action.
 
-## Corrections
-`corrections.yaml` 保存會約束未來 rerun 的 active user corrections。只要 correction 尚未被 supersede 或 retire，相關 Stage 執行前就必須載入。
+`corrections.yaml` stores active corrections that constrain future reruns. Correction IDs use `CR001`, `CR002`, and bind to addressable targets. Stage 1 uses fixed anchors such as `S1.author_initial_position`; later objects use stable `T`, `R`, `C`, `G`, and `D` IDs.
 
-Correction 使用穩定 ID `CR001`、`CR002` …，並綁定可尋址 target。
+`revisions/` is readable history. Runtime correction behavior comes from `corrections.yaml`.
 
-Stage 1 固定 anchors：
-- `S1.scope`
-- `S1.trigger`
-- `S1.initial_question`
-- `S1.underlying_question`
-- `S1.author_initial_position`
-- `S1.initial_uncertainty`
+Stages 1, 2, 4, and 6 use Markdown. Stages 3 and 5 use YAML. Output metadata follows `output-format.md`.
 
-其他物件沿用 `T`、`R`、`C`、`G`、`D` stable IDs，也可綁定特定 field，例如 `C001.provenance.type`。
+Source changes increment `source_revision`. Existing message IDs are never renumbered. Active corrections remain effective until superseded or retired.
 
-Correction lifecycle 與 rerun 行為見 [`user-fixes.md`](user-fixes.md)。
-
-## Analysis
-Stage 1、2、4、6 以 Markdown 為主；Stage 3 claims 與 Stage 5 gaps 使用 YAML。
-
-## Revisions
-`revisions/` 只保存人可讀的修正歷史。真正會影響 runtime 的目前有效修正以 `corrections.yaml` 為準。
-
-## Source revision
-原始材料擴充或修改時增加 `source_revision`。Active corrections 預設跨 source revisions 持續有效，除非使用者明確取代或撤銷。
+Destination and write-order rules are defined in `workspace-write-contract.md`.

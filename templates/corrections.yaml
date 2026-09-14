@@ -1,50 +1,12 @@
-# After-thinking correction registry template
 workflow_version: "0.1"
-
 corrections: []
 
-# Example active correction:
-# corrections:
-#   - id: CR001
-#     status: active
-#     target:
-#       type: stage_anchor
-#       id: S1.author_initial_position
-#       field: null
-#     constraint: >
-#       The author already suspected X at the beginning of the discussion;
-#       X must not be attributed to a later AI message as its origin.
-#     source_refs:
-#       - U001
-#       - U004
-#     created_from:
-#       stage: 1
-#       source_revision: 1
-#     persistence: until_superseded
-#     supersedes: null
-#     superseded_by: null
-#
-# Example replacement:
-#   - id: CR002
-#     status: active
-#     target:
-#       type: stage_anchor
-#       id: S1.author_initial_position
-#       field: null
-#     constraint: >
-#       The author initially considered X plausible but had not adopted it
-#       as a stable belief.
-#     source_refs:
-#       - U001
-#       - U004
-#       - U010
-#     created_from:
-#       stage: 1
-#       source_revision: 2
-#     persistence: until_superseded
-#     supersedes: CR001
-#     superseded_by: null
-#
-# When CR002 replaces CR001, CR001 must remain in the registry with:
-# status: superseded
-# superseded_by: CR002
+# Example correction fields:
+# id: CR001
+# status: active
+# target: S1.author_initial_position
+# constraint: "Corrected interpretation supplied by the user."
+# source_refs: [msg-000001, msg-000004]
+# persistence: until_superseded
+# supersedes: null
+# superseded_by: null

@@ -23,8 +23,7 @@ stages:
     output_path: "analysis/01-scope-origin.md"
     source_revision: null
     applied_corrections: []
-    exit_criteria_met: false
-    nonblocking_uncertainties: []
+    completion: {exit_criteria_met: false, blocking_items: [], nonblocking_uncertainties: [], stop_reason: null}
   stage_2:
     execution_status: pending
     review_policy: mandatory
@@ -32,8 +31,7 @@ stages:
     output_path: "analysis/02-topic-map.md"
     source_revision: null
     applied_corrections: []
-    exit_criteria_met: false
-    nonblocking_uncertainties: []
+    completion: {exit_criteria_met: false, blocking_items: [], nonblocking_uncertainties: [], stop_reason: null}
   stage_3:
     execution_status: pending
     review_policy: risk_based
@@ -41,8 +39,7 @@ stages:
     output_path: "analysis/03-claims.yaml"
     source_revision: null
     applied_corrections: []
-    exit_criteria_met: false
-    nonblocking_uncertainties: []
+    completion: {exit_criteria_met: false, blocking_items: [], nonblocking_uncertainties: [], stop_reason: null}
   stage_4:
     execution_status: pending
     review_policy: risk_based
@@ -50,8 +47,7 @@ stages:
     output_path: "analysis/04-cognitive-structure.md"
     source_revision: null
     applied_corrections: []
-    exit_criteria_met: false
-    nonblocking_uncertainties: []
+    completion: {exit_criteria_met: false, blocking_items: [], nonblocking_uncertainties: [], stop_reason: null}
   stage_5:
     execution_status: pending
     review_policy: risk_based
@@ -59,8 +55,7 @@ stages:
     output_path: "analysis/05-gaps.yaml"
     source_revision: null
     applied_corrections: []
-    exit_criteria_met: false
-    nonblocking_uncertainties: []
+    completion: {exit_criteria_met: false, blocking_items: [], nonblocking_uncertainties: [], stop_reason: null}
   stage_6:
     execution_status: pending
     review_policy: none
@@ -68,8 +63,7 @@ stages:
     output_path: "analysis/06-next-directions.md"
     source_revision: null
     applied_corrections: []
-    exit_criteria_met: false
-    nonblocking_uncertainties: []
+    completion: {exit_criteria_met: false, blocking_items: [], nonblocking_uncertainties: [], stop_reason: null}
 
 correction_state:
   registry_path: "corrections.yaml"

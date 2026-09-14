@@ -1,11 +1,9 @@
 # Stage Input Contracts
 
-Each Stage reads only the minimum required source and usable upstream outputs. Applicable active entries from `corrections.yaml` are mandatory control inputs for every Stage and are not treated as prior analysis.
-
-Before execution, each Stage must run correction preflight and record the applied correction IDs in its output metadata.
+Applicable active corrections are mandatory control inputs for every Stage.
 
 ## Stage 1
-- `source/conversation.md`
+- `source/conversation.jsonl`
 - `source/metadata.yaml` when present
 - applicable active corrections
 
@@ -40,5 +38,3 @@ Stage 1 does not depend on previous analysis files.
 - usable Stage 5
 - source lookup when necessary
 - applicable active corrections
-
-If a Stage needs data outside this contract, record why. Do not load the entire workspace by default.

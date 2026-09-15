@@ -1,2 +1,2 @@
-{"message_id":"msg-000001","speaker":"author","content":"Example author message.","timestamp":null}
-{"message_id":"msg-000002","speaker":"assistant","content":"Example assistant response.","timestamp":null}
+{"message_id":"msg-000001","order":10,"speaker":"author","content":"Example author message.","timestamp":null}
+{"message_id":"msg-000002","order":20,"speaker":"assistant","content":"Example assistant response.","timestamp":null}

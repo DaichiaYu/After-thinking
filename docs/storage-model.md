@@ -1,29 +1,12 @@
-# Discussion Workspace Storage
+# Storage Model
 
-Actual analysis is stored in the analysis repository selected by the user.
+Canonical workspace paths and write order are defined in `workspace-write-contract.md`; raw source structure is defined in `source-format.md`. This file only names the storage roles.
 
-```text
-discussions/<discussion-id>/
-├─ source/
-│  ├─ conversation.jsonl
-│  └─ metadata.yaml
-├─ state.yaml
-├─ corrections.yaml
-└─ analysis/
-   ├─ 01-scope-origin.md
-   ├─ 02-topic-map.md
-   ├─ 03-claims.yaml
-   ├─ 04-cognitive-structure.md
-   ├─ 05-gaps.yaml
-   └─ 06-next-directions.md
-```
+- `source/` — authoritative raw material and source-level metadata.
+- `state.yaml` — resumable workflow state, review state, ID counters, retired-object registry, conflicts, and next action.
+- `corrections.yaml` — persistent user corrections that constrain future reruns.
+- `analysis/` — current Stage outputs. Git history provides prior file versions.
 
-Git history provides file revision history; no parallel `revisions/` directory is required by default.
+Stable analysis object families are `T` (Topic), `R` (reasoning turn), `C` (Claim), `CS` (cognitive-structure observation), `G` (Gap), and `D` (Direction). Stage 1 uses fixed `S1.*` anchors; corrections use `CR` IDs. Identity lifecycle is defined in `id-lifecycle.md`.
 
-`source/conversation.jsonl` is canonical raw source. Message identity and order are separate; see `source-format.md`.
-
-Stable analysis object prefixes are `T` (Topic), `R` (reasoning turn), `C` (Claim), `CS` (cognitive-structure observation), `G` (Gap), and `D` (Direction). Stage 1 uses fixed `S1.*` anchors. Correction IDs use `CR`. Full identity lifecycle rules are in `id-lifecycle.md`.
-
-`state.yaml` stores workflow/review state, a mirror of source revision, monotonic ID counters, correction conflicts, and structured next action. `corrections.yaml` stores persistent user corrections.
-
-Stages 1, 2, 4, and 6 use Markdown with YAML front matter. Stages 3 and 5 use YAML. Output metadata follows `output-format.md`; Stage-specific object shape comes from `specs/`.
+Stages 1, 2, 4, and 6 use Markdown with YAML front matter. Stages 3 and 5 use YAML. Common run metadata comes from `output-format.md`; Stage-specific object shape comes only from `../specs/`.

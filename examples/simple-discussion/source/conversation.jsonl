@@ -1,0 +1,6 @@
+{"message_id":"msg-000001","order":10,"speaker":"author","content":"Normal summaries are fine when I only need the answer, but in long AI discussions I often want to preserve how the idea changed.","timestamp":"2026-01-01T10:00:00Z"}
+{"message_id":"msg-000002","order":20,"speaker":"author","content":"Could a workflow separate my original position from ideas the AI introduced later?","timestamp":"2026-01-01T10:01:00Z"}
+{"message_id":"msg-000003","order":30,"speaker":"assistant","content":"One approach is to give each material claim a provenance label and separately record whether the author adopted it.","timestamp":"2026-01-01T10:02:00Z"}
+{"message_id":"msg-000004","order":40,"speaker":"author","content":"Yes, separating provenance from uptake is useful. If I never respond to an AI idea, that should not become my position.","timestamp":"2026-01-01T10:03:00Z"}
+{"message_id":"msg-000005","order":50,"speaker":"assistant","content":"The structured record could later be turned into a post or article.","timestamp":"2026-01-01T10:04:00Z"}
+{"message_id":"msg-000006","order":60,"speaker":"author","content":"Maybe, but publication is secondary. First I want the discussion reconstructed faithfully; it should also be allowed to end with nothing worth publishing.","timestamp":"2026-01-01T10:05:00Z"}

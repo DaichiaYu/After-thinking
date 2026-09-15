@@ -1,15 +1,21 @@
 # After-thinking executor guide
 
-For an analysis run, first read `docs/workspace-write-contract.md`, `docs/source-format.md`, and `docs/runtime.md`. The runtime points to the normative state, uncertainty, exit-criteria, analysis-boundary, correction, and input rules.
+This file is the executor entry point. Do not treat README prose as runtime rules.
 
-User analysis belongs in the `analysis_repository` selected by the user. The After-thinking repository contains the method and templates; it is not the default destination for discussion data.
+## Read order
 
-Initialize the selected workspace from the files under `templates/`. Before each Stage, read state and applicable active corrections, then only the inputs allowed by that Stage contract.
+1. Read `docs/runtime.md`.
+2. Read `state.yaml` in the selected discussion workspace.
+3. Resolve `next_action` and the current Stage.
+4. Read that Stage's canonical spec under `specs/`.
+5. Read only the cross-Stage documents referenced by the runtime/spec and the inputs allowed by `docs/input-contracts.md`.
 
-Do not force classification when evidence is insufficient. Unclear, mixed, co-developed, low-confidence, empty, or unresolved results may be valid completed outputs. Do not keep analyzing after the Stage exit criteria are met merely to increase completeness.
+The six files under `specs/` are the normative Stage contracts. They define Stage-specific fields, enums, output shape, review policy, and exit criteria.
 
-Each output records `source_revision`, `workflow_version`, `applied_corrections`, and completion evidence. Update `state.yaml` only after the Stage output is successfully written.
+Cross-Stage rules live under `docs/`: source identity and mutation, state transitions, stable object IDs, corrections, uncertainty, analysis boundaries, input contracts, output metadata, and workspace writes.
 
-`confirmed` is reserved for explicit user confirmation. Low confidence alone does not require review.
+User analysis belongs in the `analysis_repository` selected by the user. This repository contains the method, templates, and de-identified examples; it is not the default destination for user discussion data.
 
-Stages 1–6 reconstruct the discussion and must not optimize it for later publication. Stage 6 may end with no next direction; a usable Stage 6 sets `analysis_status: complete` whether or not any later publication work exists.
+Initialize a workspace from `templates/`. Write a Stage output before updating `state.yaml`. Never reuse a retired object ID. Never preserve an old `confirmed` status across a substantive rerun.
+
+If the user changes an interpretation during review, persist that material change in `corrections.yaml` before rerunning or confirming the Stage.

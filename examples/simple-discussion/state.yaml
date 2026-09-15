@@ -22,6 +22,8 @@ id_counters:
   gap: 1
   direction: 1
   correction: 1
+identity_state:
+  retired_objects: []
 stages:
   stage_1:
     execution_status: completed

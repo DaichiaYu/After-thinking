@@ -18,8 +18,8 @@ claims:
       evidence_refs: [msg-000001]
     introduction: {source_ref: msg-000001}
     author_uptake:
-      status: Explicitly accepted
-      evidence_refs: [msg-000001]
+      status: Not applicable
+      evidence_refs: []
     epistemic_status: Stable claim
     confidence: high
     uncertainty: null

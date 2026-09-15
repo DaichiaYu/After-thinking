@@ -8,19 +8,7 @@ After-thinking organizes a discussion without flattening it into a conventional 
 
 ## What it does
 
-After-thinking can:
-
-- reconstruct the original question, starting position, and uncertainty;
-- separate a long conversation into Topics and recurring branches;
-- identify meaningful reasoning turns and why the thinking changed;
-- distinguish author-originated, AI-originated, external, and co-developed ideas;
-- track whether an AI suggestion was adopted, modified, challenged, rejected, unanswered, or unclear;
-- preserve uncertain and low-confidence findings instead of forcing classification;
-- identify recurring concepts and reasoning patterns only when supported by the source;
-- record unresolved questions, missing evidence, tensions, unsupported hypotheses, and interrupted branches;
-- derive traceable next-discussion directions only when continuation is useful;
-- preserve user corrections across reruns;
-- resume later from saved workflow state instead of reconstructing the entire chat again.
+After-thinking can reconstruct the original question and starting position; separate a long conversation into Topics and recurring branches; identify meaningful reasoning turns; distinguish author-, AI-, external-, and co-developed ideas; track author uptake; preserve uncertainty; identify supported recurring concepts; record unresolved questions and unfinished branches; derive traceable next-discussion directions when useful; preserve user corrections across reruns; and resume later from saved workflow state.
 
 A complete reasoning record is already a valid endpoint. It does not need to become a post, article, or other public artifact.
 
@@ -94,14 +82,13 @@ The structured record can later support research or design work, decision review
 ## Repository guide
 
 - [`AGENTS.md`](AGENTS.md) — executor entry point and read order.
-- [`specs/`](specs/) — canonical Stage contracts and object schemas.
+- [`specs/`](specs/) — canonical Stage contracts, inputs, and object schemas.
 - [`docs/runtime.md`](docs/runtime.md) — cross-Stage runtime entry point.
 - [`docs/state-semantics.md`](docs/state-semantics.md) — execution/review transitions and confirmation evidence.
 - [`docs/source-format.md`](docs/source-format.md) — source identity, order, mutation, revision authority.
 - [`docs/id-lifecycle.md`](docs/id-lifecycle.md) — stable analysis object identity across reruns.
 - [`docs/user-fixes.md`](docs/user-fixes.md) — persistent correction lifecycle.
 - [`docs/uncertainty-semantics.md`](docs/uncertainty-semantics.md) — uncertainty semantics.
-- [`docs/input-contracts.md`](docs/input-contracts.md) — minimum allowed Stage inputs.
 - [`docs/output-format.md`](docs/output-format.md) — common output metadata.
 - [`docs/analysis-boundary.md`](docs/analysis-boundary.md) — analysis/publication boundary.
 - [`docs/workspace-write-contract.md`](docs/workspace-write-contract.md) — destination and write order.

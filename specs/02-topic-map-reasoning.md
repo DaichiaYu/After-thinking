@@ -1,55 +1,60 @@
-# 2. 建立討論地圖與推理軌跡
+# Stage 2 — Topic Map & Reasoning Trajectory｜主題地圖與推理軌跡
 
-## 目的
-把長對話整理成可讀的主題結構與真正發生過的認知轉折，而不是逐句摘要。
+This file is the normative Stage 2 contract.
 
-## A. Topic Segmentation｜主題切分
+## Purpose
+把長對話整理成主題結構與真正發生過的認知轉折，而不是逐句摘要。
 
-每個主題至少記錄：
-- 核心問題。
-- 起始位置。
-- 結束或轉出位置。
-- Parent topic。
-- 與上一主題的關係。
-- 是否能獨立理解。
+## Inputs
+- `source/*`
+- usable Stage 1
+- active corrections targeting `T*` or `R*`
 
-### 主題類型
-- `Main topic`：主線問題。
-- `Subtopic`：仍依附主線理解的子題。
-- `Branch`：由主線推導出的分支。
-- `Standalone topic`：已足以拆成另一篇或另一輪討論。
-- `Workflow/meta topic`：發布方式、工具使用、流程設計等後設內容。
+## Output
+`analysis/02-topic-map.md` with common YAML front matter.
 
-### 判斷原則
-不能只看語義相似度，同時判斷：
-- `Semantic relation`：文字與概念是否相近。
-- `Argumentative relation`：B 是否仍在回答、修正、延伸或驗證 A。
+### Topic shape
 
-如果語義低但論證關聯高，可以保留在同一論證鏈；如果語義相近但已經不再回答同一問題，應考慮拆題。
+```markdown
+## T001 — <short name>
+- type: Main topic | Subtopic | Branch | Standalone topic | Workflow/meta topic
+- core_question: ...
+- parent: null | Txxx
+- relation_to_previous: ...
+- standalone: true | false
+- source_spans:
+  - start: msg-000001
+    end: msg-000004
+  - start: msg-000010
+    end: msg-000012
+- source_refs: []
+```
 
-## B. Reasoning Trajectory｜推理軌跡
+A Topic may recur after other Topics. Use multiple `source_spans` and/or discrete `source_refs`; never assume one continuous range.
 
-只記真正造成認知變化的節點。每個轉折至少包含：
-- `Before`：作者原本怎麼想。
-- `Trigger`：什麼內容造成轉折。
-- `Source of trigger`：作者自己、AI assistant、外部資料或其他來源。
-- `Response`：作者如何回應。
-- `After`：轉折後怎麼想。
-- `Why`：為什麼改變。
+### Reasoning-turn shape
 
-### 轉折類型
-- 修正原假設。
-- 增加變數。
-- 縮小適用範圍。
-- 擴大適用範圍。
-- 排除一條解釋。
-- 從 A 長出新問題 B。
-- 僅重新措辭，沒有實質認知改變。
+```markdown
+## R001 — <short description>
+- topic_ids: [T001]
+- before: ...
+- trigger: ...
+- trigger_source: author | assistant | external | mixed | unclear
+- response: ...
+- after: ...
+- why: ...
+- source_refs: [msg-000003, msg-000004]
+```
 
-## 使用者確認 ②
-完成後以「討論地圖」為主讓使用者確認：
-1. 哪些主題應合併或拆開。
-2. 哪些節點是真轉折，哪些只是措辭變化。
-3. 是否有漏掉作者認為重要的支線。
+Only create `R` objects for material cognitive change. Rewording alone is not necessarily a reasoning turn.
 
-Stage 2 的 review policy 為 `mandatory`。只有使用者明確確認後才標為 `confirmed` 並進入第 3 階段。
+## Segmentation rule
+Judge both semantic relation and argumentative relation. Low semantic similarity can remain in one reasoning chain when the argumentative dependency is strong; similar wording can still be a separate Topic when it answers a different question.
+
+## Execution exit criteria
+Execution is sufficient when material discussion content is assigned to a Topic, marked out of scope, or explicitly uncertain; major reasoning turns are represented; and Topic relationships are sufficient for downstream Claim analysis. Not every sentence needs a Topic.
+
+## Review and advance gate
+`review_policy: mandatory`. After execution completes, keep review pending until explicit user confirmation of the current Topic map/reasoning trajectory. Persist material review corrections before rerun. Only a usable Stage 2 may feed Stage 3.
+
+Stable ID behavior follows `docs/id-lifecycle.md`.

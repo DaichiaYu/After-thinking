@@ -1,8 +1,6 @@
-# Stage Output Format
+# Common Stage Output Format
 
-Every Stage output carries run metadata and completion evidence so a later executor can verify both how the result was produced and why the Stage stopped.
-
-## Required run metadata
+This document defines metadata shared by all Stage outputs. Stage-specific object shape, enums, and execution exit criteria are defined only in the corresponding file under `specs/`.
 
 Every output records:
 
@@ -15,21 +13,17 @@ completion:
   exit_criteria_met: true
   blocking_items: []
   nonblocking_uncertainties: []
-  stop_reason: "The Stage has enough supported structure to advance safely."
+  stop_reason: "Why execution is sufficient."
 ```
 
-`exit_criteria_met` must be true before execution can become `completed`. `nonblocking_uncertainties` may contain object IDs or short descriptions and do not prevent completion.
+`completion.exit_criteria_met` describes execution sufficiency, not human review. A Stage may be execution-complete while waiting for mandatory/risk-based review; downstream usability is determined by `docs/state-semantics.md`.
 
-## Markdown stages
+`applied_corrections` contains only active corrections directly targeting objects owned by this Stage. Do not copy upstream correction IDs into downstream outputs.
 
-Stages 1, 2, 4, and 6 use YAML front matter followed by Stage content.
-
-## YAML stages
-
-Stages 3 and 5 store the same run metadata under a top-level `metadata` object, followed by `claims` or `gaps`.
+Stages 1, 2, 4, and 6 use YAML front matter followed by the Markdown object shape in their Stage spec. Stages 3 and 5 store common metadata under top-level `metadata`, followed by their canonical YAML objects.
 
 ## State synchronization
 
-Write the Stage output first. After that write succeeds, copy its current `source_revision`, `applied_corrections`, and completion state into the Stage entry in `state.yaml`, then set execution and review fields according to the runtime rules.
+Write the Stage output first. After that succeeds, synchronize its source revision, directly applied corrections, completion state, execution state, and review state into `state.yaml`.
 
-If output metadata and `state.yaml` disagree, the Stage is not a valid current result until the mismatch is resolved.
+If output metadata and state disagree, the Stage is not a valid current result until reconciled.

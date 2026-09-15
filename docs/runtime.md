@@ -2,32 +2,40 @@
 
 The workflow is linear and rollback-aware: Stage 1 → 2 → 3 → 4 → 5 → 6.
 
-Normative runtime rules are split into:
+The six files under `../specs/` are the normative Stage contracts. Read only the current Stage spec during execution.
 
-- [`state-semantics.md`](state-semantics.md): execution status, review policy, review status, and downstream usability.
-- [`uncertainty-semantics.md`](uncertainty-semantics.md): uncertainty as a valid result and when it is review-blocking.
-- [`stage-exit-criteria.md`](stage-exit-criteria.md): safe-to-advance stopping conditions for every Stage.
-- [`analysis-boundary.md`](analysis-boundary.md): analysis as an independent terminal workflow, separate from publication.
-- [`user-fixes.md`](user-fixes.md): persistent user corrections, correction targets, rerun requirements, and correction lifecycle.
-- [`input-contracts.md`](input-contracts.md): Stage-specific allowed inputs.
+Cross-Stage normative rules:
+
+- `state-semantics.md` — execution/review transitions, confirmation evidence, structured next actions.
+- `source-format.md` — source identity, ordering, mutations, and revision authority.
+- `id-lifecycle.md` — stable analysis object identity across reruns.
+- `user-fixes.md` — persistent user corrections and direct applicability.
+- `uncertainty-semantics.md` — uncertainty as a valid result.
+- `input-contracts.md` — allowed Stage inputs.
+- `output-format.md` — common run metadata.
+- `analysis-boundary.md` — analysis is independent from publication.
+- `workspace-write-contract.md` — destination and write ordering.
 
 ## Runtime invariants
 
 - Do not force certainty when evidence is insufficient.
-- Do not continue a Stage merely to maximize completeness after its exit criteria are met.
-- Do not optimize Stages 1–6 for a possible future post, article, presentation, or other publication artifact.
+- Stop when the current Stage spec's exit criteria are met; do not maximize completeness.
+- Do not optimize Stages 1–6 for later publication.
 - Analysis may finish successfully with uncertainty, no supported cognitive pattern, no gaps, no next directions, and no publishable material.
+- A substantive rerun never inherits an old confirmation.
+- A material correction made during review is persisted before rerun or confirmation.
+- Object IDs represent logical identity and are never reused.
 
-## Rollback
+## Rollback and stale propagation
 
-Do not silently repair an upstream interpretation inside a downstream Stage. Return to the earliest incorrect Stage and rerun affected downstream stages.
+Do not repair an upstream interpretation inside a downstream Stage. Return to the earliest incorrect Stage.
 
-## Stale propagation
+Material change propagation:
 
-- Stage 1 material change → Stages 2–6 stale
-- Stage 2 material change → Stages 3–6 stale
-- Stage 3 material change → Stages 4–6 stale
-- Stage 4 material change → Stages 5–6 stale
-- Stage 5 material change → Stage 6 stale
+- Stage 1 → Stages 2–6 stale
+- Stage 2 → Stages 3–6 stale
+- Stage 3 → Stages 4–6 stale
+- Stage 4 → Stages 5–6 stale
+- Stage 5 → Stage 6 stale
 
-Formatting-only changes do not trigger stale.
+When a stale Stage is rerun, follow the review reset rules in `state-semantics.md`. Formatting-only changes do not trigger stale.

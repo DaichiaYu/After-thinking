@@ -1,32 +1,52 @@
-# 1. 確認分析範圍與討論起點
+# Stage 1 — Scope & Origin｜分析範圍與討論起點
 
-## 目的
-建立本次分析邊界，並重建作者在討論開始時已經知道、相信、懷疑與不確定的內容。
+This file is the normative Stage 1 contract.
 
-## 分析項目
+## Purpose
+建立分析邊界，重建作者在 AI／外部資料介入前已經知道、相信、懷疑與不確定的內容。
 
-### 分析範圍
-- 本次納入哪些對話、筆記、文章或其他文字。
-- 哪些內容排除。
-- 辨識文本來源：作者、AI assistant、第三方引用、研究、新聞或其他來源。
-- 來源無法確認時標記 `Unclear provenance`，不自行猜測。
+## Inputs
+- `source/conversation.jsonl`
+- `source/metadata.yaml`
+- active corrections targeting Stage 1 anchors
 
-### 討論起點
-- `Trigger`：什麼事件、資料、疑問或直覺觸發討論。
-- `Initial question`：作者表面上最先問什麼。
-- `Underlying question`：作者真正想釐清的核心問題；證據不足時不過度推論。
-- `Author initial position`：AI 或外部資料介入前，作者已提出哪些判斷、假設、直覺或區分。
-- `Initial uncertainty`：作者當時真正不知道、想驗證或想比較的是什麼。
+## Output
+`analysis/01-scope-origin.md`
 
-## 重要規則
-- 不得把「作者原本已有想法，後來找 AI 驗證」改寫成「AI 提供資訊後作者才形成想法」。
-- 不得把 AI 對問題的重述當成作者原始立場。
-- 不得為了敘事流暢自行補上原文不存在的因果。
+Use common YAML front matter from `docs/output-format.md`, then these fixed addressable sections:
 
-## 使用者確認 ①
-完成後先讓使用者確認：
-1. 討論起點是否正確。
-2. 作者初始立場是否正確。
-3. 是否有把後來出現的 AI 或外部內容錯算成作者原始想法。
+```markdown
+## S1.scope
+...
 
-Stage 1 的 review policy 為 `mandatory`。只有使用者明確確認後才標為 `confirmed` 並進入第 2 階段。
+## S1.trigger
+...
+
+## S1.initial_question
+...
+
+## S1.underlying_question
+...
+
+## S1.author_initial_position
+...
+
+## S1.initial_uncertainty
+...
+```
+
+Each section records supporting `source_refs` or explicitly states that the source is insufficient. `S1.underlying_question` may be unknown.
+
+## Rules
+- Do not turn an author idea that was later checked with AI into an AI-originated idea.
+- Do not treat an AI restatement as the author's original position.
+- Do not invent causal links or hidden motives for narrative smoothness.
+- Unknown source/origin is a valid result.
+
+## Execution exit criteria
+Execution is sufficient when scope and relevant source roles are identified or explicitly unknown; trigger, initial question, initial position, and initial uncertainty have supported findings or explicit uncertainty; the underlying question is included only when supportable; and required source references are present.
+
+Stop when these conditions are met. Do not infer additional origin detail merely for completeness.
+
+## Review and advance gate
+`review_policy: mandatory`. After execution completes, keep `review_status: pending` until the user explicitly confirms the current result. A material correction made during review must be persisted before rerun. Only a usable Stage 1 may feed Stage 2.

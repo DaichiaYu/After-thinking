@@ -1,0 +1,26 @@
+metadata:
+  workflow_version: "0.1"
+  stage: 5
+  source_revision: 1
+  applied_corrections: []
+  completion:
+    exit_criteria_met: true
+    blocking_items: []
+    nonblocking_uncertainties: []
+    stop_reason: "The material open loop is represented without inventing additional gaps."
+gaps:
+  - id: G001
+    status: active
+    name: "Does provenance tracking improve later reconstruction quality?"
+    primary_type: Missing evidence
+    secondary_types: [Unsupported hypothesis]
+    topic_ids: [T001]
+    reasoning_turn_ids: [R001]
+    claim_ids: [C002]
+    cognitive_structure_ids: []
+    evidence_refs: [msg-000003, msg-000004]
+    current_state: "The discussion adopts provenance plus uptake as a design rule, but supplies no comparative evidence about its practical effect."
+    why_open: "The mechanism is proposed and accepted without testing against an alternative reconstruction workflow."
+    origin_status: mixed
+    confidence: high
+    uncertainty: null

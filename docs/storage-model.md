@@ -9,26 +9,21 @@ discussions/<discussion-id>/
 │  └─ metadata.yaml
 ├─ state.yaml
 ├─ corrections.yaml
-├─ analysis/
-│  ├─ 01-scope-origin.md
-│  ├─ 02-topic-map.md
-│  ├─ 03-claims.yaml
-│  ├─ 04-cognitive-structure.md
-│  ├─ 05-gaps.yaml
-│  └─ 06-next-directions.md
-└─ revisions/
+└─ analysis/
+   ├─ 01-scope-origin.md
+   ├─ 02-topic-map.md
+   ├─ 03-claims.yaml
+   ├─ 04-cognitive-structure.md
+   ├─ 05-gaps.yaml
+   └─ 06-next-directions.md
 ```
 
-`source/conversation.jsonl` is the canonical raw source. See `source-format.md`. Each item has a stable role-independent message ID such as `msg-000001`; speaker is stored separately.
+Git history provides file revision history; no parallel `revisions/` directory is required by default.
 
-`state.yaml` stores workflow and review state, source revision, stale state, correction application, and next action.
+`source/conversation.jsonl` is canonical raw source. Message identity and order are separate; see `source-format.md`.
 
-`corrections.yaml` stores active corrections that constrain future reruns. Correction IDs use `CR001`, `CR002`, and bind to addressable targets. Stage 1 uses fixed anchors such as `S1.author_initial_position`; later objects use stable `T`, `R`, `C`, `G`, and `D` IDs.
+Stable analysis object prefixes are `T` (Topic), `R` (reasoning turn), `C` (Claim), `CS` (cognitive-structure observation), `G` (Gap), and `D` (Direction). Stage 1 uses fixed `S1.*` anchors. Correction IDs use `CR`. Full identity lifecycle rules are in `id-lifecycle.md`.
 
-`revisions/` is readable history. Runtime correction behavior comes from `corrections.yaml`.
+`state.yaml` stores workflow/review state, a mirror of source revision, monotonic ID counters, correction conflicts, and structured next action. `corrections.yaml` stores persistent user corrections.
 
-Stages 1, 2, 4, and 6 use Markdown. Stages 3 and 5 use YAML. Output metadata follows `output-format.md`.
-
-Source changes increment `source_revision`. Existing message IDs are never renumbered. Active corrections remain effective until superseded or retired.
-
-Destination and write-order rules are defined in `workspace-write-contract.md`.
+Stages 1, 2, 4, and 6 use Markdown with YAML front matter. Stages 3 and 5 use YAML. Output metadata follows `output-format.md`; Stage-specific object shape comes from `specs/`.

@@ -1,47 +1,45 @@
-# 4. 重建本段內容的認知結構
+# Stage 4 — Cognitive Structure｜認知結構
 
-## 目的
-在前面已有可用的主題、推理軌跡與來源歸屬結果後，整理這份材料中反覆出現的核心概念、區分方式與推理特徵。
+This file is the normative Stage 4 contract.
 
-這一階段描述的是「本段材料中可觀察到的思考方式」，不是人格測驗，也不應被泛化成作者永久特質。
+## Purpose
+整理本段材料中反覆出現的核心概念、區分方式與推理特徵。描述的是 supplied material 中可觀察的 pattern，不是作者永久人格。
 
-## A. Core Concepts｜核心概念
+## Inputs
+- `source/*`
+- usable Stage 2
+- usable Stage 3
+- active corrections targeting `CS*`
 
-辨識：
-- 表面主題。
-- 真正反覆出現的核心問題。
-- 作者特別在意的 distinction／概念區分。
-- 跨不同主題重複出現的底層概念。
-- 哪些概念只是 AI 補充，哪些已成為作者實際使用的框架。
+## Output
+`analysis/04-cognitive-structure.md` with common YAML front matter.
 
-## B. Cognitive Fingerprint｜本段材料中的認知指紋
+Each supported observation is an addressable `CS` object:
 
-可觀察項目包括：
-- 作者最先注意什麼。
-- 習慣區分哪些概念。
-- 哪些模糊化或來源混淆會被作者反對。
-- 哪類證據會讓作者改變判斷。
-- 哪類資訊不足以讓作者改變判斷。
-- 作者如何處理例外與反例。
-- 作者傾向新增變數、拆題、縮小範圍，還是重新定義問題。
-- 哪些概念在多次轉折後仍被保留。
-- 哪些地方作者會主動修正或反駁 AI。
-- 哪些推理方式在本段材料中重複出現。
+```markdown
+## CS001 — <short pattern name>
+- kind: core_concept | recurring_distinction | reasoning_pattern
+- observation: ...
+- scope: supplied_material
+- topic_ids: [T001]
+- claim_ids: [C001]
+- reasoning_turn_ids: [R001]
+- evidence_refs: [msg-000001, msg-000004]
+- confidence: high | medium | low
+- uncertainty: null
+```
 
-## 輸出原則
+If needed, `uncertainty` uses the common `{reason, user_resolvable}` shape.
 
-避免：
-- 「作者是一個很重視邏輯的人。」
-- 「作者性格上不相信權威。」
+## What may be observed
+Repeated core questions; distinctions the author repeatedly protects; evidence that changes or fails to change judgment; handling of exceptions/counterexamples; recurring moves such as adding variables, splitting Topics, narrowing scope, or redefining a question; concepts that survive multiple turns; repeated corrections of AI framing.
 
-優先寫成：
-- 「在本段材料中，作者多次要求區分『原始假設』與『後續證據』。」
-- 「當 AI 提出二元解釋時，作者傾向檢查是否存在中介變數。」
+Avoid personality claims such as "the author is logical". Prefer source-bounded statements such as "in this material, the author repeatedly distinguishes original hypotheses from later evidence."
 
-所有認知指紋描述都應盡可能回指可用的文本、Claim 或 reasoning turn。
+## Execution exit criteria
+Execution is sufficient when every reported recurring observation has evidence anchors and appropriate confidence/uncertainty, and isolated events have not been generalized without support. If no recurring pattern is supportable, explicitly record that result and complete with zero `CS` objects.
 
-## Review policy
+## Review and advance gate
+`review_policy: risk_based`. Keep review pending only for material, user-resolvable high-inference interpretations; otherwise use `not_required`. Explicit user confirmation is required for `confirmed`.
 
-本階段採 `risk_based` review，不設固定 checkpoint。
-
-如果沒有高推論性描述需要人工判斷，完成後使用 `not_required`。如果存在可能把局部材料過度泛化、錯認作者推理模式或其他高推論項目，保持 `pending`，直到使用者明確確認後才可標為 `confirmed`。
+Stable ID behavior follows `docs/id-lifecycle.md`.

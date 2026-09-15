@@ -1,0 +1,56 @@
+metadata:
+  workflow_version: "0.1"
+  stage: 3
+  source_revision: 1
+  applied_corrections: []
+  completion:
+    exit_criteria_met: true
+    blocking_items: []
+    nonblocking_uncertainties: []
+    stop_reason: "Material Claims have traceable provenance and uptake."
+claims:
+  - id: C001
+    status: active
+    claim: "When the reasoning path matters, a conventional summary can lose useful information about how the idea changed."
+    topic_ids: [T001]
+    provenance:
+      type: Author-original
+      evidence_refs: [msg-000001]
+    introduction: {source_ref: msg-000001}
+    author_uptake:
+      status: Explicitly accepted
+      evidence_refs: [msg-000001]
+    epistemic_status: Stable claim
+    confidence: high
+    uncertainty: null
+    evidence_refs: [msg-000001]
+  - id: C002
+    status: active
+    claim: "Provenance and author uptake should be tracked separately."
+    topic_ids: [T001]
+    provenance:
+      type: AI-introduced
+      evidence_refs: [msg-000003]
+    introduction: {source_ref: msg-000003}
+    author_uptake:
+      status: Explicitly accepted
+      evidence_refs: [msg-000004]
+    epistemic_status: Stable claim
+    confidence: high
+    uncertainty: null
+    evidence_refs: [msg-000003, msg-000004]
+  - id: C003
+    status: active
+    claim: "Publication should remain optional and downstream from faithful reconstruction."
+    topic_ids: [T002]
+    provenance:
+      type: Author-reformulated
+      evidence_refs: [msg-000005, msg-000006]
+    introduction: {source_ref: msg-000006}
+    author_uptake:
+      status: Explicitly accepted
+      evidence_refs: [msg-000006]
+    epistemic_status: Stable claim
+    confidence: high
+    uncertainty: null
+    evidence_refs: [msg-000005, msg-000006]

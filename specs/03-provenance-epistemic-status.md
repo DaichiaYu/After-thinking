@@ -1,55 +1,70 @@
-# 3. 來源歸屬與認知狀態
+# Stage 3 — Provenance & Epistemic Status｜來源歸屬與認知狀態
 
-## 目的
-對每個重要觀點分開判斷：誰先提出、作者後來怎麼回應，以及目前這個觀點在作者思考中處於什麼狀態。
+This file is the normative Stage 3 contract.
 
-## A. Provenance｜來源歸屬
+## Inputs
+- `source/*`
+- usable Stage 1
+- usable Stage 2
+- active corrections targeting `C*`
 
-### 來源類型
-- `Author-original`：作者在 AI 提出前已經明確說出。
-- `Author-reformulated`：作者經討論後自行重新形成的版本。
-- `AI-introduced`：概念或假設首次由 AI assistant 提出。
-- `AI-supported`：作者原本已有概念，AI 只補術語、研究、證據或形式化。
-- `Co-developed`：作者提供核心直覺，AI 協助形式化，最終由互動共同形成。
-- `External-source`：來自論文、文章、新聞或第三方。
-- `Unclear provenance`：無法可靠判斷。
+## Output
+`analysis/03-claims.yaml`
 
-## B. Author Uptake｜作者接納程度
+Canonical shape:
 
-對每個重要觀點另外標記作者的反應：
-- `Explicitly accepted`：明確接受。
-- `Implicitly adopted`：沒有直接說接受，但後續實際採用。
-- `Modified`：修改後採納。
-- `Challenged`：提出質疑。
-- `Rejected`：明確否定。
-- `Not addressed`：沒有直接或間接回應。
-- `Unclear`：無法判斷。
+```yaml
+metadata: <common metadata from docs/output-format.md>
+claims:
+  - id: C001
+    status: active
+    claim: "..."
+    topic_ids: [T001]
+    provenance:
+      type: Author-original
+      evidence_refs: [msg-000001]
+    introduction:
+      source_ref: msg-000001
+    author_uptake:
+      status: Explicitly accepted
+      evidence_refs: [msg-000003]
+    epistemic_status: Stable claim
+    confidence: high
+    uncertainty: null
+    evidence_refs: [msg-000001, msg-000003]
+```
 
-## C. Epistemic Status｜認知狀態
+When needed:
 
-- `Stable claim`：作者目前相對穩定的主張。
-- `Tentative conclusion`：作者暫時傾向接受，但仍保留修正空間。
-- `New hypothesis`：作者已形成或採納為工作假設，但尚未充分驗證。
-- `Unresolved question`：作者確實討論過並試圖判斷，但目前仍沒有答案。
-- `Unexplored lead`：討論中出現、與主線相關、作者未否定，但也未明確採納或繼續延伸。
-- `Rejected path`：作者曾考慮但後來排除的解釋。
-- `Suspended judgment`：作者刻意不下判斷，認為目前證據不足。
+```yaml
+uncertainty:
+  reason: ambiguous_author_intent
+  user_resolvable: true
+```
 
-## 關鍵規則
-- 作者沒有反對，不等於作者接受。
-- 作者後續談到相關內容，不等於已採納 AI 前面提出的觀點。
-- AI 幫作者把模糊直覺形式化，不等於 AI 創造了那個想法。
-- AI 提出而作者完全沒有接的內容，不得在最終摘要中寫成「作者認為」。
-- 無法判定時應保留不確定，不得為了輸出整齊而硬分類。
+## Provenance enum
+`Author-original`, `Author-reformulated`, `AI-introduced`, `AI-supported`, `Co-developed`, `External-source`, `Unclear provenance`.
 
-## Review policy
+## Author uptake enum
+`Explicitly accepted`, `Implicitly adopted`, `Modified`, `Challenged`, `Rejected`, `Not addressed`, `Unclear`.
 
-Stage 3 採 `risk_based` review，不要求使用者逐項核准全部內容。
+## Epistemic status enum
+`Stable claim`, `Tentative conclusion`, `New hypothesis`, `Unresolved question`, `Unexplored lead`, `Rejected path`, `Suspended judgment`.
 
-高風險項目例如：
-- AI 首先提出，但作者後續似乎有採納。
-- 作者原本表達模糊，AI 後來替其形式化。
-- 同一觀點同時受作者與外部資料影響。
-- 目前來源或作者接納程度仍不明確。
+`confidence`: `high`, `medium`, or `low`.
 
-如果沒有高風險項目，完成後使用 `review_status: not_required` 並可進入 Stage 4。如果有高風險項目，保持 `pending`，直到使用者明確確認後才可標為 `confirmed`。系統不得自行產生 `confirmed`。
+## Rules
+- No response is not acceptance.
+- Later discussion of related material is not automatically uptake of an earlier AI idea.
+- AI formalization of an author's prior intuition is not automatically AI introduction.
+- AI-only material with no author uptake must not be written as the author's belief.
+- Preserve uncertainty rather than forcing a clean classification.
+- Do not create a Claim for every statement; only material Claims affecting reconstructed reasoning need `C` objects.
+
+## Execution exit criteria
+Execution is sufficient when all material Claims have provenance, introduction point, author uptake, epistemic status, evidence, and confidence, or explicit uncertainty where evidence cannot support a definitive value. Non-user-resolvable uncertainty is non-blocking.
+
+## Review and advance gate
+`review_policy: risk_based`. Low confidence alone does not require review. If a material ambiguity is user-resolvable, keep review pending; otherwise use `not_required`. `confirmed` requires explicit user confirmation of the current result.
+
+Stable ID behavior follows `docs/id-lifecycle.md`.

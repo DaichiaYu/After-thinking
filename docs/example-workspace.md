@@ -1,5 +1,7 @@
 # Example workspace
 
-Initialize a discussion with the four starter files in `templates/`: conversation JSONL, source metadata, state, and corrections.
+See [`../examples/simple-discussion/`](../examples/simple-discussion/) for a filled, end-to-end example containing raw source, metadata, state, corrections, and all six Stage outputs.
 
-Store the conversation template as `source/conversation.jsonl`. Follow `source-format.md` for source records and `workspace-write-contract.md` for Stage output paths.
+The example is intentionally small. Its purpose is to make canonical object shape, stable IDs, evidence references, uncertainty, review state, and Stage-to-Stage traceability visible without requiring a reader to infer YAML/Markdown structure from prose contracts.
+
+For a real discussion, initialize from `../templates/`, replace the example source with the user's actual source, and follow the current Stage spec under `../specs/`.

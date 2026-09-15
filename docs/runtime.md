@@ -2,7 +2,7 @@
 
 The workflow is linear and rollback-aware: Stage 1 → 2 → 3 → 4 → 5 → 6.
 
-The six files under `../specs/` are the normative Stage contracts. Read only the current Stage spec during execution.
+The six files under `../specs/` are the normative Stage contracts. Read only the current Stage spec during execution; it owns Stage inputs, object shape, enums, review policy, and execution exit criteria.
 
 Cross-Stage normative rules:
 
@@ -11,7 +11,6 @@ Cross-Stage normative rules:
 - `id-lifecycle.md` — stable analysis object identity across reruns.
 - `user-fixes.md` — persistent user corrections and direct applicability.
 - `uncertainty-semantics.md` — uncertainty as a valid result.
-- `input-contracts.md` — allowed Stage inputs.
 - `output-format.md` — common run metadata.
 - `analysis-boundary.md` — analysis is independent from publication.
 - `workspace-write-contract.md` — destination and write ordering.
@@ -19,7 +18,7 @@ Cross-Stage normative rules:
 ## Runtime invariants
 
 - Do not force certainty when evidence is insufficient.
-- Stop when the current Stage spec's exit criteria are met; do not maximize completeness.
+- Stop when the current Stage spec's execution exit criteria are met; do not maximize completeness.
 - Do not optimize Stages 1–6 for later publication.
 - Analysis may finish successfully with uncertainty, no supported cognitive pattern, no gaps, no next directions, and no publishable material.
 - A substantive rerun never inherits an old confirmation.

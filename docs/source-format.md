@@ -1,27 +1,36 @@
 # Canonical Source Format
 
-Raw conversation source is stored as UTF-8 JSON Lines at `source/conversation.jsonl`.
+Raw conversation source is UTF-8 JSON Lines at `source/conversation.jsonl`. Each line is one source item. Preserve original `content` as supplied; analysis must not rewrite raw source.
 
-Each line is one source item. The original `content` is preserved as supplied and is not rewritten by the analysis model.
-
-Required fields:
+Canonical record:
 
 ```json
-{"message_id":"msg-000001","speaker":"author","content":"Original text","timestamp":"2026-09-14T07:35:12+08:00"}
+{"message_id":"msg-000001","order":10,"speaker":"author","content":"Original text","timestamp":"2026-09-14T07:35:12+08:00"}
 ```
 
-Allowed `speaker` values:
+Required fields are `message_id`, `order`, `speaker`, `content`, and `timestamp` (`timestamp` may be null). Allowed speakers are `author`, `assistant`, and `external`.
 
-- `author`
-- `assistant`
-- `external`
+## Identity vs order
 
-`timestamp` may be `null` when the source does not provide one.
+`message_id` is permanent identity and never encodes speaker, chronology, or array position. Existing IDs are never renumbered or reused.
 
-`message_id` is stable and does not encode speaker role. Use sequential IDs such as `msg-000001`, `msg-000002`, and never renumber existing items after append.
+`order` determines canonical reading order. It may change when material is inserted or reordered. Executors sort by `order`, not by message ID or timestamp. `order` values must be unique within the current source revision. Use spaced integers (for example 10, 20, 30) when convenient; a source rewrite may normalize order values without changing message IDs.
 
-External material may use the same container with `speaker: external`; bibliographic or URL metadata may be stored in additional fields without changing the original `content`.
+## Source mutations
 
-Analysis files cite `message_id` values as source references.
+Supported mutations are:
 
-JSONL is used instead of a Markdown transcript because it keeps provenance fields machine-readable while remaining append-friendly. `source/metadata.yaml` stores discussion-level source metadata rather than message text.
+- `append`: add material after existing items;
+- `insert`: add previously omitted material anywhere in canonical order;
+- `edit`: correct or replace the content/metadata of an existing source item while preserving its identity when it is still the same source item;
+- `delete`: remove an item from the current source while reserving its message ID permanently.
+
+Every semantic source mutation increments `source_revision` and triggers stale evaluation from the earliest affected Stage. Reordering without semantic effect still increments the source revision but does not require downstream stale propagation if analysis references remain semantically unchanged.
+
+New items always receive never-before-used message IDs, even when inserted before older items.
+
+## Source revision authority
+
+`source/metadata.yaml.source_revision` is authoritative. `state.yaml.source.revision` is a synchronized mirror for fast resume. If they disagree, execution is `blocked` until synchronized; the executor must not guess which value is current.
+
+External material may use `speaker: external` and additional bibliographic or URL fields. Analysis files cite stable `message_id` values as source references.

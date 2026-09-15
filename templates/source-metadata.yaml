@@ -5,6 +5,8 @@ source_files:
   - path: source/conversation.jsonl
     role: primary
 message_id_scheme: "msg-000001"
+message_id_counter: 2
+order_field: order
 allowed_speakers:
   - author
   - assistant

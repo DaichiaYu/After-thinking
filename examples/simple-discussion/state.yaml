@@ -1,0 +1,82 @@
+workflow_version: "0.1"
+analysis_status: complete
+workspace:
+  analysis_repository: "example/analysis-repository"
+  analysis_root: "discussions/"
+  discussion_id: "simple-discussion"
+  discussion_path: "discussions/simple-discussion/"
+source:
+  revision: 1
+  conversation_path: "source/conversation.jsonl"
+  metadata_path: "source/metadata.yaml"
+current_stage: 6
+next_action:
+  type: analysis_complete
+  stage: null
+  reason: stage_6_usable
+id_counters:
+  topic: 2
+  reasoning_turn: 2
+  claim: 3
+  cognitive_structure: 1
+  gap: 1
+  direction: 1
+  correction: 1
+stages:
+  stage_1:
+    execution_status: completed
+    review_policy: mandatory
+    review_status: confirmed
+    confirmation: {type: explicit_user_confirmation, confirmed_at: "2026-01-01T10:20:00Z", interaction_ref: example-review-002, note: "Confirmed after CR001 rerun."}
+    output_path: analysis/01-scope-origin.md
+    source_revision: 1
+    applied_corrections: [CR001]
+    completion: {exit_criteria_met: true, blocking_items: [], nonblocking_uncertainties: [], stop_reason: "Origin and scope are sufficiently supported."}
+  stage_2:
+    execution_status: completed
+    review_policy: mandatory
+    review_status: confirmed
+    confirmation: {type: explicit_user_confirmation, confirmed_at: "2026-01-01T10:25:00Z", interaction_ref: example-review-003, note: "Topic map confirmed."}
+    output_path: analysis/02-topic-map.md
+    source_revision: 1
+    applied_corrections: []
+    completion: {exit_criteria_met: true, blocking_items: [], nonblocking_uncertainties: [], stop_reason: "Material Topics and reasoning turns are represented."}
+  stage_3:
+    execution_status: completed
+    review_policy: risk_based
+    review_status: not_required
+    confirmation: null
+    output_path: analysis/03-claims.yaml
+    source_revision: 1
+    applied_corrections: []
+    completion: {exit_criteria_met: true, blocking_items: [], nonblocking_uncertainties: [], stop_reason: "Material Claims have traceable provenance and uptake."}
+  stage_4:
+    execution_status: completed
+    review_policy: risk_based
+    review_status: not_required
+    confirmation: null
+    output_path: analysis/04-cognitive-structure.md
+    source_revision: 1
+    applied_corrections: []
+    completion: {exit_criteria_met: true, blocking_items: [], nonblocking_uncertainties: [], stop_reason: "One recurring source-bounded distinction is supported."}
+  stage_5:
+    execution_status: completed
+    review_policy: risk_based
+    review_status: not_required
+    confirmation: null
+    output_path: analysis/05-gaps.yaml
+    source_revision: 1
+    applied_corrections: []
+    completion: {exit_criteria_met: true, blocking_items: [], nonblocking_uncertainties: [], stop_reason: "The material open loop is represented without inventing additional gaps."}
+  stage_6:
+    execution_status: completed
+    review_policy: none
+    review_status: not_required
+    confirmation: null
+    output_path: analysis/06-next-directions.md
+    source_revision: 1
+    applied_corrections: []
+    completion: {exit_criteria_met: true, blocking_items: [], nonblocking_uncertainties: [], stop_reason: "The single Direction is traceable to G001."}
+correction_state:
+  registry_path: corrections.yaml
+  unresolved_conflicts: []

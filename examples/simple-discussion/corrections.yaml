@@ -1,0 +1,18 @@
+workflow_version: "0.1"
+corrections:
+  - id: CR001
+    status: active
+    target:
+      type: stage_anchor
+      id: S1.author_initial_position
+      field: null
+    constraint: "Do not describe the author as generally opposed to summaries; the objection applies when the reasoning path matters."
+    source_refs: [msg-000001]
+    created_from:
+      stage: 1
+      source_revision: 1
+      interaction_ref: example-review-001
+      note: "Author corrected an over-broad Stage 1 interpretation during review."
+    persistence: until_superseded
+    supersedes: null
+    superseded_by: null

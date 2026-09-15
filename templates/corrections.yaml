@@ -8,13 +8,13 @@ corrections: []
 #     type: stage_anchor
 #     id: S1.author_initial_position
 #     field: null
-#   constraint: "Corrected interpretation supplied during review."
-#   source_refs:
-#     - msg-000001
-#     - msg-000004
+#   constraint: "Corrected interpretation supplied by the user."
+#   source_refs: [msg-000001]
 #   created_from:
 #     stage: 1
 #     source_revision: 1
+#     interaction_ref: null
+#     note: "User corrected this interpretation during review."
 #   persistence: until_superseded
 #   supersedes: null
 #   superseded_by: null

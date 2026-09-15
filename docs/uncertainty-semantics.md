@@ -2,22 +2,9 @@
 
 Uncertainty is a valid analytical result, not a failure state.
 
-A Stage must not force a classification when the supplied evidence does not support one. The workflow may complete with uncertain, mixed, or unresolved results when those results faithfully represent the source.
+A Stage must not force a classification when evidence does not support one. Stage-specific uncertain enum values belong in the relevant file under `specs/`; this document defines only cross-Stage behavior.
 
-Examples of valid states include:
-
-- `Unclear provenance`
-- `Co-developed`
-- `Not addressed`
-- `Unclear` author uptake
-- `Suspended judgment`
-- low-confidence interpretations
-- no supported cognitive pattern
-- an empty gap or next-direction list
-
-Low confidence alone does not make a Stage incomplete and does not automatically require user review.
-
-For risk-based review, uncertainty should distinguish whether the user can actually resolve it:
+Canonical uncertainty shape when an object needs explicit uncertainty metadata:
 
 ```yaml
 uncertainty:
@@ -33,6 +20,8 @@ uncertainty:
   user_resolvable: true
 ```
 
-Only uncertainty that materially affects downstream interpretation and is plausibly resolvable by the user should trigger review.
+`reason` is concise free text or a stable implementation label. `user_resolvable` controls whether uncertainty is a candidate for risk-based review.
 
-A completed Stage may therefore contain non-blocking uncertainties. Those uncertainties must be preserved rather than silently converted into definitive claims.
+Low confidence alone does not make a Stage incomplete and does not automatically require review. Only uncertainty that materially affects downstream interpretation and is plausibly resolvable by the user should block risk-based review.
+
+A completed Stage may contain non-blocking uncertainties, mixed attribution, unresolved status, no supported pattern, or an empty object set when those results faithfully represent the source. Preserve these limits rather than silently converting them into definitive claims.

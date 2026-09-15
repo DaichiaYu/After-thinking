@@ -1,46 +1,49 @@
-# 5. 找出還沒走完的地方
+# Stage 5 — Discussion Gaps｜討論缺口
 
-## 目的
-整理這場討論目前仍未完成、未驗證、未延伸或彼此存在張力的部分，但此階段只負責辨識缺口，不直接替作者補答案。
+This file is the normative Stage 5 contract.
 
-## 缺口類型
+## Inputs
+- `source/*`
+- usable Stage 2
+- usable Stage 3
+- usable Stage 4
+- active corrections targeting `G*`
 
-### Unresolved question｜未解問題
-作者確實有討論、比較或試圖判斷，但最後仍沒有答案。
+Stage 2 is required because Topic/reasoning structure may be necessary to identify interrupted branches and preserve traceability.
 
-### Unexplored lead｜未延伸線索
-AI、外部資料或其他內容曾提出，和主線有合理關聯，作者沒有明確否定，但也沒有足夠證據表示作者已接受、採納或打算使用。
+## Output
+`analysis/05-gaps.yaml`
 
-### Unsupported hypothesis｜尚未驗證的假設
-作者已經形成或暫時採納某個工作假設，但目前缺乏足夠證據或驗證。
+Canonical shape:
 
-### Missing evidence｜缺失證據
-某個現有判斷依賴證據，但目前材料沒有提供足夠支撐。
+```yaml
+metadata: <common metadata from docs/output-format.md>
+gaps:
+  - id: G001
+    status: active
+    name: "..."
+    primary_type: Unresolved question
+    secondary_types: []
+    topic_ids: [T001]
+    reasoning_turn_ids: [R001]
+    claim_ids: [C001]
+    cognitive_structure_ids: []
+    evidence_refs: [msg-000004]
+    current_state: "..."
+    why_open: "..."
+    origin_status: author
+    confidence: high
+    uncertainty: null
+```
 
-### Tension｜尚未處理的張力
-兩個已存在的主張、假設或觀察彼此存在衝突或難以同時成立，但討論還沒有處理完。
+Gap types: `Unresolved question`, `Unexplored lead`, `Unsupported hypothesis`, `Missing evidence`, `Tension`, `Interrupted branch`.
 
-### Interrupted branch｜中止分支
-討論曾經開出一條有意義的分支，但因換題、時間、篇幅或其他原因停止。
+`origin_status` may be `author`, `assistant`, `external`, `mixed`, or `unclear`. Preserve source/uptake limits: an AI-only suggestion is not automatically the author's unresolved question.
 
-## 關鍵規則
-- 不把 AI 單方面提出的點子直接升級成作者的未解問題。
-- 不因作者沒有否定，就把某方向判定為作者已採納。
-- 不在本階段擅自解決缺口。
-- 同一缺口可同時具有多種性質，但需標出主要類型。
+## Execution exit criteria
+Execution is sufficient when material open loops already exposed by the preceding analysis are represented, each Gap is traceable to source and relevant upstream objects, duplicates are merged, and unresolved classification uncertainty is explicit. Do not search for extra gaps merely to populate the file. `gaps: []` is valid.
 
-## 建議輸出
+## Review and advance gate
+`review_policy: risk_based`. Keep review pending only when a material classification changes whether the author is treated as having proposed/adopted/pursued something and the user can plausibly resolve it. Otherwise use `not_required`.
 
-每個缺口至少包含：
-- 穩定 Gap ID。
-- 名稱或簡短描述。
-- 類型。
-- evidence references。
-- 它從哪個主題、Claim 或 reasoning turn 產生。
-- 目前已知到哪裡。
-- 為什麼仍未完成。
-- 若屬 AI 或外部來源提出，保留來源狀態。
-
-## Review policy
-
-本階段採 `risk_based` review。如果 gap classification 有充分依據，完成後使用 `not_required`；如果分類會實質改變作者是否被視為「已經提出／採納／正在追問」某個問題，保持 `pending`，等待使用者明確確認。
+Stable ID behavior follows `docs/id-lifecycle.md`.

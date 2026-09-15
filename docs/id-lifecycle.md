@@ -2,35 +2,21 @@
 
 Object IDs represent logical identity, not list position or source order.
 
-Prefixes:
-
-- `T` — Topic
-- `R` — reasoning turn
-- `C` — Claim
-- `CS` — cognitive-structure observation
-- `G` — Gap
-- `D` — Direction
-- `CR` — Correction
-
-Stage 1 uses fixed anchors such as `S1.scope` and `S1.author_initial_position`.
+Prefixes: `T` Topic, `R` reasoning turn, `C` Claim, `CS` cognitive-structure observation, `G` Gap, `D` Direction, `CR` Correction. Stage 1 uses fixed `S1.*` anchors.
 
 ## Rerun rules
 
-- Same logical object with revised wording, evidence, confidence, or fields → keep the existing ID.
-- Newly discovered logical object → allocate a new ID from the next counter value.
-- Object no longer supported → retire the ID; never reuse it.
-- Split one object into multiple objects → retire the old object and allocate new IDs for all resulting objects.
-- Merge multiple objects → retire the old objects and allocate one new ID for the merged object.
+- Same logical object with revised wording, evidence, confidence, or fields → keep its ID.
+- Newly discovered logical object → allocate a new ID from the monotonic counter.
+- Object no longer supported → retire its ID; never reuse it.
+- Split one object → retire the old ID and allocate new IDs for all resulting objects.
+- Merge multiple objects → retire all old IDs and allocate one new ID for the merged object.
 
-Executors should match rerun objects by semantic identity plus source/evidence anchors, not by array position.
+Match rerun objects by semantic identity plus source/evidence anchors, not by array position.
 
-## Correction safety
+## Counters and retirement registry
 
-If a retired, split, or merged object has an active correction, do not guess a new correction target. Set the affected Stage to `blocked`, add a correction conflict, and request explicit user resolution.
-
-## Counters
-
-`state.yaml` stores monotonic counters. Counters never decrease and retired IDs are never returned to the pool.
+`state.yaml` stores monotonic counters and a retirement registry:
 
 ```yaml
 id_counters:
@@ -41,4 +27,18 @@ id_counters:
   gap: 0
   direction: 0
   correction: 0
+
+identity_state:
+  retired_objects:
+    - id: C003
+      stage: 3
+      reason: split
+      replacements: [C007, C008]
+      source_revision: 2
 ```
+
+Counters never decrease. A retired ID is recorded even when it has no replacement. `replacements` may be empty for removal, contain several IDs for split, or one new ID for merge. This lets future executors distinguish "never existed" from "existed and was retired."
+
+## Correction safety
+
+If a retired/split/merged object has an active correction, do not guess a new target. Set the owning Stage to `blocked`, add a correction conflict, and request explicit user resolution. Candidate replacements do not authorize automatic correction retargeting.

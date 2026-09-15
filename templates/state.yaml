@@ -27,6 +27,9 @@ id_counters:
   direction: 0
   correction: 0
 
+identity_state:
+  retired_objects: []
+
 stages:
   stage_1:
     execution_status: pending

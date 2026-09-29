@@ -66,3 +66,8 @@ button.secondary { background: transparent; color: var(--ink); border: 1px solid
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }
+.pair { display: flex; gap: 8px; }
+.pair button { margin-top: 10px; }
+#confirm { margin-top: 12px; padding: 10px; border: 1px solid var(--author); border-radius: 6px; font-size: 13px; }
+#confirm p { margin: 0; }
+#upload-target { margin-top: 6px; }

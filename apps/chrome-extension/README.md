@@ -1,4 +1,4 @@
-# After-thinking Capture v0.1.6
+# After-thinking Capture v0.2.0
 
 把 ChatGPT 或 Claude 網頁上的對話擷取成 After-thinking 的原文檔。
 這一版是「按圖示模式」（manual_click）：只有你按下擴充功能圖示時，才會讀取目前這個分頁。
@@ -11,12 +11,19 @@
 4. 按「載入未封裝項目」，選擇 `after-thinking-capture` 資料夾。
 5. 建議按工具列的拼圖圖示，把 After-thinking Capture 釘選出來。
 
+## 設定 GitHub（第一次使用）
+
+1. 在 GitHub 建立一個私人（private）倉庫，並勾選「Add a README」。
+2. 在 `chrome://extensions` 找到 After-thinking Capture，按「詳細資料」→「擴充功能選項」，或在擴充功能視窗按「GitHub 設定」。
+3. 依照設定頁的步驟建立 fine-grained token（只開放這個倉庫的 Contents 讀寫權限），貼上後按「儲存並測試連線」。
+
 ## 使用
 
 1. 打開一段 ChatGPT 或 Claude 的對話（不用自己捲動）。
 2. 按擴充功能圖示。擴充功能會自動從頭捲到尾、展開被摺疊的長訊息，再捲回原位。讀取時請不要點擊其他地方，否則視窗會關閉。
 3. 在清單裡檢查訊息，取消勾選不要的。
-4. 按「下載原文檔」。檔案會出現在「下載」資料夾的 `after-thinking/<討論編號>/source/`。
+4. 按「上傳到 GitHub」，確認視窗裡的內容後按「確定上傳」。檔案會以一個提交（commit）寫入 `discussions/<討論編號>/`，包含 `source/conversation.jsonl`、`source/metadata.yaml`、`state.yaml`、`corrections.yaml`。
+5. 也可以按「只下載檔案」，存到電腦的「下載」資料夾。
 
 ## 請幫忙測試並回報
 

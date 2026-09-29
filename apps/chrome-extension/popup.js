@@ -1,7 +1,7 @@
 // After-thinking Capture v0.1.1 — 按圖示模式（manual_click）
 // 只在使用者按下擴充功能圖示時讀取目前這個分頁，不會背景監聽。
 
-const VERSION = "0.1.6";
+const VERSION = "0.2.0";
 
 function detectPlatform(url) {
   const host = new URL(url).hostname;
@@ -653,13 +653,95 @@ async function main() {
   idInput.value = defaultDiscussionId(platform, page.url);
   document.getElementById("result").hidden = false;
 
-  document.getElementById("download").addEventListener("click", async (event) => {
-    const status = document.getElementById("status");
+  const status = document.getElementById("status");
+  const uploadBtn = document.getElementById("upload");
+  const target = document.getElementById("upload-target");
+  const confirmBox = document.getElementById("confirm");
+  const openResult = document.getElementById("open-result");
+
+  document.getElementById("open-options").addEventListener("click", () => chrome.runtime.openOptionsPage());
+
+  // 讀取勾選結果，並檢查討論編號
+  const prepare = () => {
     const id = sanitizeId(idInput.value);
     const kept = items.filter((_, i) => selected[i]);
-    if (!id) { status.textContent = "請輸入 Discussion ID，只能用英文小寫、數字和連字號。"; return; }
-    if (!kept.length) { status.textContent = "至少要勾選一則訊息。"; return; }
+    if (!id) { status.textContent = "請輸入 Discussion ID，只能用英文小寫、數字和連字號。"; return null; }
+    if (!kept.length) { status.textContent = "至少要勾選一則訊息。"; return null; }
+    idInput.value = id;
+    return { id, kept };
+  };
 
+  const config = await loadConfig();
+  if (config && config.repo && config.token) {
+    target.textContent = "上傳到 " + config.repo + " 的 " + normalizeRoot(config.root) + "<討論編號>/";
+  } else {
+    uploadBtn.disabled = true;
+    target.textContent = "還沒設定 GitHub。請按下方「GitHub 設定」。";
+  }
+
+  let pending = null;
+  uploadBtn.addEventListener("click", async () => {
+    const prepared = prepare();
+    if (!prepared) return;
+    uploadBtn.disabled = true;
+    openResult.hidden = true;
+    status.textContent = "檢查倉庫中…";
+    try {
+      const check = await checkRepo(config);
+      if (!check.ok) throw new Error(check.message);
+      const root = normalizeRoot(config.root);
+      const folder = root + prepared.id + "/";
+      if (await pathExists(config, check.branch, folder)) {
+        throw new Error("倉庫裡已經有「" + folder + "」。為了不覆蓋既有的分析，請換一個討論編號。（接續更新同一段對話會在之後的版本支援）");
+      }
+      pending = { ...prepared, branch: check.branch, folder };
+      document.getElementById("confirm-text").textContent =
+        "即將上傳 " + prepared.kept.length + " 則訊息到 " + config.repo + "（私人倉庫）的 " + folder +
+        "，會建立 4 個檔案：conversation.jsonl、metadata.yaml、state.yaml、corrections.yaml。確定嗎？";
+      confirmBox.hidden = false;
+      status.textContent = "";
+    } catch (e) {
+      status.textContent = "無法上傳：" + e.message;
+      uploadBtn.disabled = false;
+    }
+  });
+
+  document.getElementById("confirm-no").addEventListener("click", () => {
+    pending = null;
+    confirmBox.hidden = true;
+    uploadBtn.disabled = false;
+    status.textContent = "已取消，沒有上傳任何東西。";
+  });
+
+  document.getElementById("confirm-yes").addEventListener("click", async (event) => {
+    if (!pending) return;
+    event.target.disabled = true;
+    status.textContent = "上傳中…";
+    const { id, kept, branch, folder } = pending;
+    try {
+      await commitFiles(config, branch, [
+        { path: folder + "source/conversation.jsonl", content: buildJsonl(kept) },
+        { path: folder + "source/metadata.yaml", content: buildMetadata(kept.length, items.length, platform, page) },
+        { path: folder + "state.yaml", content: buildState(config, id) },
+        { path: folder + "corrections.yaml", content: CORRECTIONS_TEMPLATE }
+      ], "After-thinking: capture " + id + " (" + platform + ", " + kept.length + " messages)");
+      confirmBox.hidden = true;
+      status.textContent = "已上傳 " + kept.length + " 則訊息到 " + config.repo + " 的 " + folder;
+      const url = "https://github.com/" + config.repo + "/tree/" + encodeURIComponent(branch) + "/" +
+        folder.split("/").filter(Boolean).map(encodeURIComponent).join("/");
+      openResult.hidden = false;
+      openResult.onclick = () => chrome.tabs.create({ url });
+      pending = null;
+    } catch (e) {
+      status.textContent = "上傳失敗：" + e.message + "（倉庫沒有被修改）";
+      event.target.disabled = false;
+    }
+  });
+
+  document.getElementById("download").addEventListener("click", async (event) => {
+    const prepared = prepare();
+    if (!prepared) return;
+    const { id, kept } = prepared;
     event.target.disabled = true;
     status.textContent = "下載中…";
     const base = "after-thinking/" + id + "/source/";
@@ -675,8 +757,8 @@ async function main() {
       }
     } catch (e) {
       status.textContent = "下載失敗：" + e.message;
-      event.target.disabled = false;
     }
+    event.target.disabled = false;
   });
 }
 

@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<title>After-thinking Capture 設定</title>
+<link rel="stylesheet" href="popup.css">
+<style>
+  body { width: auto; max-width: 560px; margin: 24px auto; padding: 0 20px; }
+  label { display: block; margin-top: 14px; }
+  .row { display: flex; gap: 8px; margin-top: 16px; }
+  .row button { margin-top: 0; }
+  ol.steps { padding-left: 20px; font-size: 13px; color: var(--muted); }
+  ol.steps li { margin: 4px 0; }
+  .ok { color: var(--author); }
+</style>
+</head>
+<body>
+  <h1>GitHub 上傳設定</h1>
+  <p class="muted">對話會上傳到你自己的私人（private）倉庫。設定只存在這台電腦的瀏覽器裡，不會同步到其他地方。</p>
+
+  <label for="repo" class="label">分析倉庫（帳號/倉庫名稱）</label>
+  <input id="repo" type="text" placeholder="例如 DaichiaYu/my-thinking-records" spellcheck="false">
+
+  <label for="branch" class="label">分支（留空就用倉庫的預設分支）</label>
+  <input id="branch" type="text" placeholder="main" spellcheck="false">
+
+  <label for="root" class="label">存放位置（analysis_root）</label>
+  <input id="root" type="text" value="discussions/" spellcheck="false">
+
+  <label for="token" class="label">存取金鑰（fine-grained token）</label>
+  <input id="token" type="password" placeholder="github_pat_…" spellcheck="false" autocomplete="off">
+
+  <div class="row">
+    <button id="save">儲存並測試連線</button>
+    <button id="clear" class="secondary">清除設定</button>
+  </div>
+  <p id="result" role="status"></p>
+
+  <h2 style="font-size:15px;margin-top:28px">怎麼建立存取金鑰</h2>
+  <ol class="steps">
+    <li>在 GitHub 先建立一個<b>私人</b>倉庫，並勾選「Add a README」，讓倉庫不是空的。</li>
+    <li>到 GitHub → Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token。</li>
+    <li>Expiration（到期日）：建議 90 天，到期再換新的。</li>
+    <li>Repository access：選 Only select repositories，只勾你的分析倉庫。</li>
+    <li>Permissions → Repository permissions → Contents：選 Read and write。其他都不用開。</li>
+    <li>產生後複製金鑰，貼到上面的欄位。</li>
+  </ol>
+  <script src="github.js"></script>
+  <script src="options.js"></script>
+</body>
+</html>

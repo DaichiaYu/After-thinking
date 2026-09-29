@@ -22,8 +22,24 @@
     <label for="discussion-id" class="label">Discussion ID（討論編號）</label>
     <input id="discussion-id" type="text" spellcheck="false">
 
-    <button id="download">下載原文檔</button>
+    <button id="upload">上傳到 GitHub</button>
+    <p id="upload-target" class="hint"></p>
+
+    <div id="confirm" hidden>
+      <p id="confirm-text"></p>
+      <div class="pair">
+        <button id="confirm-yes">確定上傳</button>
+        <button id="confirm-no" class="secondary">取消</button>
+      </div>
+    </div>
+
     <p id="status" class="muted" role="status"></p>
+    <button id="open-result" class="secondary" hidden>在 GitHub 上查看</button>
+
+    <div class="pair">
+      <button id="download" class="secondary">只下載檔案</button>
+      <button id="open-options" class="secondary">GitHub 設定</button>
+    </div>
   </section>
 
   <p id="error" class="error" hidden></p>
@@ -33,6 +49,7 @@
     <p class="hint">診斷報告只包含頁面結構和字數，不包含對話內容。抓取有問題時，把它貼給開發者。</p>
     <p id="diagnose-status" class="muted" role="status"></p>
   </footer>
+  <script src="github.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

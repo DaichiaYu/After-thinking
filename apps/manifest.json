@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "name": "After-thinking Capture",
+  "version": "0.1.6",
+  "description": "把 ChatGPT 或 Claude 的對話擷取成 After-thinking 的原文檔（conversation.jsonl）。",
+  "permissions": ["activeTab", "scripting", "downloads"],
+  "action": {
+    "default_title": "擷取這段對話",
+    "default_popup": "popup.html"
+  }
+}

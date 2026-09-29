@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header>
+    <h1>擷取這段對話</h1>
+    <p id="platform" class="muted">正在讀取頁面…</p>
+  </header>
+
+  <section id="result" hidden>
+    <div id="shape" aria-label="對話形狀：每一格代表一則訊息"></div>
+    <p class="legend"><span class="dot author"></span>你 <b id="count-author">0</b> 則
+      <span class="dot assistant"></span>AI <b id="count-assistant">0</b> 則
+      <span id="count-excluded"></span></p>
+
+    <p class="label">取消勾選不要的訊息</p>
+    <ol id="messages"></ol>
+
+    <label for="discussion-id" class="label">Discussion ID（討論編號）</label>
+    <input id="discussion-id" type="text" spellcheck="false">
+
+    <button id="download">下載原文檔</button>
+    <p id="status" class="muted" role="status"></p>
+  </section>
+
+  <p id="error" class="error" hidden></p>
+
+  <footer>
+    <button id="diagnose" class="secondary">複製診斷報告</button>
+    <p class="hint">診斷報告只包含頁面結構和字數，不包含對話內容。抓取有問題時，把它貼給開發者。</p>
+    <p id="diagnose-status" class="muted" role="status"></p>
+  </footer>
+  <script src="popup.js"></script>
+</body>
+</html>

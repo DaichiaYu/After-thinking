@@ -1,6 +1,6 @@
-# After-thinking Capture v0.2.0
+# After-thinking Capture v0.3.0
 
-把 ChatGPT 或 Claude 網頁上的對話擷取成 After-thinking 的原文檔。
+把 ChatGPT、Claude 或 Gemini 網頁上的對話擷取成 After-thinking 的原文檔。
 這一版是「按圖示模式」（manual_click）：只有你按下擴充功能圖示時，才會讀取目前這個分頁。
 
 ## 安裝（開發人員模式）
@@ -19,7 +19,7 @@
 
 ## 使用
 
-1. 打開一段 ChatGPT 或 Claude 的對話（不用自己捲動）。
+1. 打開一段 ChatGPT、Claude 或 Gemini 的對話（不用自己捲動）。
 2. 按擴充功能圖示。擴充功能會自動從頭捲到尾、展開被摺疊的長訊息，再捲回原位。讀取時請不要點擊其他地方，否則視窗會關閉。
 3. 在清單裡檢查訊息，取消勾選不要的。
 4. 按「上傳到 GitHub」，確認視窗裡的內容後按「確定上傳」。檔案會以一個提交（commit）寫入 `discussions/<討論編號>/`，包含 `source/conversation.jsonl`、`source/metadata.yaml`、`state.yaml`、`corrections.yaml`。
@@ -33,6 +33,13 @@
 2. 第一則、最後一則是否正確。
 3. 打開 `conversation.jsonl`，內容有沒有缺字、重複，或混進按鈕文字（例如「複製」「重新生成」）。
 4. Claude 的回答如果有思考過程或工具結果，有沒有被一起抓進來。
+5. Gemini：開啟「顯示思路」的回答，思考內容有沒有混進來；有程式碼的回答，有沒有多出「content_copy」之類的按鈕文字。
+
+## Gemini 說明
+
+- Gemini 只會先顯示最近幾則，越早的訊息要捲到頂才會一小批一小批載入。擴充功能會自動一直往上捲，直到最早那則連續幾次都沒變才開始讀，所以長對話會比 ChatGPT、Claude 慢（可能要一兩分鐘），期間請不要點其他地方。
+- Gemini 一律用捲動讀取（沒有直接讀資料的方式），所以沒有訊息時間，也偵測不到分支。
+- 只擷取回答本文：思考過程、引用來源小卡、程式碼區塊上的複製按鈕都不會抓進來。上傳的檔案和生成的圖片不會擷取。
 
 ## 已知限制
 

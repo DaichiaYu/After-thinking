@@ -1,12 +1,13 @@
-// After-thinking Capture v0.1.1 — 按圖示模式（manual_click）
+// After-thinking Capture v0.3.0 — 按圖示模式（manual_click）
 // 只在使用者按下擴充功能圖示時讀取目前這個分頁，不會背景監聽。
 
-const VERSION = "0.2.0";
+const VERSION = "0.3.0";
 
 function detectPlatform(url) {
   const host = new URL(url).hostname;
   if (host === "chatgpt.com" || host === "chat.openai.com") return "chatgpt";
   if (host === "claude.ai") return "claude";
+  if (host === "gemini.google.com") return "gemini";
   return null;
 }
 
@@ -33,6 +34,11 @@ async function captureViaApi(platform) {
   });
 
   try {
+    if (platform === "gemini") {
+      // Gemini 沒有穩定可用的對話資料介面，直接交給捲動讀取
+      note("api", "not_supported");
+      return { api: log };
+    }
     if (platform === "chatgpt") {
       const m = location.pathname.match(/\/c\/([0-9a-f-]{36})/i);
       if (!m) { note("conversation_id", "not_found"); return { api: log }; }
@@ -183,6 +189,24 @@ async function captureConversation(platform) {
   }
   const outermost = (nodes) => nodes.filter((n) => !nodes.some((o) => o !== n && o.contains(n)));
 
+  // Gemini 的回答裡夾著按鈕和圖示文字（例如程式碼區塊上方的「content_copy」）。
+  // 做法：複製一份放到畫面外，拿掉這些元素後再讀文字，原本的頁面不受影響。
+  const GEMINI_NOISE = ".code-block-decoration, mat-icon, button, .cdk-visually-hidden, " +
+    "sources-carousel-inline, source-inline-chip, .source-inline-chip-container";
+  function geminiText(node) {
+    if (!node.querySelector(GEMINI_NOISE)) return node.innerText;
+    const box = document.createElement("div");
+    box.style.cssText = "position:fixed;left:-100000px;top:0;width:" + Math.max(300, node.clientWidth) + "px;";
+    const copy = node.cloneNode(true);
+    copy.querySelectorAll(GEMINI_NOISE).forEach((el) => el.remove());
+    box.appendChild(copy);
+    document.body.appendChild(box);
+    const text = copy.innerText;
+    box.remove();
+    cleaning.add("strip_gemini_controls");
+    return text;
+  }
+
   let strategy = "none";
 
   // 讀取目前網頁上「已經產生」的訊息，依畫面順序回傳
@@ -213,9 +237,31 @@ async function captureConversation(platform) {
       nodes.forEach((node) => out.push({ node, speaker: node.matches(USER) ? "author" : "assistant",
         raw: stripStatusHeader(node.innerText), platform_message_id: null }));
     }
+    if (platform === "gemini") {
+      strategy = "gemini:conversation-container";
+      const turns = document.querySelectorAll("#chat-history .conversation-container, .conversation-container");
+      outermost(Array.from(turns)).forEach((turn, i) => {
+        const turnKey = turn.id || null;
+        const q = turn.querySelector("user-query .query-text") || turn.querySelector("user-query");
+        if (q) {
+          const lines = q.querySelectorAll(".query-text-line");
+          const text = lines.length ? Array.from(lines).map((l) => l.innerText).join("\n") : geminiText(q);
+          out.push({ node: q, speaker: "author", raw: text, platform_message_id: null,
+            key: turnKey ? "turn:" + turnKey + ":q" : null });
+        }
+        const r = turn.querySelector("model-response");
+        if (r) {
+          // 只拿回答本文；思考過程（model-thoughts）不在這個區塊裡
+          const body = r.querySelector(".model-response-text .markdown") || r.querySelector("message-content .markdown") ||
+            r.querySelector(".model-response-text") || r.querySelector("message-content");
+          if (body) out.push({ node: body, speaker: "assistant", raw: geminiText(body), platform_message_id: null,
+            key: turnKey ? "turn:" + turnKey + ":r" : null });
+        }
+      });
+    }
     return out.map((m) => {
       const content = clean(stripButtons(m.raw));
-      return { node: m.node, speaker: m.speaker, content, platform_message_id: m.platform_message_id,
+      return { node: m.node, speaker: m.speaker, content, platform_message_id: m.platform_message_id, key: m.key || null,
         truncated: TRUNCATED_TAIL.test(content) };
     }).filter((m) => m.content.length > 0);
   }
@@ -243,7 +289,7 @@ async function captureConversation(platform) {
     return document.scrollingElement || document.documentElement;
   }
 
-  const keyOf = (m) => m.platform_message_id ? "id:" + m.platform_message_id : m.speaker + ":" + m.content;
+  const keyOf = (m) => m.key || (m.platform_message_id ? "id:" + m.platform_message_id : m.speaker + ":" + m.content);
 
   // 把新看到的一批訊息接在已收集的清單後面：找出重疊的部分，只加上新的
   let gaps = 0;
@@ -289,10 +335,16 @@ async function captureConversation(platform) {
   //    有些網站的捲動是倒過來的（最底部是 0、往上是負數），
   //    所以這裡不設定「位置 0」，而是設一個極小的值，讓瀏覽器自己停在真正的頂端。
   //    較舊的訊息常是捲到頂才開始載入，所以要等到「最早那則」連續幾次都沒變才算完成。
+  //    Gemini 每次只補一小批舊訊息、而且載入比較慢，所以等久一點，
+  //    並且每次先往下推一點再回到頂端，確保網站收到「又捲到頂了」的訊號。
+  const isGemini = platform === "gemini";
+  const TOP_WAIT = isGemini ? 1500 : 600;
+  const TOP_STABLE = isGemini ? 4 : 3;
   let stable = 0, lastFirst = null, lastHeight = -1;
-  while (stable < 3 && log.top_rounds < 200 && Date.now() - started < TIME_LIMIT) {
+  while (stable < TOP_STABLE && log.top_rounds < 200 && Date.now() - started < TIME_LIMIT) {
+    if (isGemini && scroller.scrollTop <= 1) { scroller.scrollTop = 80; await frame(); }
     scroller.scrollTop = -1e9;
-    await sleep(600); await frame();
+    await sleep(TOP_WAIT); await frame();
     log.top_rounds++;
     log.top_min_seen = Math.min(log.top_min_seen, Math.round(scroller.scrollTop));
     const snap = snapshot();
@@ -300,7 +352,7 @@ async function captureConversation(platform) {
     if (firstKey === lastFirst && scroller.scrollHeight === lastHeight) stable++;
     else stable = 0;
     lastFirst = firstKey; lastHeight = scroller.scrollHeight;
-    progress("正在往上載入較舊的訊息（第 " + log.top_rounds + " 次）…");
+    progress("正在往上載入較舊的訊息（第 " + log.top_rounds + " 次，目前載入 " + snap.length + " 則）…");
   }
 
   // 2. 一路往下捲，邊展開邊收集。捲不動了就代表到底。
@@ -343,7 +395,9 @@ function diagnosePage() {
     "[data-message-author-role]", '[data-message-author-role="user"]', '[data-message-author-role="assistant"]',
     "article", 'article[data-testid^="conversation-turn"]', "article[data-turn]",
     '[data-testid="user-message"]', ".font-claude-response", ".font-claude-message",
-    "[data-is-streaming]", "[data-test-render-count]", "main", "[role=main]"
+    "[data-is-streaming]", "[data-test-render-count]", "main", "[role=main]",
+    "#chat-history", "infinite-scroller", ".conversation-container", "user-query", "user-query .query-text",
+    "model-response", "model-response .markdown", "model-thoughts", "message-content"
   ];
   const testids = {};
   document.querySelectorAll("[data-testid]").forEach((el) => {
@@ -388,7 +442,7 @@ function diagnosePage() {
     "[data-turn-key]", "[data-chatgpt-agent-turn-start]"
   ].map((sel) => [sel, probe(sel)]));
   const samples = Array.from(document.querySelectorAll(
-    '[data-testid="user-message"], .font-claude-response, .font-claude-message, article, [data-message-author-role]'
+    '[data-testid="user-message"], .font-claude-response, .font-claude-message, article, [data-message-author-role], user-query, model-response'
   ));
   return {
     host: location.hostname,
@@ -578,7 +632,7 @@ async function main() {
   const tab = await getActiveTab();
   const platform = tab && tab.url ? detectPlatform(tab.url) : null;
   if (!platform) {
-    showError("這個頁面不是 ChatGPT 或 Claude 的對話。請先打開要整理的對話，再按一次圖示。");
+    showError("這個頁面不是 ChatGPT、Claude 或 Gemini 的對話。請先打開要整理的對話，再按一次圖示。");
     return;
   }
 
@@ -640,7 +694,7 @@ async function main() {
 
   const truncated = items.filter((i) => i.truncated).length;
   document.getElementById("platform").textContent =
-    (platform === "chatgpt" ? "ChatGPT" : "Claude") + "｜" + page.title +
+    ({ chatgpt: "ChatGPT", claude: "Claude", gemini: "Gemini" }[platform]) + "｜" + page.title +
     (page.api && page.api.ok ? "｜已直接讀取完整資料" : "｜使用捲動讀取") +
     "｜用時 " + elapsed() + " 秒" +
     (page.branches ? "｜這段對話有 " + page.branches + " 個分支點，只擷取目前這條路線" : "") +

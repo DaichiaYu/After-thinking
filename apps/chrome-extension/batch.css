@@ -1,0 +1,52 @@
+:root {
+  --ink: #1f2a44;
+  --paper: #ffffff;
+  --page: #f5f6f8;
+  --line: #d9dee7;
+  --muted: #5b6478;
+  --author: #1f6f78;
+  --error: #a4461b;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; padding: 32px 16px;
+  font: 15px/1.65 "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", system-ui, sans-serif;
+  color: var(--ink); background: var(--page);
+}
+main { max-width: 640px; margin: 0 auto; }
+h1 { font-size: 22px; margin: 0 0 6px; }
+h2 { font-size: 16px; margin: 0 0 4px; }
+.lead { color: var(--muted); margin: 0 0 20px; }
+code { font: 13px ui-monospace, Menlo, monospace; background: #e9ecf1; padding: 1px 4px; border-radius: 3px; }
+.card { background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 16px 18px; margin-bottom: 14px; }
+.muted { color: var(--muted); font-size: 13.5px; margin: 4px 0 0; }
+.error { color: var(--error); }
+button {
+  margin-top: 12px; padding: 9px 16px; border: 0; border-radius: 6px;
+  background: var(--ink); color: #fff; font: inherit; font-weight: 600; cursor: pointer;
+}
+button:disabled { opacity: .45; cursor: default; }
+button:focus-visible { outline: 2px solid var(--author); outline-offset: 2px; }
+button.secondary { background: transparent; color: var(--ink); border: 1px solid var(--line); font-weight: 500; }
+button.link { background: none; color: var(--author); padding: 0; margin: 0 14px 0 0; font-weight: 500; font-size: 13.5px; }
+.pair { display: flex; gap: 8px; flex-wrap: wrap; }
+#summary { margin: 12px 0 4px; font-weight: 600; }
+details { margin-top: 6px; }
+summary { cursor: pointer; color: var(--muted); font-size: 13.5px; }
+.tools { margin: 8px 0 4px; }
+#chats {
+  list-style: none; margin: 0; padding: 0; max-height: 360px; overflow-y: auto;
+  border: 1px solid var(--line); border-radius: 6px;
+}
+#chats li { border-bottom: 1px solid var(--line); }
+#chats li:last-child { border-bottom: 0; }
+#chats label { display: grid; grid-template-columns: 18px 1fr auto; gap: 8px; padding: 6px 10px; font-size: 13.5px; cursor: pointer; }
+#chats input { margin: 4px 0 0; }
+#chats .title { overflow-wrap: anywhere; }
+#chats .tag { color: var(--muted); font-size: 12px; white-space: nowrap; }
+#chats li.captured .title { color: var(--muted); }
+.bar { height: 8px; background: #e9ecf1; border-radius: 4px; overflow: hidden; margin-top: 14px; }
+#bar-fill { display: block; height: 100%; width: 0; background: var(--author); transition: width .3s; }
+#progress-text { margin: 8px 0 0; font-weight: 600; }
+#failures { font-size: 13.5px; color: var(--error); padding-left: 20px; }
+@media (prefers-reduced-motion: reduce) { #bar-fill { transition: none; } }

@@ -45,11 +45,14 @@
   <p id="error" class="error" hidden></p>
 
   <footer>
+    <button id="open-batch" class="secondary">批量擷取 Gemini 對話</button>
+    <p class="hint">一次把 Gemini 側邊欄裡的對話全部抓進 GitHub 的 inbox/，抓過的會自動跳過。</p>
     <button id="diagnose" class="secondary">複製診斷報告</button>
     <p class="hint">診斷報告只包含頁面結構和字數，不包含對話內容。抓取有問題時，把它貼給開發者。</p>
     <p id="diagnose-status" class="muted" role="status"></p>
   </footer>
   <script src="github.js"></script>
+  <script src="capture.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

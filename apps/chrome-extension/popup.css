@@ -71,3 +71,4 @@ button.secondary { background: transparent; color: var(--ink); border: 1px solid
 #confirm { margin-top: 12px; padding: 10px; border: 1px solid var(--author); border-radius: 6px; font-size: 13px; }
 #confirm p { margin: 0; }
 #upload-target { margin-top: 6px; }
+#diagnose { margin-top: 12px; }

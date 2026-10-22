@@ -1,4 +1,4 @@
-# After-thinking Capture v0.3.0
+# After-thinking Capture v0.4.0
 
 把 ChatGPT、Claude 或 Gemini 網頁上的對話擷取成 After-thinking 的原文檔。
 這一版是「按圖示模式」（manual_click）：只有你按下擴充功能圖示時，才會讀取目前這個分頁。
@@ -34,6 +34,25 @@
 3. 打開 `conversation.jsonl`，內容有沒有缺字、重複，或混進按鈕文字（例如「複製」「重新生成」）。
 4. Claude 的回答如果有思考過程或工具結果，有沒有被一起抓進來。
 5. Gemini：開啟「顯示思路」的回答，思考內容有沒有混進來；有程式碼的回答，有沒有多出「content_copy」之類的按鈕文字。
+
+## 批量擷取 Gemini 對話（v0.4.0 新增）
+
+對話很多、不想一段段打開時用這個。
+
+1. 先完成上面的 GitHub 設定。
+2. 按擴充功能圖示，在最下面按「批量擷取 Gemini 對話」，會打開一個新分頁。
+3. 按「讀取 Gemini 對話清單」：會開一個 Gemini 視窗，自動捲完側邊欄，列出所有對話。已經抓過的會標成「已擷取」，預設不勾。
+4. 按「開始擷取」：擴充功能會一段段打開對話、往上載入完整內容、上傳。每段都是一個獨立的提交，中途停止或關掉，已經上傳的都還在。
+5. 擷取時讓 Gemini 視窗留在畫面上（不要縮到最小），可以去做別的事。每段大約幾十秒到兩分鐘。
+
+上傳位置（和單段擷取的 `discussions/` 分開）：
+
+- `inbox/gemini-<對話編號>/source/conversation.jsonl`、`source/metadata.yaml`
+- `inbox/index.jsonl`：每段一行，記錄標題、網址、訊息數、字數、警告。下次批量擷取靠它跳過抓過的對話；之後分類也從這個檔案開始。
+
+inbox 裡的對話還不是 After-thinking 的討論工作區（沒有 `state.yaml`），分類後挑出要分析的，再移到 `discussions/`。
+
+批量擷取需要讀 Gemini 頁面的權限（`gemini.google.com`），從舊版更新時 Chrome 可能會請你同意。
 
 ## Gemini 說明
 

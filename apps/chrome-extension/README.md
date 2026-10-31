@@ -1,4 +1,4 @@
-# After-thinking Capture v0.5.0
+# After-thinking Capture v0.6.0
 
 把 ChatGPT、Claude 或 Gemini 網頁上的對話擷取成 After-thinking 的原文檔。
 這一版是「按圖示模式」（manual_click）：只有你按下擴充功能圖示時，才會讀取目前這個分頁。
@@ -47,8 +47,10 @@
 
 上傳位置（和單段擷取的 `discussions/` 分開）：
 
-- `inbox/gemini-<對話編號>/source/conversation.jsonl`、`source/metadata.yaml`
-- `inbox/index.jsonl`：擷取紀錄。每擷取一次記一行（標題、網址、存放位置、批量或單段、訊息數、字數、附件數、警告）。之後分類也從這個檔案開始。
+- `inbox/<年-月>/gemini-<對話編號>/source/`：`conversation.jsonl`、`metadata.yaml`，有附件時還有 `attachments/`
+- 月份是**對話開始的月份**（原始時間）；找不到原始時間的放 `inbox/undated/`
+- `inbox/index.jsonl`：擷取紀錄。每擷取一次記一行（標題、網址、存放位置、批量或單段、對話開始和最後的時間、訊息數、字數、附件數、警告）。之後分類也從這個檔案開始。
+- v0.5.0 以前抓的對話放在 `inbox/gemini-<對話編號>/`（沒有月份），位置以 `index.jsonl` 為準。
 
 ## 怎麼知道哪些抓過了（v0.5.0）
 
@@ -57,29 +59,45 @@
 - 單段擷取視窗：打開抓過的對話時，最上面會提示什麼時候抓的、當時幾則、存在哪裡，以及之後多了幾則。
 - 只用「只下載檔案」存到電腦的，不會記進紀錄。
 
-## 檔案和圖片
+## 檔案和圖片（v0.6.0：Gemini 會存原檔）
 
-檔案和圖片本身不會下載，只在訊息裡原本的位置留下記號，另外記在 `conversation.jsonl` 的 `attachments` 欄位：
+Gemini 對話裡的圖片和檔案會下載原檔，存在 `source/attachments/`，訊息裡原本的位置留下指向檔案的記號，另外記在 `conversation.jsonl` 的 `attachments` 欄位：
 
-- 你上傳的：`[附件：報告.pdf]`、`[圖片：photo.jpg]`（沒有檔名時是 `[圖片]`），放在你那則訊息的開頭。
-- AI 產生的圖：`[AI 生成的圖片]`，放在那則回答的結尾。
-- ChatGPT、Claude 從網站資料讀，檔名比較完整；Gemini 從畫面讀，檔名抓不到時只會有 `[圖片]` 或 `[附件：未知檔名]`。
-- 檔案的內容（例如 PDF 裡的文字）不會擷取。
+- 你上傳的：`[附件：報告.pdf → attachments/01.pdf]`、`[圖片：attachments/02.png]`，放在你那則訊息的開頭。
+- AI 產生的圖：`[AI 生成的圖片：attachments/03.png]`，放在那則回答的結尾。
+- 拿不到原檔的寫成 `[附件：報告.pdf（未取得原檔）]`，擷取紀錄的 `attachments_missing` 會記數量，批量頁完成時也會提示。之後可以自己把檔案放進那個 `attachments/` 資料夾。
+- 單一檔案超過 20 MB 不下載。
+- ChatGPT、Claude 目前仍然只留記號（`[附件：檔名]`），還沒下載原檔。
+
+## 原始時間（v0.6.0，Gemini）
+
+Gemini 畫面上不顯示時間。擴充功能會在 Gemini 頁面載入時「旁聽」頁面自己向 Google 拿的對話資料，從裡面找出每一輪的時間（不會另外送出請求，資料只留在那個分頁裡）。
+
+- 找到的時間寫進每則訊息的 `timestamp`，以及 `metadata.yaml` 的 `conversation_created_at`、`conversation_updated_at`、`time_source`。
+- Gemini 的資料格式沒有公開，Google 改版時可能會找不到時間；這時對話會放進 `inbox/undated/`，其他照常。
+- 單段擷取：裝好新版之後，已經開著的 Gemini 頁面要先重新整理一次，才抓得到時間（視窗會提示）。
+
+## 根目錄的指引檔（AGENTS.md）
+
+第一次上傳時，會在倉庫根目錄建立 `AGENTS.md`（資料夾地圖、檔案格式、怎麼找資料、給 AI 的規則）和一個指向它的 `CLAUDE.md`。之後查資料的 AI 先讀它就知道倉庫怎麼用。
+
+- 擴充功能更新指引內容時會一起更新這個檔案。
+- 想自己改寫的話，刪掉 `AGENTS.md` 第一行的標記，之後就不會被覆蓋。已經存在的 `CLAUDE.md` 不會被動到。
 
 inbox 裡的對話還不是 After-thinking 的討論工作區（沒有 `state.yaml`），分類後挑出要分析的，再移到 `discussions/`。
 
-批量擷取需要讀 Gemini 頁面的權限（`gemini.google.com`），從舊版更新時 Chrome 可能會請你同意。
+批量擷取需要讀 Gemini 頁面的權限（`gemini.google.com`）；下載圖片需要讀 Google 圖片網址的權限（`googleusercontent.com`、`usercontent.google.com`）。從舊版更新時 Chrome 可能會請你同意。
 
 ## Gemini 說明
 
 - Gemini 只會先顯示最近幾則，越早的訊息要捲到頂才會一小批一小批載入。擴充功能會自動一直往上捲，直到最早那則連續幾次都沒變才開始讀，所以長對話會比 ChatGPT、Claude 慢（可能要一兩分鐘），期間請不要點其他地方。
-- Gemini 一律用捲動讀取（沒有直接讀資料的方式），所以沒有訊息時間，也偵測不到分支。
-- 只擷取回答本文：思考過程、引用來源小卡、程式碼區塊上的複製按鈕都不會抓進來。上傳的檔案和生成的圖片只留記號（見「檔案和圖片」）。
+- Gemini 一律用捲動讀取，偵測不到分支。訊息時間見「原始時間」。
+- 只擷取回答本文：思考過程、引用來源小卡、程式碼區塊上的複製按鈕都不會抓進來。上傳的檔案和生成的圖片會存原檔（見「檔案和圖片」）。
 
 ## 已知限制
 
 - 網站改版時，擷取規則可能失效，需要更新。
 - 抓到的是畫面上顯示的文字，Markdown 格式（例如粗體、表格）會變成純文字。
 - 只抓畫面上目前這條路線，編輯或重新生成造成的其他分支不會被擷取。
-- 網頁上沒有訊息時間，所以 `timestamp` 一律是 null。
+- ChatGPT、Claude 從網站資料讀時間；改用捲動讀取時 `timestamp` 是 null。Gemini 見「原始時間」。
 - `metadata.yaml` 多了 `capture`（擷取資訊）欄位，After-thinking 的 `docs/source-format.md` 之後需要補上這個欄位的說明。

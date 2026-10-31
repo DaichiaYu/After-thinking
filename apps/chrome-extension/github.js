@@ -127,10 +127,18 @@ async function commitFiles(config, branch, files, message) {
   const parentSha = ref.json.object.sha;
   const parent = await gh(config.token, "GET", repo + "/git/commits/" + parentSha);
   if (!parent.ok) throw new Error("讀取最新提交失敗（" + parent.status + "）");
-  const tree = await gh(config.token, "POST", repo + "/git/trees", {
-    base_tree: parent.json.tree.sha,
-    tree: files.map((f) => ({ path: f.path, mode: "100644", type: "blob", content: f.content }))
-  });
+  // 圖片等二進位檔要先建立 blob，再放進樹裡
+  const entries = [];
+  for (const f of files) {
+    if (f.base64 !== undefined) {
+      const blob = await gh(config.token, "POST", repo + "/git/blobs", { content: f.base64, encoding: "base64" });
+      if (!blob.ok) throw new Error("上傳附件失敗（" + blob.status + "）");
+      entries.push({ path: f.path, mode: "100644", type: "blob", sha: blob.json.sha });
+    } else {
+      entries.push({ path: f.path, mode: "100644", type: "blob", content: f.content });
+    }
+  }
+  const tree = await gh(config.token, "POST", repo + "/git/trees", { base_tree: parent.json.tree.sha, tree: entries });
   if (!tree.ok) throw new Error("建立檔案失敗（" + tree.status + "）");
   const commit = await gh(config.token, "POST", repo + "/git/commits", {
     message, tree: tree.json.sha, parents: [parentSha]

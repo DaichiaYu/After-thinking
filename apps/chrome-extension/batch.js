@@ -17,6 +17,7 @@ let workerWindowId = null;
 let stopRequested = false;
 let lastFailures = [];
 let listing = false;
+let guideDone = false;     // 這次已經確認過根目錄的 AGENTS.md
 
 // 讀寫 index 的函式在 github.js（readCaptureIndex、upsertCaptureRow）
 
@@ -79,6 +80,7 @@ async function init() {
   chrome.tabs.getCurrent((tab) => { if (tab) chrome.tabs.update(tab.id, { autoDiscardable: false }).catch(() => {}); });
   $("open-options").addEventListener("click", () => chrome.runtime.openOptionsPage());
 
+  await ensureGeminiRecorder();
   config = await loadConfig();
   if (!config || !config.repo || !config.token) {
     $("repo-status").textContent = "還沒設定 GitHub。設定好之後重新整理這一頁。";
@@ -194,15 +196,21 @@ async function captureOne(chat) {
   page.title = chat.title || page.title;
   page.url = chat.url;
   page.api = { tried: false, ok: false, steps: ["api:not_supported"] };
+  const attachmentFiles = await finalizeCapture(workerTabId, "gemini", page);
 
-  const folder = INBOX + "gemini-" + chat.id + "/";
+  // 依對話開始的月份放資料夾；找不到原始時間就放 undated/
+  const folder = INBOX + (folderMonth(page.conversation_created_at) || "undated") + "/gemini-" + chat.id + "/";
   const items = page.items;
   const entry = buildCaptureEntry("gemini", chat.id, chat.title, chat.url, folder, items, page, "batch");
-  await commitWithRetry([
+  const files = [
     { path: folder + "source/conversation.jsonl", content: buildJsonl(items) },
     { path: folder + "source/metadata.yaml", content: buildMetadata(items.length, items.length, "gemini", page, "batch") },
+    ...attachmentFiles.map((f) => ({ path: folder + "source/" + f.path, base64: f.base64 })),
     { path: CAPTURE_INDEX_PATH, content: serializeCaptureIndex(upsertCaptureRow(index, entry)) }
-  ], "After-thinking inbox: gemini " + chat.id + " (" + items.length + " messages)");
+  ];
+  if (!guideDone) files.push(...await repoGuideFiles(config, branch));
+  await commitWithRetry(files, "After-thinking inbox: gemini " + chat.id + " (" + items.length + " messages)");
+  guideDone = true;
   index = upsertCaptureRow(index, entry);
   capturedIds.add("gemini:" + chat.id);
   return entry;
@@ -219,6 +227,8 @@ async function runBatch(queue) {
   const startedAt = Date.now();
   const failures = [];
   let ok = 0;
+  let dated = 0;
+  let missingAtts = 0;
   const show = (i, current) => {
     const pct = Math.round((i / queue.length) * 100);
     $("bar-fill").style.width = pct + "%";
@@ -233,8 +243,10 @@ async function runBatch(queue) {
     const chat = queue[i];
     show(i, "正在擷取：" + (chat.title || chat.id) + "（長對話要往上載入，可能要一兩分鐘）");
     try {
-      await captureOne(chat);
+      const entry = await captureOne(chat);
       ok++;
+      if (entry.started_at) dated++;
+      missingAtts += entry.attachments_missing || 0;
     } catch (e) {
       failures.push({ chat, reason: e.message });
     }
@@ -250,7 +262,9 @@ async function runBatch(queue) {
   lastFailures = failures.map((f) => f.chat);
   const skipped = stopRequested ? queue.length - ok - failures.length : 0;
   $("done-text").textContent = "完成：成功 " + ok + " 段，失敗 " + failures.length + " 段" +
-    (skipped ? "，因為按了停止而沒抓 " + skipped + " 段" : "") + "。目前總共擷取過 " + capturedIds.size + " 段對話。";
+    (skipped ? "，因為按了停止而沒抓 " + skipped + " 段" : "") + "。目前總共擷取過 " + capturedIds.size + " 段對話。" +
+    (ok ? "找到原始時間的有 " + dated + " 段" + (dated < ok ? "（其他放在 inbox/undated/）" : "") + "。" : "") +
+    (missingAtts ? "有 " + missingAtts + " 個附件沒拿到原檔，訊息裡標成「未取得原檔」。" : "");
   const list = $("failures");
   list.textContent = "";
   failures.forEach((f) => {

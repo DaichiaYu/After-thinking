@@ -1,6 +1,6 @@
 // After-thinking Capture — 共用的擷取與輸出程式（popup.js 和 batch.js 都會用到）
 
-const VERSION = "0.5.0";
+const VERSION = "0.6.0";
 
 function detectPlatform(url) {
   const host = new URL(url).hostname;
@@ -275,23 +275,33 @@ async function captureConversation(platform) {
   const looksLikeFile = (s) => /^[^\n]{1,200}\.[a-z0-9]{1,8}$/i.test(s);
 
   // 使用者上傳的檔案和圖片：在 user-query 裡、但不在提問文字裡
+  // 使用者上傳的檔案和圖片：在 user-query 裡、但不在提問文字裡。
+  // src 是之後下載原檔用的網址（可能是 https、blob 或 data）
+  const imgSrc = (img) => img.currentSrc || img.getAttribute("src") || null;
   function geminiUserAttachments(uq) {
     // 先列檔案、再列圖片
     const files = [];
     const images = [];
     const qt = uq.querySelector(".query-text");
+    const outside = (el) => !(qt && qt.contains(el)) && !el.closest(GEMINI_NOISE);
     uq.querySelectorAll("img").forEach((img) => {
-      if (qt && qt.contains(img)) return;
+      if (!outside(img)) return;
       const alt = (img.getAttribute("alt") || "").trim();
-      images.push({ kind: "image", name: looksLikeFile(alt) ? alt : null });
+      images.push({ kind: "image", name: looksLikeFile(alt) ? alt : null, src: imgSrc(img) });
     });
-    const copy = uq.cloneNode(true);
-    copy.querySelectorAll(".query-text, img, " + GEMINI_NOISE).forEach((el) => el.remove());
+    // 檔案卡：文字剛好像檔名（例如「報告.pdf」）的最內層元素；旁邊有連結的話記下來當下載網址
     const seen = new Set(images.map((a) => a.name).filter(Boolean));
-    offscreenText(copy, uq.clientWidth).split("\n").map((l) => l.trim()).filter(looksLikeFile).forEach((name) => {
-      if (seen.has(name)) return;
-      seen.add(name);
-      files.push({ kind: "file", name });
+    uq.querySelectorAll("*").forEach((el) => {
+      if (!outside(el) || el.tagName === "IMG") return;
+      // 只看元素「自己」的文字，不含子元素（避免把「報告.pdf」和旁邊的「PDF」標籤黏在一起）
+      const t = Array.from(el.childNodes).filter((c) => c.nodeType === 3).map((c) => c.textContent).join("").trim();
+      if (!looksLikeFile(t) || seen.has(t)) return;
+      seen.add(t);
+      let link = el.closest("a[href]");
+      for (let p = el.parentElement, k = 0; !link && p && p !== uq && k < 3; p = p.parentElement, k++) {
+        link = p.querySelector("a[href]");
+      }
+      files.push({ kind: "file", name: t, src: link ? link.href : null });
     });
     return files.concat(images);
   }
@@ -306,7 +316,7 @@ async function captureConversation(platform) {
       if (w && w < 64) return;
       const src = img.currentSrc || img.getAttribute("src") || "";
       const generated = !!img.closest("generated-image, .generated-image, .generated-images") || /googleusercontent\.com\/gg\//.test(src);
-      atts.push({ kind: generated ? "generated_image" : "image", name: null });
+      atts.push({ kind: generated ? "generated_image" : "image", name: null, src: src || null });
     });
     return atts;
   }
@@ -370,7 +380,7 @@ async function captureConversation(platform) {
       const atts = m.attachments || [];
       const text = clean(stripButtons(m.raw));
       const content = withMarkers(text, atts, m.speaker);
-      return { node: m.node, speaker: m.speaker, content, platform_message_id: m.platform_message_id, key: m.key || null,
+      return { node: m.node, speaker: m.speaker, content, text, platform_message_id: m.platform_message_id, key: m.key || null,
         attachments: atts, truncated: TRUNCATED_TAIL.test(text) };
     }).filter((m) => m.content.length > 0);
   }
@@ -389,6 +399,14 @@ async function captureConversation(platform) {
   // 找出真正負責捲動的容器（只看高度，不看 CSS 設定，避免漏掉）
   function findScroller() {
     const first = snapshot()[0];
+    // Gemini 的對話區塊即使內容還沒多到能捲，也是負責載入舊訊息的那一層
+    if (platform === "gemini" && first) {
+      const known = first.node.closest("#chat-history, infinite-scroller");
+      if (known) {
+        const oy = getComputedStyle(known).overflowY;
+        if (oy === "auto" || oy === "scroll" || oy === "overlay") return known;
+      }
+    }
     let el = first ? first.node.parentElement : null;
     while (el && el !== document.body) {
       const oy = getComputedStyle(el).overflowY;
@@ -453,6 +471,8 @@ async function captureConversation(platform) {
   while (stable < TOP_STABLE && log.top_rounds < 200 && Date.now() - started < TIME_LIMIT) {
     if (isGemini && scroller.scrollTop <= 1) { scroller.scrollTop = 80; await frame(); }
     scroller.scrollTop = -1e9;
+    // 內容還不夠長、捲不動時，瀏覽器不會發出「捲動了」的通知，這裡補發一次讓網站去載入舊訊息
+    if (isGemini) scroller.dispatchEvent(new Event("scroll"));
     await sleep(TOP_WAIT); await frame();
     log.top_rounds++;
     log.top_min_seen = Math.min(log.top_min_seen, Math.round(scroller.scrollTop));
@@ -488,7 +508,7 @@ async function captureConversation(platform) {
   scroller.scrollTop = originalTop;
 
   return {
-    items: acc.map((m) => ({ speaker: m.speaker, content: m.content, platform_message_id: m.platform_message_id,
+    items: acc.map((m) => ({ speaker: m.speaker, content: m.content, text: m.text, platform_message_id: m.platform_message_id,
       attachments: m.attachments || [], truncated: m.truncated })),
     strategy,
     cleaning: Array.from(cleaning),
@@ -516,7 +536,8 @@ function buildCaptureEntry(platform, conversationId, title, url, folder, items, 
   if (page.scroll && page.scroll.timed_out) warnings.push("timed_out");
   if (page.scroll && page.scroll.gaps) warnings.push("possible_gaps");
   if (items.some((i) => i.truncated)) warnings.push("truncated_messages");
-  const attachments = items.reduce((n, i) => n + (Array.isArray(i.attachments) ? i.attachments.length : 0), 0);
+  const allAtts = items.reduce((list, i) => list.concat(Array.isArray(i.attachments) ? i.attachments : []), []);
+  const attachments = allAtts.length;
   return {
     platform,
     conversation_id: conversationId,
@@ -528,14 +549,19 @@ function buildCaptureEntry(platform, conversationId, title, url, folder, items, 
     author_messages: items.filter((i) => i.speaker === "author").length,
     chars: items.reduce((n, i) => n + i.content.length, 0),
     attachments,
+    attachments_saved: allAtts.filter((a) => a.file).length,
+    attachments_missing: allAtts.filter((a) => a.missing).length,
+    started_at: page.conversation_created_at || null,
+    updated_at: page.conversation_updated_at || null,
     warnings,
     captured_at: new Date().toISOString(),
     extension_version: VERSION
   };
 }
 
-function defaultDiscussionId(platform, url) {
-  const date = new Date().toISOString().slice(0, 10);
+function defaultDiscussionId(platform, url, startedAt) {
+  const d = startedAt ? new Date(startedAt) : new Date();
+  const date = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
   const match = new URL(url).pathname.match(/([0-9a-f]{8})[0-9a-f-]*\/?$/i);
   return [date, platform, match ? match[1].toLowerCase() : "chat"].join("-");
 }
@@ -582,6 +608,8 @@ function buildMetadata(kept, detected, platform, page, mode) {
     "  branch_points_detected: " + (page.branches === undefined || page.branches === null ? "null" : page.branches),
     "  branch_captured: current_path",
     "  conversation_created_at: " + (page.conversation_created_at ? q(page.conversation_created_at) : "null"),
+    "  conversation_updated_at: " + (page.conversation_updated_at ? q(page.conversation_updated_at) : "null"),
+    "  time_source: " + (page.time_source ? q(page.time_source) : (page.api && page.api.ok ? q("site_api") : "null")),
     "  api_fallback_reason: " + (page.api && !page.api.ok ? q(page.api.steps.join(", ")) : "null"),
     "  auto_scroll: " + (page.scroll ? "{down_steps: " + page.scroll.down_steps + ", gaps: " + page.scroll.gaps + ", timed_out: " + page.scroll.timed_out + "}" : "null"),
     "  items_still_truncated: " + page.items.filter((i) => i.truncated).length,
@@ -683,4 +711,245 @@ async function waitForGeminiConversation(expectedId) {
     await sleep(500);
   }
   return { ok: false, reason: location.pathname.toLowerCase().includes(expectedId) ? "no_messages" : "redirected" };
+}
+
+// ── 擷取後處理（在擴充功能頁面執行）：原始時間、附件原檔 ──
+
+// 讓 Gemini 頁面一開始載入就啟動記錄器。只對「之後載入」的頁面有效。
+async function ensureGeminiRecorder() {
+  try {
+    const existing = await chrome.scripting.getRegisteredContentScripts({ ids: ["at-gemini-recorder"] });
+    if (existing.length) return;
+    await chrome.scripting.registerContentScripts([{
+      id: "at-gemini-recorder", matches: ["https://gemini.google.com/*"], js: ["gemini-recorder.js"],
+      runAt: "document_start", world: "MAIN", persistAcrossSessions: true
+    }]);
+  } catch (e) { /* 註冊失敗只會少了時間，不影響擷取 */ }
+}
+
+// 注入 MAIN world：取出記錄器存的資料
+function readGeminiRecorded() {
+  return window.__atRecorder ? window.__atRecorder.responses.slice() : null;
+}
+
+// 解析 Gemini 的 batchexecute 回應，找出「對話編號 → 時間」和「每一輪 → 時間」。
+// 格式沒有公開，所以用寬鬆的規則：時間是 [秒, 奈秒] 這種兩個整數的組合。
+function parseGeminiRecorded(raws) {
+  const isTs = (a) => Array.isArray(a) && a.length === 2 && Number.isInteger(a[0]) && Number.isInteger(a[1]) &&
+    a[0] > 1.4e9 && a[0] < 2.2e9 && a[1] >= 0 && a[1] < 1e9;
+  const toMs = (a) => a[0] * 1000 + Math.floor(a[1] / 1e6);
+  const payloads = [];
+  (raws || []).forEach((raw) => {
+    raw.replace(/^\)\]\}'\s*/, "").split("\n").forEach((line) => {
+      const l = line.trim();
+      if (!l.startsWith("[")) return;
+      let arr;
+      try { arr = JSON.parse(l); } catch (e) { return; }
+      (Array.isArray(arr) ? arr : []).forEach((e) => {
+        if (Array.isArray(e) && e[0] === "wrb.fr" && typeof e[2] === "string") {
+          try { payloads.push({ rpc: e[1], data: JSON.parse(e[2]) }); } catch (err) {}
+        }
+      });
+    });
+  });
+
+  const conversations = {};   // 編號 → [毫秒…]
+  const turns = [];           // { ms, strings }
+  const findTs = (node, depth, out) => {
+    if (!Array.isArray(node) || depth > 4) return;
+    if (isTs(node)) { out.push(toMs(node)); return; }
+    node.forEach((c) => findTs(c, depth + 1, out));
+  };
+  const strings = (node, depth, out) => {
+    if (depth > 6) return;
+    if (typeof node === "string") {
+      if (node.length > 0 && !/^(c|r|rc)_[0-9a-f]+$/i.test(node) && !/^https?:\/\//.test(node)) out.push(node);
+    } else if (Array.isArray(node)) node.forEach((c) => strings(c, depth + 1, out));
+  };
+  const walk = (node, depth) => {
+    if (!Array.isArray(node) || depth > 40) return;
+    if (typeof node[0] === "string" && /^c_[0-9a-f]{8,}$/i.test(node[0])) {
+      const ts = [];
+      findTs(node, 0, ts);
+      if (ts.length) {
+        const id = node[0].slice(2).toLowerCase();
+        conversations[id] = (conversations[id] || []).concat(ts);
+      }
+    }
+    const direct = node.find(isTs);
+    if (direct) {
+      const s = [];
+      node.forEach((c) => { if (c !== direct) strings(c, 0, s); });
+      if (s.length) turns.push({ ms: toMs(direct), strings: s });
+    }
+    node.forEach((c) => walk(c, depth + 1));
+  };
+  payloads.forEach((p) => walk(p.data, 0));
+  return { conversations, turns, payloads: payloads.length };
+}
+
+// 把時間對到畫面上抓到的訊息：用提問文字比對，同樣的文字（例如「繼續」）依時間先後分配
+function applyGeminiTimes(page, conversationId, parsed) {
+  const norm = (s) => (s || "").replace(/\s+/g, " ").trim();
+  const used = new Set();
+  const turns = parsed.turns.slice().sort((a, b) => a.ms - b.ms);
+  const normed = turns.map((t) => t.strings.map(norm));
+  let matched = 0;
+  let lastMs = null;
+  page.items.forEach((item) => {
+    if (item.speaker !== "author") {
+      if (lastMs !== null) item.timestamp = new Date(lastMs).toISOString();
+      return;
+    }
+    lastMs = null;
+    const q = norm(item.text !== undefined ? item.text : item.content);
+    if (!q) return;
+    const head = q.slice(0, 80);
+    const k = turns.findIndex((t, i) => !used.has(i) && normed[i].some((s) => s === q || (head.length >= 20 && s.startsWith(head))));
+    if (k < 0) return;
+    used.add(k);
+    lastMs = turns[k].ms;
+    item.timestamp = new Date(lastMs).toISOString();
+    matched++;
+  });
+  const stamps = page.items.map((i) => i.timestamp).filter(Boolean).sort();
+  const listed = (parsed.conversations[conversationId] || []).slice().sort((a, b) => a - b);
+  page.conversation_created_at = stamps[0] || (listed.length ? new Date(listed[0]).toISOString() : null);
+  page.conversation_updated_at = stamps[stamps.length - 1] || (listed.length ? new Date(listed[listed.length - 1]).toISOString() : null);
+  page.time_source = matched ? "gemini:recorded_turns" : listed.length ? "gemini:recorded_list" : null;
+  return matched;
+}
+
+// 注入對話頁面：在頁面裡讀附件（blob:、data: 只能在頁面裡讀；https 也先試試看）
+async function fetchAttachmentsInPage(urls, maxBytes) {
+  const out = {};
+  const toB64 = (blob) => new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result).split(",")[1] || "");
+    r.onerror = () => reject(r.error);
+    r.readAsDataURL(blob);
+  });
+  for (const url of urls) {
+    try {
+      const res = await fetch(url, { credentials: "include" });
+      if (!res.ok) { out[url] = { error: "http_" + res.status }; continue; }
+      const blob = await res.blob();
+      if (blob.size > maxBytes) { out[url] = { error: "too_large" }; continue; }
+      out[url] = { b64: await toB64(blob), type: blob.type || res.headers.get("content-type") || "" };
+    } catch (e) {
+      out[url] = { error: "fetch_failed" };
+    }
+  }
+  return out;
+}
+
+async function fetchAttachmentHere(url, maxBytes) {
+  try {
+    const res = await fetch(url, { credentials: "include" });
+    if (!res.ok) return { error: "http_" + res.status };
+    const buf = await res.arrayBuffer();
+    if (buf.byteLength > maxBytes) return { error: "too_large" };
+    let bin = "";
+    const bytes = new Uint8Array(buf);
+    for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    return { b64: btoa(bin), type: res.headers.get("content-type") || "" };
+  } catch (e) {
+    return { error: "fetch_failed" };
+  }
+}
+
+const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024;
+
+function attachmentExt(att, type, url) {
+  const fromName = att.name && att.name.match(/\.([a-z0-9]{1,8})$/i);
+  if (fromName) return fromName[1].toLowerCase();
+  const map = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp", "image/gif": "gif", "image/svg+xml": "svg",
+    "application/pdf": "pdf", "text/plain": "txt", "text/csv": "csv" };
+  const t = (type || "").split(";")[0].trim().toLowerCase();
+  if (map[t]) return map[t];
+  const fromUrl = (url || "").match(/\.([a-z0-9]{2,5})(?:[?#=]|$)/i);
+  if (fromUrl && !/^(com|html?)$/i.test(fromUrl[1])) return fromUrl[1].toLowerCase();
+  return att.kind === "file" ? "bin" : "png";
+}
+
+// 下載附件原檔，回傳要寫進 source/ 的檔案；訊息裡的記號改成指向檔案
+async function downloadAttachments(tabId, items) {
+  const targets = [];
+  items.forEach((item) => (item.attachments || []).forEach((att) => { if (att.src) targets.push(att); }));
+  const files = [];
+  if (!targets.length) return files;
+  const urls = Array.from(new Set(targets.map((a) => a.src)));
+  let got = {};
+  try {
+    const [inj] = await chrome.scripting.executeScript({ target: { tabId }, func: fetchAttachmentsInPage, args: [urls, MAX_ATTACHMENT_BYTES] });
+    got = (inj && inj.result) || {};
+  } catch (e) { got = {}; }
+  // 頁面裡讀不到的 https 網址（通常是跨網域限制），改由擴充功能自己讀
+  for (const url of urls) {
+    const r = got[url];
+    if (/^https:/.test(url) && (!r || (r.error && r.error !== "too_large"))) got[url] = await fetchAttachmentHere(url, MAX_ATTACHMENT_BYTES);
+  }
+  const pathOf = {};
+  let n = 0;
+  targets.forEach((att) => {
+    const r = got[att.src];
+    if (r && r.b64) {
+      if (!pathOf[att.src]) {
+        n++;
+        pathOf[att.src] = "attachments/" + String(n).padStart(2, "0") + "." + attachmentExt(att, r.type, att.src);
+        files.push({ path: pathOf[att.src], base64: r.b64 });
+      }
+      att.file = pathOf[att.src];
+    } else {
+      att.missing = (r && r.error) || "not_found";
+    }
+    delete att.src;
+  });
+  return files;
+}
+
+// 附件記號：有原檔就寫路徑（相對於 source/），拿不到就標「未取得原檔」
+function attachmentMarker(a) {
+  const tail = a.file ? (a.name ? "：" + a.name + " → " + a.file : "：" + a.file)
+    : (a.name ? "：" + a.name : "") + (a.missing ? "（未取得原檔）" : "");
+  if (a.kind === "generated_image") return "[AI 生成的圖片" + tail + "]";
+  if (a.kind === "image") return "[圖片" + tail + "]";
+  return "[附件" + (tail || "：未知檔名") + "]";
+}
+
+function renderItemContent(item) {
+  if (item.text === undefined) return item.content;
+  const atts = item.attachments || [];
+  if (!atts.length) return item.text;
+  const marks = atts.map(attachmentMarker).join("\n");
+  if (!item.text) return marks;
+  return item.speaker === "author" ? marks + "\n\n" + item.text : item.text + "\n\n" + marks;
+}
+
+// 擷取完成後一律呼叫：Gemini 補時間、下載附件；回傳要一起上傳的附件檔
+async function finalizeCapture(tabId, platform, page) {
+  let files = [];
+  if (platform === "gemini") {
+    const conversationId = conversationIdFromUrl(platform, page.url);
+    try {
+      const [inj] = await chrome.scripting.executeScript({ target: { tabId }, world: "MAIN", func: readGeminiRecorded });
+      const raws = inj && inj.result;
+      page.recorder = raws ? "active" : "not_loaded";
+      if (raws && raws.length) applyGeminiTimes(page, conversationId, parseGeminiRecorded(raws));
+    } catch (e) { page.recorder = "error"; }
+    files = await downloadAttachments(tabId, page.items);
+  }
+  page.items.forEach((item) => {
+    item.content = renderItemContent(item);
+    delete item.text;
+  });
+  return files;
+}
+
+// 資料夾用的日期：對話開始的日期（本地時間），沒有原始時間就是 null
+function folderMonth(iso) {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (isNaN(d)) return null;
+  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0");
 }

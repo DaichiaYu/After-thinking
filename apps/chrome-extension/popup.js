@@ -207,6 +207,7 @@ document.getElementById("diagnose").addEventListener("click", async () => {
 });
 
 async function main() {
+  ensureGeminiRecorder();
   const tab = await getActiveTab();
   const platform = tab && tab.url ? detectPlatform(tab.url) : null;
   if (!platform) {
@@ -258,11 +259,25 @@ async function main() {
     return;
   }
 
-  stopTicker();
   if (!page.items.length) {
+    stopTicker();
     showError("在這個頁面找不到對話訊息。請按下方「複製診斷報告」，把報告貼給開發者。");
     return;
   }
+
+  // Gemini：補原始時間、下載圖片和檔案
+  let attachmentFiles = [];
+  try {
+    if (platform === "gemini") setPhase("正在讀取原始時間和附件…");
+    attachmentFiles = await finalizeCapture(tab.id, platform, page);
+  } catch (e) { /* 附件或時間失敗不影響擷取 */ }
+  stopTicker();
+  // 只保留勾選訊息用到的附件
+  const filesFor = (kept) => {
+    const used = new Set();
+    kept.forEach((i) => (i.attachments || []).forEach((a) => { if (a.file) used.add(a.file); }));
+    return attachmentFiles.filter((f) => used.has(f.path));
+  };
 
   const items = page.items;
   // 很短的 AI 訊息很可能是誤抓的頁面文字（例如專案名稱），預設不勾選，讓使用者決定。
@@ -278,11 +293,12 @@ async function main() {
     (page.branches ? "｜這段對話有 " + page.branches + " 個分支點，只擷取目前這條路線" : "") +
     (page.scroll && page.scroll.gaps ? "｜注意：捲動時可能跳過部分訊息，請檢查清單" : "") +
     (page.scroll && page.scroll.timed_out ? "｜注意：讀取超過 5 分鐘，已提前停止" : "") +
-    (truncated ? "｜注意：有 " + truncated + " 則長訊息沒能完整展開" : "");
+    (truncated ? "｜注意：有 " + truncated + " 則長訊息沒能完整展開" : "") +
+    (platform === "gemini" && page.recorder === "not_loaded" ? "｜沒有抓到原始時間：重新整理這個 Gemini 頁面後再按一次圖示就會有" : "");
   renderMessages(items, selected);
 
   const idInput = document.getElementById("discussion-id");
-  idInput.value = defaultDiscussionId(platform, page.url);
+  idInput.value = defaultDiscussionId(platform, page.url, page.conversation_created_at);
   document.getElementById("result").hidden = false;
 
   const status = document.getElementById("status");
@@ -354,6 +370,7 @@ async function main() {
     const { id, kept, branch, folder } = pending;
     try {
       const files = [
+        ...filesFor(kept).map((f) => ({ path: folder + "source/" + f.path, base64: f.base64 })),
         { path: folder + "source/conversation.jsonl", content: buildJsonl(kept) },
         { path: folder + "source/metadata.yaml", content: buildMetadata(kept.length, items.length, platform, page) },
         { path: folder + "state.yaml", content: buildState(config, id) },
@@ -365,6 +382,7 @@ async function main() {
         const entry = buildCaptureEntry(platform, conversationId, page.title, page.url, folder, kept, page, "manual_click");
         files.push({ path: CAPTURE_INDEX_PATH, content: serializeCaptureIndex(upsertCaptureRow(rows, entry)) });
       }
+      files.push(...await repoGuideFiles(config, branch));
       await commitFiles(config, branch, files,
         "After-thinking: capture " + id + " (" + platform + ", " + kept.length + " messages)");
       confirmBox.hidden = true;
@@ -390,6 +408,9 @@ async function main() {
     try {
       const saved = await download(base + "conversation.jsonl", buildJsonl(kept));
       await download(base + "metadata.yaml", buildMetadata(kept.length, items.length, platform, page));
+      for (const f of filesFor(kept)) {
+        await download(base + f.path, Uint8Array.from(atob(f.base64), (c) => c.charCodeAt(0)));
+      }
       const normalized = saved.replace(/\\/g, "/");
       if (normalized.endsWith(base + "conversation.jsonl")) {
         status.textContent = "已下載 " + kept.length + " 則訊息到「下載」資料夾的 after-thinking/" + id + "/source/";

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "After-thinking Capture",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "把 ChatGPT、Claude 或 Gemini 的對話擷取成 After-thinking 的原文檔，並上傳到你自己的私人 GitHub 倉庫。",
   "permissions": [
     "activeTab",

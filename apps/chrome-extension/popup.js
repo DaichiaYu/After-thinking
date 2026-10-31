@@ -155,6 +155,32 @@ function renderMessages(items, selected) {
   refresh();
 }
 
+// 這段對話之前抓過的話，在最上面提示：什麼時候、抓了幾則、存在哪裡，現在又多了幾則
+async function showPreviousCaptures(config, platform, conversationId, nowCount) {
+  const box = document.getElementById("seen");
+  try {
+    const check = await checkRepo(config);
+    if (!check.ok) return;
+    const rows = (await readCaptureIndex(config, check.branch))
+      .filter((r) => r.platform === platform && r.conversation_id === conversationId);
+    if (!rows.length) return;
+    box.textContent = "";
+    const head = document.createElement("b");
+    head.textContent = "這段對話已經擷取過";
+    box.appendChild(head);
+    rows.forEach((r) => {
+      const d = new Date(r.captured_at);
+      const date = isNaN(d) ? "" : (d.getMonth() + 1) + "/" + d.getDate() + " ";
+      const diff = nowCount - r.messages;
+      const line = document.createElement("div");
+      line.textContent = date + (r.mode === "batch" ? "批量" : "單段") + "擷取 " + r.messages + " 則，存在 " + r.folder +
+        (diff > 0 ? "。之後多了 " + diff + " 則" : diff === 0 ? "。目前沒有新訊息" : "");
+      box.appendChild(line);
+    });
+    box.hidden = false;
+  } catch (e) { /* 讀不到紀錄時不提示，不影響擷取 */ }
+}
+
 async function getActiveTab() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   return tab;
@@ -278,8 +304,10 @@ async function main() {
   };
 
   const config = await loadConfig();
+  const conversationId = conversationIdFromUrl(platform, page.url);
   if (config && config.repo && config.token) {
     target.textContent = "上傳到 " + config.repo + " 的 " + normalizeRoot(config.root) + "<討論編號>/";
+    if (conversationId) showPreviousCaptures(config, platform, conversationId, items.length);
   } else {
     uploadBtn.disabled = true;
     target.textContent = "還沒設定 GitHub。請按下方「GitHub 設定」。";
@@ -325,12 +353,20 @@ async function main() {
     status.textContent = "上傳中…";
     const { id, kept, branch, folder } = pending;
     try {
-      await commitFiles(config, branch, [
+      const files = [
         { path: folder + "source/conversation.jsonl", content: buildJsonl(kept) },
         { path: folder + "source/metadata.yaml", content: buildMetadata(kept.length, items.length, platform, page) },
         { path: folder + "state.yaml", content: buildState(config, id) },
         { path: folder + "corrections.yaml", content: CORRECTIONS_TEMPLATE }
-      ], "After-thinking: capture " + id + " (" + platform + ", " + kept.length + " messages)");
+      ];
+      // 記到擷取紀錄，之後批量擷取和這個視窗都會知道這段抓過了
+      if (conversationId) {
+        const rows = await readCaptureIndex(config, branch);
+        const entry = buildCaptureEntry(platform, conversationId, page.title, page.url, folder, kept, page, "manual_click");
+        files.push({ path: CAPTURE_INDEX_PATH, content: serializeCaptureIndex(upsertCaptureRow(rows, entry)) });
+      }
+      await commitFiles(config, branch, files,
+        "After-thinking: capture " + id + " (" + platform + ", " + kept.length + " messages)");
       confirmBox.hidden = true;
       status.textContent = "已上傳 " + kept.length + " 則訊息到 " + config.repo + " 的 " + folder;
       const url = "https://github.com/" + config.repo + "/tree/" + encodeURIComponent(branch) + "/" +

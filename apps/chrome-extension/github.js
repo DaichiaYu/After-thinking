@@ -146,3 +146,37 @@ async function loadConfig() {
   const { githubConfig } = await chrome.storage.local.get("githubConfig");
   return githubConfig || null;
 }
+
+// ── 擷取紀錄：inbox/index.jsonl ──
+// 每擷取一次（批量或單段）就記一行，用來判斷「這段對話抓過了沒」。
+// 同一段對話可以有多行（例如先批量進 inbox/，之後又單段擷取到 discussions/）。
+
+const CAPTURE_INDEX_PATH = "inbox/index.jsonl";
+
+async function readRawFile(config, branch, path) {
+  const res = await fetch("https://api.github.com/repos/" + config.repo + "/contents/" +
+    path.split("/").map(encodeURIComponent).join("/") + "?ref=" + encodeURIComponent(branch), {
+    headers: { Authorization: "Bearer " + config.token, Accept: "application/vnd.github.raw+json",
+      "X-GitHub-Api-Version": "2022-11-28" },
+    cache: "no-store"
+  });
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error("讀取 " + path + " 失敗（" + res.status + "）");
+  return res.text();
+}
+
+async function readCaptureIndex(config, branch) {
+  const raw = await readRawFile(config, branch, CAPTURE_INDEX_PATH);
+  if (!raw) return [];
+  return raw.split("\n").filter((l) => l.trim()).map((l) => { try { return JSON.parse(l); } catch (e) { return null; } })
+    .filter(Boolean);
+}
+
+const captureKey = (row) => row.platform + ":" + row.conversation_id;
+
+// 同一個資料夾重新擷取時取代舊的那行；不同資料夾就新增一行
+function upsertCaptureRow(rows, entry) {
+  return rows.filter((r) => !(captureKey(r) === captureKey(entry) && r.folder === entry.folder)).concat([entry]);
+}
+
+const serializeCaptureIndex = (rows) => rows.map((r) => JSON.stringify(r)).join("\n") + "\n";

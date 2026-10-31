@@ -3,7 +3,6 @@
 // 每抓完一段就提交一次（含更新後的 index），中途停止或失敗都不會丟掉已完成的部分。
 
 const INBOX = "inbox/";
-const INDEX_PATH = INBOX + "index.jsonl";
 const GEMINI_HOME = "https://gemini.google.com/app";
 
 const $ = (id) => document.getElementById(id);
@@ -19,23 +18,7 @@ let stopRequested = false;
 let lastFailures = [];
 let listing = false;
 
-// ── GitHub：讀 index ──
-
-async function readRawFile(path) {
-  const res = await fetch("https://api.github.com/repos/" + config.repo + "/contents/" +
-    path.split("/").map(encodeURIComponent).join("/") + "?ref=" + encodeURIComponent(branch), {
-    headers: { Authorization: "Bearer " + config.token, Accept: "application/vnd.github.raw+json",
-      "X-GitHub-Api-Version": "2022-11-28" },
-    cache: "no-store"
-  });
-  if (res.status === 404) return null;
-  if (!res.ok) throw new Error("讀取 " + path + " 失敗（" + res.status + "）");
-  return res.text();
-}
-
-// 重新擷取同一段對話時，用新的那筆取代舊的
-const withoutChat = (rows, id) => rows.filter((r) => !(r.platform === "gemini" && r.conversation_id === id));
-const serializeIndex = (rows) => rows.map((r) => JSON.stringify(r)).join("\n") + "\n";
+// 讀寫 index 的函式在 github.js（readCaptureIndex、upsertCaptureRow）
 
 async function commitWithRetry(files, message) {
   const waits = [15000, 60000];
@@ -107,10 +90,9 @@ async function init() {
     const check = await checkRepo(config);
     if (!check.ok) throw new Error(check.message);
     branch = check.branch;
-    const raw = await readRawFile(INDEX_PATH);
-    index = raw ? raw.split("\n").filter((l) => l.trim()).map((l) => JSON.parse(l)) : [];
-    capturedIds = new Set(index.map((r) => r.platform + ":" + r.conversation_id));
-    $("repo-status").textContent = config.repo + "（私人倉庫，分支 " + branch + "）｜inbox/ 裡已經有 " + index.length + " 段對話";
+    index = await readCaptureIndex(config, branch);
+    capturedIds = new Set(index.map(captureKey));
+    $("repo-status").textContent = config.repo + "（私人倉庫，分支 " + branch + "）｜已經擷取過 " + capturedIds.size + " 段對話";
     $("list").disabled = false;
   } catch (e) {
     $("repo-status").textContent = "無法使用倉庫：" + e.message;
@@ -138,7 +120,7 @@ function renderChats() {
     title.textContent = chat.title || "（沒有標題）";
     const tag = document.createElement("span");
     tag.className = "tag";
-    tag.textContent = done ? "已擷取" : "";
+    tag.textContent = done ? capturedLabel("gemini:" + chat.id) : "";
     label.append(box, title, tag);
     li.appendChild(label);
     list.appendChild(li);
@@ -146,10 +128,20 @@ function renderChats() {
   updateSummary();
 }
 
+// 例如「已擷取 10/25（批量）」；同一段抓過好幾次時顯示最近一次
+function capturedLabel(key) {
+  const rows = index.filter((r) => captureKey(r) === key);
+  if (!rows.length) return "";
+  const last = rows.reduce((a, b) => (a.captured_at > b.captured_at ? a : b));
+  const d = new Date(last.captured_at);
+  const date = isNaN(d) ? "" : " " + (d.getMonth() + 1) + "/" + d.getDate();
+  return "已擷取" + date + "（" + (last.mode === "batch" ? "批量" : "單段") + "）";
+}
+
 function updateSummary() {
   const done = chats.filter((c) => capturedIds.has("gemini:" + c.id)).length;
   const picked = selected.filter(Boolean).length;
-  $("summary").textContent = "找到 " + chats.length + " 段對話：已擷取 " + done + " 段，這次要抓 " + picked + " 段";
+  $("summary").textContent = "找到 " + chats.length + " 段對話：已擷取 " + done + " 段（灰色，預設不勾），這次要抓 " + picked + " 段";
   $("start").disabled = picked === 0;
   $("start").textContent = picked ? "開始擷取 " + picked + " 段" : "開始擷取";
 }
@@ -205,29 +197,13 @@ async function captureOne(chat) {
 
   const folder = INBOX + "gemini-" + chat.id + "/";
   const items = page.items;
-  const warnings = [];
-  if (page.scroll && page.scroll.timed_out) warnings.push("timed_out");
-  if (page.scroll && page.scroll.gaps) warnings.push("possible_gaps");
-  if (items.some((i) => i.truncated)) warnings.push("truncated_messages");
-  const entry = {
-    platform: "gemini",
-    conversation_id: chat.id,
-    title: chat.title,
-    url: chat.url,
-    folder,
-    messages: items.length,
-    author_messages: items.filter((i) => i.speaker === "author").length,
-    chars: items.reduce((n, i) => n + i.content.length, 0),
-    warnings,
-    captured_at: new Date().toISOString(),
-    extension_version: VERSION
-  };
+  const entry = buildCaptureEntry("gemini", chat.id, chat.title, chat.url, folder, items, page, "batch");
   await commitWithRetry([
     { path: folder + "source/conversation.jsonl", content: buildJsonl(items) },
     { path: folder + "source/metadata.yaml", content: buildMetadata(items.length, items.length, "gemini", page, "batch") },
-    { path: INDEX_PATH, content: serializeIndex(withoutChat(index, chat.id).concat([entry])) }
+    { path: CAPTURE_INDEX_PATH, content: serializeCaptureIndex(upsertCaptureRow(index, entry)) }
   ], "After-thinking inbox: gemini " + chat.id + " (" + items.length + " messages)");
-  index = withoutChat(index, chat.id).concat([entry]);
+  index = upsertCaptureRow(index, entry);
   capturedIds.add("gemini:" + chat.id);
   return entry;
 }
@@ -274,7 +250,7 @@ async function runBatch(queue) {
   lastFailures = failures.map((f) => f.chat);
   const skipped = stopRequested ? queue.length - ok - failures.length : 0;
   $("done-text").textContent = "完成：成功 " + ok + " 段，失敗 " + failures.length + " 段" +
-    (skipped ? "，因為按了停止而沒抓 " + skipped + " 段" : "") + "。inbox/ 現在共有 " + index.length + " 段。";
+    (skipped ? "，因為按了停止而沒抓 " + skipped + " 段" : "") + "。目前總共擷取過 " + capturedIds.size + " 段對話。";
   const list = $("failures");
   list.textContent = "";
   failures.forEach((f) => {

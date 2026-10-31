@@ -1,6 +1,6 @@
 // After-thinking Capture — 共用的擷取與輸出程式（popup.js 和 batch.js 都會用到）
 
-const VERSION = "0.4.0";
+const VERSION = "0.5.0";
 
 function detectPlatform(url) {
   const host = new URL(url).hostname;
@@ -26,6 +26,16 @@ async function captureViaApi(platform) {
     note(url.split("?")[0].replace(/[0-9a-f-]{36}/g, "<id>"), res.status);
     if (!res.ok) return null;
     return res.json();
+  };
+  // 附件和圖片不下載，只在內容裡留下記號，並另外記在 attachments 欄位
+  const marker = (a) => a.kind === "generated_image" ? "[AI 生成的圖片]"
+    : a.kind === "image" ? "[圖片" + (a.name ? "：" + a.name : "") + "]"
+    : "[附件：" + (a.name || "未知檔名") + "]";
+  const withMarkers = (text, atts, speaker) => {
+    if (!atts.length) return text;
+    const marks = atts.map(marker).join("\n");
+    if (!text) return marks;
+    return speaker === "author" ? marks + "\n\n" + text : text + "\n\n" + marks;
   };
   const result = (items, extra) => ({
     items, strategy: extra.strategy, cleaning: [], title: document.title, url: location.href,
@@ -64,23 +74,49 @@ async function captureViaApi(platform) {
         return msg.content.content_type === "text" || msg.content.content_type === "multimodal_text";
       };
       const items = [];
-      path.filter(visible).forEach((node) => {
+      const isImagePart = (x) => x && typeof x === "object" && /image/.test(x.content_type || "");
+      // 工具產生的圖片（例如畫圖）掛在工具訊息上，接到下一則 AI 回答
+      let pendingGenerated = [];
+      path.forEach((node) => {
+        const msg = node.message;
+        if (!msg || !msg.author || msg.author.role !== "tool" || !msg.content) return;
+        const parts = Array.isArray(msg.content.parts) ? msg.content.parts : [];
+        parts.filter(isImagePart).forEach(() => { node.__generated = (node.__generated || 0) + 1; });
+      });
+      path.forEach((node) => {
+        if (node.__generated) {
+          for (let k = 0; k < node.__generated; k++) pendingGenerated.push({ kind: "generated_image", name: null });
+          return;
+        }
+        if (!visible(node)) return;
         const msg = node.message;
         const parts = Array.isArray(msg.content.parts) ? msg.content.parts : [];
         const text = parts.filter((x) => typeof x === "string").join("\n").trim();
-        const attachments = parts.filter((x) => typeof x !== "string").length;
-        if (!text && !attachments) return;
         const speaker = msg.author.role === "user" ? "author" : "assistant";
+        let atts = [];
+        const listed = (msg.metadata && Array.isArray(msg.metadata.attachments)) ? msg.metadata.attachments : [];
+        if (listed.length) {
+          atts = listed.map((a) => ({ kind: /^image\//.test(a.mime_type || "") ? "image" : "file", name: a.name || null }));
+        } else {
+          atts = parts.filter(isImagePart).map(() => ({ kind: speaker === "author" ? "image" : "generated_image", name: null }));
+        }
+        if (speaker === "assistant" && pendingGenerated.length) { atts = atts.concat(pendingGenerated); pendingGenerated = []; }
+        if (!text && !atts.length) return;
         const prev = items[items.length - 1];
         // 同一輪回答被網站拆成好幾段時，合併成一則
         if (prev && prev.speaker === "assistant" && speaker === "assistant") {
-          prev.content = (prev.content + "\n\n" + text).trim();
+          prev.text = (prev.text + "\n\n" + text).trim();
           prev.platform_message_id += " " + msg.id;
-          prev.attachments += attachments;
+          prev.attachments = prev.attachments.concat(atts);
           return;
         }
-        items.push({ speaker, content: text, platform_message_id: msg.id, timestamp: iso(msg.create_time), attachments });
+        items.push({ speaker, text, platform_message_id: msg.id, timestamp: iso(msg.create_time), attachments: atts });
       });
+      if (pendingGenerated.length) {
+        const last = items.filter((i) => i.speaker === "assistant").pop();
+        if (last) last.attachments = last.attachments.concat(pendingGenerated);
+      }
+      items.forEach((i) => { i.content = withMarkers(i.text, i.attachments, i.speaker); delete i.text; });
 
       // 分支點：有兩個以上「看得見的」後續訊息的位置
       let branchPoints = 0;
@@ -133,10 +169,13 @@ async function captureViaApi(platform) {
       path.forEach((msg) => {
         if (msg.sender !== "human" && msg.sender !== "assistant") return;
         const text = textOf(msg);
-        const attachments = (msg.attachments || []).length + (msg.files || msg.files_v2 || []).length;
-        if (!text && !attachments) return;
-        items.push({ speaker: msg.sender === "human" ? "author" : "assistant", content: text,
-          platform_message_id: msg.uuid, timestamp: iso(msg.created_at), attachments });
+        const speaker = msg.sender === "human" ? "author" : "assistant";
+        const atts = (msg.attachments || []).map((a) => ({ kind: "file", name: a.file_name || null }))
+          .concat((msg.files_v2 || msg.files || []).map((f) => ({
+            kind: f.file_kind === "image" ? "image" : "file", name: f.file_name || null })));
+        if (!text && !atts.length) return;
+        items.push({ speaker, content: withMarkers(text, atts, speaker),
+          platform_message_id: msg.uuid, timestamp: iso(msg.created_at), attachments: atts });
       });
 
       const childCount = {};
@@ -212,6 +251,66 @@ async function captureConversation(platform) {
     return text;
   }
 
+  // 附件和圖片不下載，只在內容裡留下記號，並另外記在 attachments 欄位
+  const marker = (a) => a.kind === "generated_image" ? "[AI 生成的圖片]"
+    : a.kind === "image" ? "[圖片" + (a.name ? "：" + a.name : "") + "]"
+    : "[附件：" + (a.name || "未知檔名") + "]";
+  const withMarkers = (text, atts, speaker) => {
+    if (!atts.length) return text;
+    const marks = atts.map(marker).join("\n");
+    if (!text) return marks;
+    return speaker === "author" ? marks + "\n\n" + text : text + "\n\n" + marks;
+  };
+
+  // 放到畫面外讀文字（innerText 需要元素在畫面上才會分行）
+  function offscreenText(copy, width) {
+    const box = document.createElement("div");
+    box.style.cssText = "position:fixed;left:-100000px;top:0;width:" + Math.max(300, width) + "px;";
+    box.appendChild(copy);
+    document.body.appendChild(box);
+    const text = copy.innerText;
+    box.remove();
+    return text;
+  }
+  const looksLikeFile = (s) => /^[^\n]{1,200}\.[a-z0-9]{1,8}$/i.test(s);
+
+  // 使用者上傳的檔案和圖片：在 user-query 裡、但不在提問文字裡
+  function geminiUserAttachments(uq) {
+    // 先列檔案、再列圖片
+    const files = [];
+    const images = [];
+    const qt = uq.querySelector(".query-text");
+    uq.querySelectorAll("img").forEach((img) => {
+      if (qt && qt.contains(img)) return;
+      const alt = (img.getAttribute("alt") || "").trim();
+      images.push({ kind: "image", name: looksLikeFile(alt) ? alt : null });
+    });
+    const copy = uq.cloneNode(true);
+    copy.querySelectorAll(".query-text, img, " + GEMINI_NOISE).forEach((el) => el.remove());
+    const seen = new Set(images.map((a) => a.name).filter(Boolean));
+    offscreenText(copy, uq.clientWidth).split("\n").map((l) => l.trim()).filter(looksLikeFile).forEach((name) => {
+      if (seen.has(name)) return;
+      seen.add(name);
+      files.push({ kind: "file", name });
+    });
+    return files.concat(images);
+  }
+
+  // 回答裡的圖片（生成的圖、搜尋到的圖）；排除思考過程、來源小卡和小圖示
+  function geminiResponseImages(r) {
+    const atts = [];
+    r.querySelectorAll("img").forEach((img) => {
+      if (img.closest("model-thoughts, " + GEMINI_NOISE)) return;
+      const rect = img.getBoundingClientRect();
+      const w = rect.width || img.naturalWidth || Number(img.getAttribute("width")) || 0;
+      if (w && w < 64) return;
+      const src = img.currentSrc || img.getAttribute("src") || "";
+      const generated = !!img.closest("generated-image, .generated-image, .generated-images") || /googleusercontent\.com\/gg\//.test(src);
+      atts.push({ kind: generated ? "generated_image" : "image", name: null });
+    });
+    return atts;
+  }
+
   let strategy = "none";
 
   // 讀取目前網頁上「已經產生」的訊息，依畫面順序回傳
@@ -247,11 +346,13 @@ async function captureConversation(platform) {
       const turns = document.querySelectorAll("#chat-history .conversation-container, .conversation-container");
       outermost(Array.from(turns)).forEach((turn, i) => {
         const turnKey = turn.id || null;
-        const q = turn.querySelector("user-query .query-text") || turn.querySelector("user-query");
+        const uq = turn.querySelector("user-query");
+        const q = turn.querySelector("user-query .query-text") || uq;
         if (q) {
           const lines = q.querySelectorAll(".query-text-line");
           const text = lines.length ? Array.from(lines).map((l) => l.innerText).join("\n") : geminiText(q);
           out.push({ node: q, speaker: "author", raw: text, platform_message_id: null,
+            attachments: uq ? geminiUserAttachments(uq) : [],
             key: turnKey ? "turn:" + turnKey + ":q" : null });
         }
         const r = turn.querySelector("model-response");
@@ -260,14 +361,17 @@ async function captureConversation(platform) {
           const body = r.querySelector(".model-response-text .markdown") || r.querySelector("message-content .markdown") ||
             r.querySelector(".model-response-text") || r.querySelector("message-content");
           if (body) out.push({ node: body, speaker: "assistant", raw: geminiText(body), platform_message_id: null,
+            attachments: geminiResponseImages(r),
             key: turnKey ? "turn:" + turnKey + ":r" : null });
         }
       });
     }
     return out.map((m) => {
-      const content = clean(stripButtons(m.raw));
+      const atts = m.attachments || [];
+      const text = clean(stripButtons(m.raw));
+      const content = withMarkers(text, atts, m.speaker);
       return { node: m.node, speaker: m.speaker, content, platform_message_id: m.platform_message_id, key: m.key || null,
-        truncated: TRUNCATED_TAIL.test(content) };
+        attachments: atts, truncated: TRUNCATED_TAIL.test(text) };
     }).filter((m) => m.content.length > 0);
   }
 
@@ -384,7 +488,8 @@ async function captureConversation(platform) {
   scroller.scrollTop = originalTop;
 
   return {
-    items: acc.map((m) => ({ speaker: m.speaker, content: m.content, platform_message_id: m.platform_message_id, truncated: m.truncated })),
+    items: acc.map((m) => ({ speaker: m.speaker, content: m.content, platform_message_id: m.platform_message_id,
+      attachments: m.attachments || [], truncated: m.truncated })),
     strategy,
     cleaning: Array.from(cleaning),
     title: document.title,
@@ -395,6 +500,39 @@ async function captureConversation(platform) {
 
 // 只回報頁面結構和字數，不回傳任何對話文字。
 // ── 產生輸出檔 ──
+
+// 從網址取出對話編號，用來比對「抓過了沒」
+function conversationIdFromUrl(platform, url) {
+  const path = new URL(url).pathname;
+  const pattern = { chatgpt: /\/c\/([0-9a-f-]{36})/i, claude: /\/chat\/([0-9a-f-]{36})/i,
+    gemini: /\/(?:app|gem\/[^/]+)\/([0-9a-f]{10,})/i }[platform];
+  const m = pattern ? path.match(pattern) : null;
+  return m ? m[1].toLowerCase() : null;
+}
+
+// 擷取紀錄（inbox/index.jsonl）的一行
+function buildCaptureEntry(platform, conversationId, title, url, folder, items, page, mode) {
+  const warnings = [];
+  if (page.scroll && page.scroll.timed_out) warnings.push("timed_out");
+  if (page.scroll && page.scroll.gaps) warnings.push("possible_gaps");
+  if (items.some((i) => i.truncated)) warnings.push("truncated_messages");
+  const attachments = items.reduce((n, i) => n + (Array.isArray(i.attachments) ? i.attachments.length : 0), 0);
+  return {
+    platform,
+    conversation_id: conversationId,
+    title,
+    url,
+    folder,
+    mode,
+    messages: items.length,
+    author_messages: items.filter((i) => i.speaker === "author").length,
+    chars: items.reduce((n, i) => n + i.content.length, 0),
+    attachments,
+    warnings,
+    captured_at: new Date().toISOString(),
+    extension_version: VERSION
+  };
+}
 
 function defaultDiscussionId(platform, url) {
   const date = new Date().toISOString().slice(0, 10);
@@ -414,7 +552,7 @@ function buildJsonl(items) {
     content: item.content,
     timestamp: item.timestamp || null,
     platform_message_id: item.platform_message_id,
-    ...(item.attachments ? { attachments: item.attachments } : {})
+    ...(Array.isArray(item.attachments) && item.attachments.length ? { attachments: item.attachments } : {})
   })).join("\n") + "\n";
 }
 

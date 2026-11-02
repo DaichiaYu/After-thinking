@@ -189,6 +189,10 @@ async function getActiveTab() {
 let lastScrollLog = null;
 let lastApiLog = null;
 
+document.getElementById("open-tags").addEventListener("click", () => {
+  chrome.tabs.create({ url: chrome.runtime.getURL("tag.html") });
+});
+
 document.getElementById("open-batch").addEventListener("click", () => {
   chrome.tabs.create({ url: chrome.runtime.getURL("batch.html") });
 });
@@ -335,6 +339,7 @@ async function main() {
     if (!prepared) return;
     uploadBtn.disabled = true;
     openResult.hidden = true;
+    document.getElementById("open-tag").hidden = true;
     status.textContent = "檢查倉庫中…";
     try {
       const check = await checkRepo(config);
@@ -391,6 +396,9 @@ async function main() {
         folder.split("/").filter(Boolean).map(encodeURIComponent).join("/");
       openResult.hidden = false;
       openResult.onclick = () => chrome.tabs.create({ url });
+      const openTag = document.getElementById("open-tag");
+      openTag.hidden = false;
+      openTag.onclick = () => chrome.tabs.create({ url: chrome.runtime.getURL("tag.html?folder=" + encodeURIComponent(folder)) });
       pending = null;
     } catch (e) {
       status.textContent = "上傳失敗：" + e.message + "（倉庫沒有被修改）";

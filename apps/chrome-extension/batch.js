@@ -290,4 +290,8 @@ $("open-inbox").addEventListener("click", () => {
   chrome.tabs.create({ url: "https://github.com/" + config.repo + "/tree/" + encodeURIComponent(branch) + "/inbox" });
 });
 
+$("open-tags").addEventListener("click", () => {
+  chrome.tabs.create({ url: chrome.runtime.getURL("tag.html") });
+});
+
 init();

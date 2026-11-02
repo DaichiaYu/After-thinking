@@ -36,6 +36,7 @@
     </div>
 
     <p id="status" class="muted" role="status"></p>
+    <button id="open-tag" hidden>標記這段對話</button>
     <button id="open-result" class="secondary" hidden>在 GitHub 上查看</button>
 
     <div class="pair">
@@ -47,6 +48,8 @@
   <p id="error" class="error" hidden></p>
 
   <footer>
+    <button id="open-tags" class="secondary">標記擷取過的對話</button>
+    <p class="hint">逐句看過對話、分主題或標出關鍵，存成討論資料夾裡的 outline.json。不會用到 AI。</p>
     <button id="open-batch" class="secondary">批量擷取 Gemini 對話</button>
     <p class="hint">一次把 Gemini 側邊欄裡的對話全部抓進 GitHub 的 inbox/，抓過的會自動跳過。</p>
     <button id="diagnose" class="secondary">複製診斷報告</button>

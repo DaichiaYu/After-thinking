@@ -17,10 +17,12 @@ inbox/
         conversation.jsonl     對話原文，一行一則訊息
         metadata.yaml          擷取資訊（平台、網址、時間、擷取方式、警告）
         attachments/           對話裡的圖片和檔案原檔（有抓到才會有）
+      outline.json             使用者自己做的標記：主題分組或關鍵（有標才會有）
   undated/                     找不到原始時間的對話
   gemini-<對話編號>/           較早版本擷取的對話（還沒依月份分）
 {{ROOT}}<討論編號>/            已經挑出來、要用 After-thinking 分析的討論
   source/                      同上
+  outline.json                 同上（有標才會有）
   state.yaml                   分析進度
   corrections.yaml             使用者的修正
   analysis/                    分析結果
@@ -46,8 +48,22 @@ inbox/
 | `messages` / `author_messages` / `chars` | 訊息數、使用者訊息數、總字數 |
 | `attachments` / `attachments_saved` / `attachments_missing` | 附件數、有存原檔的、沒拿到原檔的 |
 | `warnings` | 擷取時的警告，例如 `timed_out`、`possible_gaps`、`truncated_messages` |
+| `outline_updated_at` / `outline_mode` | 使用者最後一次儲存標記的時間、標記方式（有標才會有） |
 
 同一段對話可能有好幾行（例如先批量進 inbox，之後又單段擷取進討論資料夾）。
+
+## outline.json（使用者的標記）
+
+使用者在擴充功能的「標記對話」頁自己做的，**是使用者的判斷，不是 AI 的推測**。整理這段對話時，有這個檔案就先讀它，照它的分組和重點走。
+
+- `mode`：`multi_topic`（聊了好幾件事，看 `topics`）或 `single_topic`（一直在聊同一件事，看 `single_topic` 和 `key_points`）。
+- `topics[]`：`id`（A、B…）、`name`、`note`（使用者的補充說明）、`messages`（屬於這個主題的 `message_id`，照順序）。
+- `untagged`：還沒分到主題的訊息。
+- `key_points[]`：使用者標的關鍵，`speaker` 分出是使用者說的（`author`）還是 AI 說的（`assistant`）。
+- `turns[]`：轉向的地方。`source: auto` 是程式依關鍵字找到、使用者沒有刪掉的；`manual` 是使用者自己標的。
+- `notes[]`：使用者寫在某則訊息上的備註。
+- `summary`：同樣內容的文字版，編號是依 `order` 排序後的位置（001 是第一則）。
+- `source.source_revision`：做標記時的原文版本。和 `source/metadata.yaml` 的 `source_revision` 不同時，標記可能已經對不上，先跟使用者確認。
 
 ## source/conversation.jsonl（對話原文）
 
@@ -73,4 +89,5 @@ inbox/
 
 - `source/` 底下的檔案是原始紀錄，不要修改。
 - 分類、摘要、整理的結果另外寫成新檔案，不要寫進 `source/`。
+- `outline.json` 是使用者的標記，不要自己改寫；有不同看法時另外提出，讓使用者決定。
 - 要分析某段討論時，依照 After-thinking 倉庫的 `AGENTS.md` 執行。

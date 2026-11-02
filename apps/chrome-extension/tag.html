@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>標記對話｜After-thinking</title>
+<link rel="stylesheet" href="tag.css">
+</head>
+<body>
+<header class="top">
+  <div class="wrap top-row">
+    <div class="title-block">
+      <p class="crumb"><span class="mono">AT</span> <span id="crumb">標記對話</span></p>
+      <h1 id="title">標記對話</h1>
+      <p id="meta" class="muted"></p>
+    </div>
+    <div id="top-actions" class="top-actions" hidden>
+      <span id="mode-label" class="mode-label"></span>
+      <button id="change-mode" class="secondary">改整理方式</button>
+      <button id="save">儲存</button>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <p id="error" class="error" hidden></p>
+  <p id="status" class="status" role="status" hidden></p>
+
+  <!-- 選對話 -->
+  <section id="picker" hidden>
+    <h2>選一段要標記的對話</h2>
+    <p id="repo-line" class="muted"></p>
+    <label for="search" class="sr-only">搜尋標題</label>
+    <input id="search" type="search" placeholder="搜尋標題" hidden>
+    <ol id="convos" class="convos"></ol>
+    <div class="file-open">
+      <p class="muted">沒有用 GitHub，或想標記下載下來的檔案：</p>
+      <label class="file-btn">從電腦開啟 conversation.jsonl
+        <input id="file" type="file" accept=".jsonl,.json" multiple>
+      </label>
+      <p class="hint">要接著標之前存的結果，可以同時選 <code>conversation.jsonl</code> 和 <code>outline.json</code>。</p>
+    </div>
+  </section>
+
+  <div id="draft-banner" class="banner" hidden>
+    <p id="draft-text"></p>
+    <div class="row">
+      <button id="use-draft">接著用草稿</button>
+      <button id="drop-draft" class="secondary">丟掉草稿</button>
+    </div>
+  </div>
+
+  <!-- 選整理方式 -->
+  <section id="mode-choice" hidden>
+    <h2>這段對話比較像哪一種？</h2>
+    <p class="muted">選錯也沒關係，之後可以改，已經做的標記會留著。</p>
+    <p id="mode-stats" class="muted"></p>
+    <div class="mode-grid">
+      <button id="choose-multi" class="mode-card">
+        <span class="mode-title">聊了好幾件事</span>
+        <span class="mode-desc">中間換過話題，要把不同主題分開整理。</span>
+        <span class="mode-go">用主題標籤分組 →</span>
+      </button>
+      <button id="choose-flow" class="mode-card">
+        <span class="mode-title">一直在聊同一件事</span>
+        <span class="mode-desc">從頭到尾是一個主題，只是中間有幾段特別重要，要標出來，並分清楚是你說的還是 AI 說的。</span>
+        <span class="mode-go">標出關鍵內容 →</span>
+      </button>
+    </div>
+  </section>
+
+  <!-- 標記 -->
+  <section id="workspace" hidden>
+    <div id="multi-panel" hidden>
+      <div class="section-head">
+        <h2>主題</h2>
+        <span id="left" class="pill"></span>
+      </div>
+      <div id="topics" class="topic-grid"></div>
+      <div class="toolbar">
+        <div class="seg" role="group" aria-label="檢視方式">
+          <button id="view-time" aria-pressed="true">照時間</button>
+          <button id="view-topic" aria-pressed="false">照主題</button>
+        </div>
+        <button id="range" class="secondary" aria-pressed="false">連選：關</button>
+        <span class="hint grow">點每句旁邊的主題標籤就能直接改。要一次改很多句：點編號選取，按住 Shift 再點另一個編號，中間整串一起選。AI 的回覆會跟著上一句你的發言。</span>
+      </div>
+    </div>
+
+    <div id="flow-panel" hidden>
+      <div class="card flow-card">
+        <div class="section-head">
+          <h2>這段對話的主題</h2>
+          <span id="key-count" class="muted"></span>
+        </div>
+        <div class="row wrap-row">
+          <input id="flow-name" type="text" aria-label="主題名稱" class="strong">
+          <input id="flow-note" type="text" aria-label="主題補充說明" placeholder="補充說明，例如：在評估要不要養貓" class="grow2">
+        </div>
+      </div>
+      <div class="toolbar">
+        <div id="filters" class="seg" role="group" aria-label="顯示範圍"></div>
+        <span class="hint grow">每一句都可以按「標為關鍵」。是你說的還是 AI 說的，會照發言的人自動分開。</span>
+      </div>
+    </div>
+
+    <div id="selbar" class="selbar" hidden></div>
+
+    <div id="list" class="list" aria-label="對話"></div>
+
+    <section class="card out">
+      <div class="section-head">
+        <h2>交給下一步的資料</h2>
+        <button id="copy-output" class="secondary small">複製</button>
+      </div>
+      <pre id="output"></pre>
+    </section>
+  </section>
+</main>
+
+<script src="github.js"></script>
+<script src="capture.js"></script>
+<script src="guide.js"></script>
+<script src="tag.js"></script>
+</body>
+</html>

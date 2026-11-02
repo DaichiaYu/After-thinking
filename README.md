@@ -71,6 +71,15 @@ After-thinking currently provides a workflow specification, runtime contracts, t
 
 See [`examples/simple-discussion/`](examples/simple-discussion/) for a complete small run.
 
+## Capture extension
+
+[`apps/chrome-extension/`](apps/chrome-extension/) is a Chrome extension (After-thinking Capture) that prepares the source material:
+
+- **Capture** a ChatGPT, Claude, or Gemini conversation into `source/conversation.jsonl` and `source/metadata.yaml`, uploaded to your own private GitHub repository or downloaded. Gemini also supports batch capture, attachment files, and original message times.
+- **Tag** a captured conversation yourself before any AI analysis: group it into topics or mark key points, turns, and notes. No AI is involved; the result is saved as `outline.json` next to `source/`.
+
+Languages: the extension's interface is Traditional Chinese only. Conversations in any language can be captured as-is. The site's own interface should be in Traditional Chinese, Simplified Chinese, or English for collapsed long messages to expand automatically. The tagging page's "possible turn" hints recognize Traditional Chinese, Simplified Chinese, English, and Japanese. See the [extension README](apps/chrome-extension/README.md) for details.
+
 ## Why use it?
 
 Long AI conversations often contain more than a final answer: an original intuition, several branches, an AI-generated counterexample, a correction, a reframed question, an abandoned hypothesis, and conclusions that only make sense because of the route taken to reach them.
@@ -94,6 +103,7 @@ The structured record can later support research or design work, decision review
 - [`docs/workspace-write-contract.md`](docs/workspace-write-contract.md) — destination and write order.
 - [`templates/`](templates/) — starter workspace files.
 - [`examples/simple-discussion/`](examples/simple-discussion/) — filled end-to-end example.
+- [`apps/chrome-extension/`](apps/chrome-extension/) — After-thinking Capture: capture and tag conversations.
 
 ---
 
@@ -129,6 +139,15 @@ Stage 1–2 必須由使用者確認；Stage 3–5 採風險式確認；Stage 6 
 After-thinking repository 保存方法本身，實際分析寫入使用者指定的 repository。Raw source 的 message ID 代表永久身分，`order` 另外代表閱讀順序，因此之後補進漏掉的前段或中段資料時，不需要重編既有 ID。
 
 分析物件使用 `T / R / C / CS / G / D` 穩定 ID；一般重跑保留同一物件的 ID，真正 split / merge 時才退休舊 ID。`state.yaml` 保存目前 Stage、review、ID counters、conflict 與 structured `next_action`。
+
+## 擷取擴充功能
+
+[`apps/chrome-extension/`](apps/chrome-extension/) 是 Chrome 擴充功能 After-thinking Capture，負責準備原文：
+
+- **擷取**：把 ChatGPT、Claude 或 Gemini 的對話存成 `source/conversation.jsonl` 和 `source/metadata.yaml`，上傳到你自己的私人 GitHub 倉庫，或下載到電腦。Gemini 另外支援批量擷取、附件原檔和原始時間。
+- **標記**：在交給 AI 分析之前，自己先分主題，或標出關鍵、轉向和備註。這一步不用 AI，結果存成 `source/` 旁邊的 `outline.json`。
+
+支援語言：擴充功能的介面目前只有繁體中文；對話內容任何語言都能照原文擷取；網站本身的介面設成繁體中文、簡體中文或英文時，摺疊的長訊息才能自動展開；標記頁的「可能轉向」提示認得繁體中文、簡體中文、英文和日文。詳細說明見[擴充功能的 README](apps/chrome-extension/README.md)。
 
 ## 為什麼需要它？
 

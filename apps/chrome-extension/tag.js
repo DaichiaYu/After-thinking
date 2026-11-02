@@ -8,7 +8,20 @@ const OUTLINE_VERSION = 2;   // 2：加上內容指紋、轉向分成「確認�
 const AI_PREVIEW = 200;       // AI 回覆先顯示的字數
 const USER_PREVIEW = 1500;    // 使用者訊息超過這個長度才摺疊（通常是貼上的長文件）
 const GAP_HOURS = 6;          // 兩則訊息相隔超過這麼久，畫一條分隔線
-const TURN_WORDS = /其實|不對|改成|改為|算了|等等|等一下|回到剛剛|回到前面|重新想|換個方向|actually|on second thought|wait,/i;
+// 「可能轉向」的提示詞。只是提示，使用者按確認才算數，所以寧可多抓一點
+const TURN_WORD_LIST = {
+  "中文（繁體）": ["其實", "不對", "改成", "改為", "算了", "等等", "等一下", "回到剛剛", "回到前面", "重新想", "換個方向"],
+  // 和繁體字形相同的（改成、算了、等等、等一下、回到前面、重新想）不重複列
+  "中文（簡體）": ["其实", "不对", "改为", "回到刚刚", "换个方向"],
+  "English": ["actually", "on second thought", "wait,", "no wait", "never mind", "nevermind", "scratch that",
+    "I was wrong", "let me rethink", "instead", "change of plan", "change of plans"],
+  // 「いや」單獨太常見，只算後面接逗號的
+  "日本語": ["実は", "やっぱり", "やはり", "いや、", "いや,", "待って", "訂正", "考え直"]
+};
+const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+// 英文詞前後要是單字邊界（避免 instead 抓到 insteadOf 之類），中日文不用
+const TURN_WORDS = new RegExp(Object.values(TURN_WORD_LIST).flat().map((w) =>
+  /^[a-z]/i.test(w) ? "\\b" + escapeRe(w) + (/[a-z]$/i.test(w) ? "\\b" : "") : escapeRe(w)).join("|"), "i");
 const TOPIC_IDS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
 const PALETTE = [
   { stripe: "#3451C7", bg: "#E6EBFB", fg: "#1F3487" },

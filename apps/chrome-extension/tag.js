@@ -4,7 +4,7 @@
 // 結果存成討論資料夾裡的 outline.json（不寫進 source/）。
 
 const OUTLINE_FILE = "outline.json";
-const OUTLINE_VERSION = 1;
+const OUTLINE_VERSION = 2;   // 2：加上內容指紋、轉向分成「確認」和「程式提示」、AI 回覆可以單獨分類
 const AI_PREVIEW = 200;       // AI 回覆先顯示的字數
 const USER_PREVIEW = 1500;    // 使用者訊息超過這個長度才摺疊（通常是貼上的長文件）
 const GAP_HOURS = 6;          // 兩則訊息相隔超過這麼久，畫一條分隔線
@@ -33,29 +33,44 @@ let msgs = [];         // [{ id, speaker, content, ts }]，依 order 排好
 let anchorOf = [];     // 每則訊息跟著哪一則（AI 回覆跟著前一句使用者發言）
 let savedAt = null;    // 目前載入的 outline 的 updated_at
 let dirty = false;
+let editVersion = 0;   // 每改一次加一；儲存完成時比對，避免把儲存途中的修改誤報成已儲存
 
 const S = {
   mode: null,          // "multi" | "flow" | null（還沒選）
   topics: [],          // [{ id, name, note }]
-  tags: {},            // 錨點訊息 id → 主題 id
+  tags: {},            // 錨點訊息 id → 主題 id；AI 回覆單獨分類時也記在這裡（"" 代表單獨設成還沒標）
   keys: {},            // 訊息 id → true
-  turnsManual: {},     // 手動加的轉向
-  turnsDismissed: {},  // 程式判斷、被使用者刪掉的轉向
+  turnsConfirmed: {},  // 使用者自己標、或確認過的轉向
+  turnsDismissed: {},  // 程式提示、被使用者刪掉的轉向
   notes: {},           // 訊息 id → 備註
   single: { name: "", note: "" }
 };
-const UI = { view: "time", filter: "all", range: false, sel: new Set(), last: null, exp: {}, picker: null, noteOpen: {} };
+const UI = { view: "time", filter: "all", range: false, sel: new Set(), last: null, exp: {}, picker: null, noteOpen: {}, moved: new Set() };
 
 // ── 小工具 ──
 
 const width = () => Math.max(3, String(msgs.length).length);
 const pad = (i) => String(i + 1).padStart(width(), "0");   // 顯示編號：第 i 則 → 001
 const isAnchor = (i) => anchorOf[i] === i;
-const tagOf = (i) => S.tags[msgs[anchorOf[i]].id] || null;
+const has = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
+// AI 回覆預設跟著上一句使用者發言；使用者按「另外分類」後就用自己的
+const ownTag = (i) => !isAnchor(i) && has(S.tags, msgs[i].id);
+const tagOf = (i) => (ownTag(i) ? S.tags[msgs[i].id] : S.tags[msgs[anchorOf[i]].id]) || null;
 const topicById = (id) => S.topics.find((t) => t.id === id) || null;
 const pal = (id) => { const k = S.topics.findIndex((t) => t.id === id); return k < 0 ? NONE : PALETTE[k % PALETTE.length]; };
-const autoTurn = (i) => msgs[i].speaker !== "assistant" && TURN_WORDS.test(msgs[i].content) && !S.turnsDismissed[msgs[i].id];
-const isTurn = (i) => autoTurn(i) || !!S.turnsManual[msgs[i].id];
+const matchesTurnWords = (i) => msgs[i].speaker !== "assistant" && TURN_WORDS.test(msgs[i].content);
+// 轉向分兩種：使用者確認過的（算使用者的判斷），和程式依關鍵字提示、還沒確認的
+const turnConfirmed = (i) => !!S.turnsConfirmed[msgs[i].id];
+const turnHint = (i) => matchesTurnWords(i) && !S.turnsDismissed[msgs[i].id] && !turnConfirmed(i);
+
+// 內容指紋：說話者＋全文的雜湊。重新擷取後訊息編號可能換人，用它確認標記還指著同一段話
+function fingerprint(m) {
+  const s = m.speaker + "\n" + m.content;
+  let h = 0x811c9dc5;
+  for (let k = 0; k < s.length; k++) { h ^= s.charCodeAt(k); h = Math.imul(h, 0x01000193); }
+  return s.length.toString(36) + "-" + (h >>> 0).toString(16).padStart(8, "0");
+}
+const sourceFingerprint = () => fingerprint({ speaker: "all", content: msgs.map(fingerprint).join("|") });
 const anchors = () => msgs.map((_, i) => i).filter(isAnchor);
 const who = (m) => (m.speaker === "author" ? "你" : m.speaker === "assistant" ? "AI" : "外部");
 
@@ -99,9 +114,10 @@ function gapLabel(i) {
 
 function showError(text) { const e = $("error"); e.textContent = text; e.hidden = false; }
 let statusTimer = null;
-function showStatus(text, keep) {
+function showStatus(text, keep, warn) {
   const s = $("status");
   s.textContent = text;
+  s.classList.toggle("warn", !!warn);
   s.hidden = false;
   clearTimeout(statusTimer);
   if (!keep) statusTimer = setTimeout(() => { s.hidden = true; }, 6000);
@@ -130,35 +146,97 @@ function computeAnchors() {
   });
 }
 
-function applyOutline(o) {
-  if (!o || typeof o !== "object") return 0;
+// 把舊標記裡的 message_id 換成現在這份對話的位置。
+// 有內容指紋時：同編號、同內容才直接用；編號換人了就照內容找回新位置（找不到就略過），不會悄悄指錯。
+function makeResolver(o) {
   const pos = new Map(msgs.map((m, i) => [m.id, i]));
-  let missing = 0;
-  const known = (id) => { if (pos.has(id)) return true; missing++; return false; };
+  const fps = msgs.map(fingerprint);
+  const old = o.source && Array.isArray(o.source.message_fingerprints) ? o.source.message_fingerprints : null;
+  const stats = { checked: !!old, moved: new Set(), lost: new Set() };
+  if (!old) {
+    return { stats, resolve: (id) => { if (pos.has(id)) return pos.get(id); stats.lost.add(id); return -1; } };
+  }
+  const oldFp = new Map();
+  old.forEach((pair, k) => { if (Array.isArray(pair)) oldFp.set(pair[0], { f: pair[1], k }); });
+  const byFp = new Map();
+  fps.forEach((f, i) => { if (!byFp.has(f)) byFp.set(f, []); byFp.get(f).push(i); });
+  const cache = new Map();
+  const resolve = (id) => {
+    if (cache.has(id)) return cache.get(id);
+    let r = -1;
+    const was = oldFp.get(id);
+    if (!was) r = pos.has(id) ? pos.get(id) : -1;
+    else if (pos.has(id) && fps[pos.get(id)] === was.f) r = pos.get(id);
+    else {
+      const cands = byFp.get(was.f) || [];
+      // 內容一樣的有好幾則時（例如都只說「好」），取離原本位置最近的
+      if (cands.length) { r = cands.reduce((best, i) => (Math.abs(i - was.k) < Math.abs(best - was.k) ? i : best)); stats.moved.add(r); }
+    }
+    if (r < 0) stats.lost.add(id);
+    cache.set(id, r);
+    return r;
+  };
+  return { stats, resolve };
+}
+
+function applyOutline(o) {
+  if (!o || typeof o !== "object") return null;
+  const { stats, resolve } = makeResolver(o);
+  const idOf = (mid) => { const i = resolve(mid); return i < 0 ? null : msgs[i].id; };
   S.mode = o.mode === "multi_topic" ? "multi" : o.mode === "single_topic" ? "flow" : null;
   S.topics = (o.topics || []).filter((t) => t && TOPIC_IDS.includes(t.id))
     .map((t) => ({ id: t.id, name: String(t.name || ""), note: String(t.note || "") }));
+  // 先算每一則在舊標記裡屬於哪個主題，再分成「錨點的標籤」和「AI 回覆另外分類」
+  const topicAt = new Map();
+  (o.topics || []).forEach((t) => (t.messages || []).forEach((mid) => { const i = resolve(mid); if (i >= 0) topicAt.set(i, t.id); }));
+  (o.untagged || []).forEach((mid) => { const i = resolve(mid); if (i >= 0 && !topicAt.has(i)) topicAt.set(i, null); });
   S.tags = {};
-  (o.topics || []).forEach((t) => (t.messages || []).forEach((id) => {
-    if (known(id) && isAnchor(pos.get(id))) S.tags[id] = t.id;
-  }));
+  topicAt.forEach((tid, i) => { if (isAnchor(i) && tid) S.tags[msgs[i].id] = tid; });
+  topicAt.forEach((tid, i) => {
+    if (isAnchor(i)) return;
+    const anchorTid = S.tags[msgs[anchorOf[i]].id] || null;
+    if (tid !== anchorTid) S.tags[msgs[i].id] = tid || "";
+  });
   S.keys = {};
-  (o.key_points || []).forEach((k) => { if (k && known(k.message_id)) S.keys[k.message_id] = true; });
-  S.turnsManual = {};
-  (o.turns || []).forEach((t) => { if (t && t.source === "manual" && known(t.message_id)) S.turnsManual[t.message_id] = true; });
+  (o.key_points || []).forEach((k) => { const id = k && idOf(k.message_id); if (id) S.keys[id] = true; });
+  S.turnsConfirmed = {};
+  // v1 的 "manual" 和 v2 的 "user" 都是使用者自己的；v1 的 "auto" 只是程式提示，重新由程式判斷
+  (o.turns || []).forEach((t) => { const id = t && (t.source === "manual" || t.source === "user") && idOf(t.message_id); if (id) S.turnsConfirmed[id] = true; });
   S.turnsDismissed = {};
-  (o.dismissed_auto_turns || []).forEach((id) => { if (pos.has(id)) S.turnsDismissed[id] = true; });
+  (o.dismissed_auto_turns || []).forEach((mid) => { const id = idOf(mid); if (id) S.turnsDismissed[id] = true; });
   S.notes = {};
-  (o.notes || []).forEach((n) => { if (n && known(n.message_id) && n.text) S.notes[n.message_id] = String(n.text); });
+  (o.notes || []).forEach((n) => { const id = n && n.text && idOf(n.message_id); if (id) S.notes[id] = String(n.text); });
   if (o.single_topic) S.single = { name: String(o.single_topic.name || ""), note: String(o.single_topic.note || "") };
-  return missing;
+  stats.sourceChanged = !!(o.source && o.source.fingerprint && o.source.fingerprint !== sourceFingerprint()) ||
+    (!stats.checked && o.source && o.source.message_count !== undefined && o.source.message_count !== msgs.length);
+  return stats;
 }
 
 function defaultState() {
   S.mode = null;
   S.topics = [{ id: "A", name: "主題 A", note: "" }];
-  S.tags = {}; S.keys = {}; S.turnsManual = {}; S.turnsDismissed = {}; S.notes = {};
+  S.tags = {}; S.keys = {}; S.turnsConfirmed = {}; S.turnsDismissed = {}; S.notes = {};
   S.single = { name: ctx.title || "", note: "" };
+  UI.moved = new Set();
+}
+
+// 原文在標記之後變過時，說清楚哪些自動對上、哪些找不到，並在那幾則上標「位置變過」
+function reportResolve(stats) {
+  if (!stats) return;
+  UI.moved = stats.moved;
+  const lost = stats.lost.size, moved = stats.moved.size;
+  if (!stats.sourceChanged && !lost && !moved) return;
+  let text;
+  if (!stats.checked) {
+    text = "這份標記是舊格式，沒有內容指紋，而原文的訊息數已經不一樣了。標記可能指到錯的訊息，請逐一核對後再儲存。";
+  } else {
+    text = "原文在上次標記之後變過（例如重新擷取）。" +
+      (moved ? moved + " 則依內容對到了新位置（畫面上標「位置變過」）。" : "") +
+      (lost ? lost + " 個標記在新的原文裡找不到同樣的內容，已略過。" : "") +
+      (!moved && !lost ? "所有標記都還對得上。" : "請檢查後再儲存。");
+  }
+  showStatus(text, true, true);
+  if (moved || lost || !stats.checked) { dirty = true; editVersion++; }
 }
 
 const draftKey = () => "outlineDraft:" + (ctx.kind === "repo" ? config.repo + ":" + ctx.folder : "file:" + ctx.fileName);
@@ -166,8 +244,8 @@ const draftKey = () => "outlineDraft:" + (ctx.kind === "repo" ? config.repo + ":
 async function startConversation(outline) {
   computeAnchors();
   defaultState();
-  let missing = 0;
-  if (outline) { missing = applyOutline(outline); savedAt = outline.updated_at || null; }
+  let resolved = null;
+  if (outline) { resolved = applyOutline(outline); savedAt = outline.updated_at || null; }
   if (!S.single.name) S.single.name = ctx.title || "";
   if (!S.topics.length) S.topics = [{ id: "A", name: "主題 A", note: "" }];
 
@@ -176,7 +254,7 @@ async function startConversation(outline) {
   $("crumb").textContent = ctx.kind === "repo" ? ctx.folder : "從電腦開啟：" + ctx.fileName;
   const nUser = msgs.filter((m) => m.speaker === "author").length;
   const nGaps = msgs.filter((_, i) => gapLabel(i)).length;
-  const nTurns = msgs.filter((_, i) => autoTurn(i)).length;
+  const nTurns = msgs.filter((_, i) => matchesTurnWords(i)).length;
   $("meta").textContent = [
     ({ chatgpt: "ChatGPT", claude: "Claude", gemini: "Gemini" }[ctx.platform] || ctx.platform || ""),
     msgs.length + " 則（你 " + nUser + " 則、AI " + (msgs.length - nUser) + " 則）",
@@ -185,7 +263,7 @@ async function startConversation(outline) {
     savedAt ? "上次儲存 " + new Date(savedAt).toLocaleString() : ""
   ].filter(Boolean).join(" · ");
   $("mode-stats").textContent = $("meta").textContent;
-  if (missing) showStatus("之前存的標記裡有 " + missing + " 個訊息編號在這份對話裡找不到，已略過（可能原文被修改過）。", true);
+  reportResolve(resolved);
 
   // 有比較新的草稿就問要不要接著用
   try {
@@ -196,8 +274,9 @@ async function startConversation(outline) {
       $("draft-banner").hidden = false;
       $("use-draft").onclick = () => {
         defaultState();
-        applyOutline(draft.outline);
+        reportResolve(applyOutline(draft.outline));
         dirty = true;
+        editVersion++;
         $("draft-banner").hidden = true;
         showMain();
       };
@@ -320,6 +399,7 @@ async function showPicker() {
 let draftTimer = null;
 function changed(full) {
   dirty = true;
+  editVersion++;
   updateTop();
   if (full) render(); else { renderOutput(); renderSelbar(); }
   clearTimeout(draftTimer);
@@ -348,15 +428,20 @@ function outputText() {
     });
     const un = msgs.map((_, i) => i).filter((i) => !tagOf(i));
     if (un.length) lines.push("還沒標：" + ranges(un));
+    const own = msgs.map((_, i) => i).filter(ownTag);
+    if (own.length) lines.push("AI 回覆另外分類：" + own.map((i) => { const t = topicById(tagOf(i)); return pad(i) + "→" + (t ? t.id : "還沒標"); }).join("、"));
   } else {
     lines.push("主題：" + (S.single.name || "（未命名）") + (S.single.note ? "（" + S.single.note + "）" : "") + "：" + ranges(msgs.map((_, i) => i)));
-    const keyList = (sp) => msgs.map((_, i) => i).filter((i) => S.keys[msgs[i].id] && (sp === "author" ? msgs[i].speaker !== "assistant" : msgs[i].speaker === "assistant")).map(pad);
-    const uk = keyList("author"), ak = keyList("assistant");
-    lines.push("你說的關鍵：" + (uk.length ? uk.join("、") : "無"));
-    lines.push("AI 說的關鍵：" + (ak.length ? ak.join("、") : "無"));
   }
-  const turns = msgs.map((_, i) => i).filter(isTurn);
-  if (turns.length) lines.push("轉向：" + turns.map(pad).join("、"));
+  // 關鍵兩種模式都可以標；多主題時沒標就不寫
+  const keyList = (ai) => msgs.map((_, i) => i).filter((i) => S.keys[msgs[i].id] && (msgs[i].speaker === "assistant") === ai).map(pad);
+  const uk = keyList(false), ak = keyList(true);
+  if (S.mode !== "multi" || uk.length) lines.push("你說的關鍵：" + (uk.length ? uk.join("、") : "無"));
+  if (S.mode !== "multi" || ak.length) lines.push("AI 說的關鍵：" + (ak.length ? ak.join("、") : "無"));
+  const confirmed = msgs.map((_, i) => i).filter(turnConfirmed);
+  const hints = msgs.map((_, i) => i).filter(turnHint);
+  if (confirmed.length) lines.push("轉向（你確認的）：" + confirmed.map(pad).join("、"));
+  if (hints.length) lines.push("可能轉向（程式依關鍵字提示，你還沒確認）：" + hints.map(pad).join("、"));
   const notes = msgs.map((_, i) => i).filter((i) => S.notes[msgs[i].id]);
   if (notes.length) lines.push("備註：\n" + notes.map((i) => "  " + pad(i) + " " + S.notes[msgs[i].id]).join("\n"));
   return lines.join("\n");
@@ -374,7 +459,10 @@ function buildOutline() {
       source_revision: ctx.revision,
       message_count: msgs.length,
       first_message_id: msgs[0].id,
-      last_message_id: msgs[msgs.length - 1].id
+      last_message_id: msgs[msgs.length - 1].id,
+      fingerprint: sourceFingerprint(),
+      // [message_id, 內容指紋]，照順序。重新擷取後編號可能換人，載入時用它核對
+      message_fingerprints: msgs.map((m) => [m.id, fingerprint(m)])
     },
     mode: S.mode === "multi" ? "multi_topic" : S.mode === "flow" ? "single_topic" : null,
     numbering: "顯示編號 = 依 order 排序後的位置（001 是第一則）；這個檔案裡一律用 message_id",
@@ -385,8 +473,10 @@ function buildOutline() {
     untagged: all.filter((i) => !tagOf(i)).map((i) => msgs[i].id),
     single_topic: { name: S.single.name, note: S.single.note },
     key_points: all.filter((i) => S.keys[msgs[i].id]).map((i) => ({ message_id: msgs[i].id, speaker: msgs[i].speaker })),
-    turns: all.filter(isTurn).map((i) => ({ message_id: msgs[i].id, source: autoTurn(i) ? "auto" : "manual" })),
-    dismissed_auto_turns: Object.keys(S.turnsDismissed),
+    // turns 只放使用者確認過的；程式提示另外放在 turn_hints，不算使用者的判斷
+    turns: all.filter(turnConfirmed).map((i) => ({ message_id: msgs[i].id, source: "user", keyword_match: matchesTurnWords(i) })),
+    turn_hints: all.filter(turnHint).map((i) => msgs[i].id),
+    dismissed_auto_turns: all.filter((i) => S.turnsDismissed[msgs[i].id]).map((i) => msgs[i].id),
     notes: all.filter((i) => S.notes[msgs[i].id]).map((i) => ({ message_id: msgs[i].id, text: S.notes[msgs[i].id] })),
     summary: outputText()
   };
@@ -398,6 +488,7 @@ async function save() {
   const btn = $("save");
   btn.disabled = true;
   const outline = buildOutline();
+  const version = editVersion;   // 這次存的是這個版本；儲存途中又改的，不能算已儲存
   const content = JSON.stringify(outline, null, 2) + "\n";
   try {
     if (ctx.kind === "repo") {
@@ -424,11 +515,17 @@ async function save() {
       showStatus("已下載 outline.json。下次要接著標，選 conversation.jsonl 時一起選它。");
     }
     savedAt = outline.updated_at;
-    dirty = false;
+    if (editVersion === version) {
+      dirty = false;
+      UI.moved = new Set();
+      try { await chrome.storage.local.remove(draftKey()); } catch (e) {}
+      if (S.mode) renderList();
+    } else {
+      showStatus("已儲存按下儲存時的版本；儲存途中你又改了東西，那部分還沒存，請再按一次儲存。", true, true);
+    }
     updateTop();
-    try { await chrome.storage.local.remove(draftKey()); } catch (e) {}
   } catch (e) {
-    showStatus("儲存失敗：" + e.message + "（標記還在這一頁，也存成草稿了，可以再試一次）", true);
+    showStatus("儲存失敗：" + e.message + "（標記還在這一頁，也存成草稿了，可以再試一次）", true, true);
   }
   btn.disabled = false;
 }
@@ -467,6 +564,7 @@ function renderTopics() {
     del.addEventListener("click", () => {
       const n = Object.values(S.tags).filter((v) => v === t.id).length;
       S.topics = S.topics.filter((x) => x !== t);
+      // 錨點變回還沒標；另外分類的 AI 回覆變回跟著上一句
       Object.keys(S.tags).forEach((k) => { if (S.tags[k] === t.id) delete S.tags[k]; });
       if (!S.topics.length) S.topics = [{ id: nextTopicId(), name: "新主題", note: "" }];
       showStatus("已刪除主題 " + t.id + (n ? "，原本的 " + n + " 句變成還沒標" : ""));
@@ -550,8 +648,14 @@ function renderSelbar() {
   bar.append(nb, clear, un);
 }
 
-function assign(anchorIdxs, topicId) {
-  anchorIdxs.forEach((i) => { const id = msgs[i].id; if (topicId) S.tags[id] = topicId; else delete S.tags[id]; });
+// 錨點：設定或清除標籤。AI 回覆：設定自己的分類（"" 代表單獨設成還沒標），followAgain 才回到跟著上一句
+function assign(idxs, topicId) {
+  idxs.forEach((i) => {
+    const id = msgs[i].id;
+    if (!isAnchor(i)) S.tags[id] = topicId || "";
+    else if (topicId) S.tags[id] = topicId;
+    else delete S.tags[id];
+  });
   UI.sel.clear(); UI.last = null; UI.picker = null;
   changed(true);
 }
@@ -662,37 +766,49 @@ function msgRow(i) {
 
   const body = el("div", { class: "body" });
   const line1 = el("div", { class: "line1" }, el("span", { class: "who", text: who(m) }));
-  if (multi && anchor) {
+  const own = ownTag(i);
+  if (multi && (anchor || own)) {
     const chip = el("button", { class: "chip", "aria-expanded": String(UI.picker === i),
       style: { background: p.bg, color: p.fg, borderColor: t ? p.stripe : "#C9CED6" },
       "data-chip-topic": tid || "", text: (t ? t.id + " " + t.name : "還沒標") + " ▾" });
     chip.addEventListener("click", () => { UI.picker = UI.picker === i ? null : i; renderList(); });
     line1.append(chip);
+    if (own) line1.append(el("span", { class: "follow", text: "另外分類" }));
   } else if (multi) {
     line1.append(el("span", { class: "follow", text: "跟著 " + pad(anchorOf[i]) }));
+    const split = el("button", { class: "chip quiet", "aria-expanded": String(UI.picker === i), text: "另外分類 ▾" });
+    split.addEventListener("click", () => { UI.picker = UI.picker === i ? null : i; renderList(); });
+    line1.append(split);
   }
-  if (!multi) {
-    const on = ai ? { bg: "var(--ai-key)", fg: "#fff" } : { bg: "var(--user-key)", fg: "#fff" };
-    const kb = el("button", { class: "chip", "aria-pressed": String(key),
-      style: key ? { background: on.bg, color: on.fg, borderColor: on.bg } : {},
-      text: key ? (ai ? "★ AI 說的關鍵" : "★ 你說的關鍵") : "☆ 標為關鍵" });
-    kb.addEventListener("click", () => { if (key) delete S.keys[m.id]; else S.keys[m.id] = true; renderFlowPanel(); changed(true); });
-    line1.append(kb);
-  }
-  if (isTurn(i)) {
-    const x = el("button", { "aria-label": "移除 " + pad(i) + " 的轉向標記", text: "×" });
+  // 關鍵：兩種模式都可以標
+  const on = ai ? { bg: "var(--ai-key)", fg: "#fff" } : { bg: "var(--user-key)", fg: "#fff" };
+  const kb = el("button", { class: "chip" + (multi && !key ? " quiet" : ""), "aria-pressed": String(key),
+    style: key ? { background: on.bg, color: on.fg, borderColor: on.bg } : {},
+    text: key ? (ai ? "★ AI 說的關鍵" : "★ 你說的關鍵") : "☆ 標為關鍵" });
+  kb.addEventListener("click", () => { if (key) delete S.keys[m.id]; else S.keys[m.id] = true; if (!multi) renderFlowPanel(); changed(true); });
+  line1.append(kb);
+  // 轉向：程式提示要使用者確認才算數
+  if (turnConfirmed(i)) {
+    const x = el("button", { "aria-label": "移除 " + pad(i) + " 的轉向", text: "×" });
     x.addEventListener("click", () => {
-      if (autoTurn(i)) S.turnsDismissed[m.id] = true;
-      delete S.turnsManual[m.id];
+      delete S.turnsConfirmed[m.id];
+      if (matchesTurnWords(i)) S.turnsDismissed[m.id] = true;
       changed(true);
     });
-    line1.append(el("span", { class: "turn" }, autoTurn(i) ? "可能轉向（程式判斷）" : "轉向", x));
+    line1.append(el("span", { class: "turn" }, "轉向", x));
+  } else if (turnHint(i)) {
+    const ok = el("button", { class: "confirm", text: "確認" });
+    ok.addEventListener("click", () => { S.turnsConfirmed[m.id] = true; changed(true); });
+    const x = el("button", { "aria-label": "這不是轉向，移除 " + pad(i) + " 的提示", text: "×" });
+    x.addEventListener("click", () => { S.turnsDismissed[m.id] = true; changed(true); });
+    line1.append(el("span", { class: "turn hint" }, "可能轉向？（程式提示）", ok, x));
   }
+  if (UI.moved.has(i)) line1.append(el("span", { class: "moved", text: "位置變過，請確認" }));
   body.append(line1);
 
   // 主題選單
-  if (multi && anchor && UI.picker === i) {
-    const targets = selected && UI.sel.size > 1 ? Array.from(UI.sel) : [i];
+  if (multi && UI.picker === i) {
+    const targets = anchor && selected && UI.sel.size > 1 ? Array.from(UI.sel) : [i];
     const box = el("div", { class: "picker" }, el("span", { class: "hint", text: targets.length > 1 ? "套用到已選的 " + targets.length + " 句" : "改成" }));
     S.topics.forEach((x) => {
       const xp = pal(x.id);
@@ -706,6 +822,11 @@ function msgRow(i) {
     const nb = el("button", { style: { background: "#fff", color: "#1B1F24", borderColor: "#1B1F24" }, text: "＋ 新主題" });
     nb.addEventListener("click", () => { const id = addTopic(); if (id) assign(targets, id); });
     box.append(none, nb);
+    if (own) {
+      const back = el("button", { style: { background: "#fff", color: "#3D4450", borderColor: "#C9CED6" }, text: "改回跟著 " + pad(anchorOf[i]) });
+      back.addEventListener("click", () => { delete S.tags[m.id]; UI.picker = null; changed(true); });
+      box.append(back);
+    }
     body.append(box);
   }
 
@@ -742,9 +863,9 @@ function msgRow(i) {
     b.addEventListener("click", () => { UI.noteOpen[i] = "focus"; renderList(); });
     actions.append(b);
   }
-  if (!ai && !isTurn(i)) {
+  if (!ai && !turnConfirmed(i) && !turnHint(i)) {
     const b = el("button", { text: "＋標轉向" });
-    b.addEventListener("click", () => { S.turnsManual[m.id] = true; changed(true); });
+    b.addEventListener("click", () => { S.turnsConfirmed[m.id] = true; delete S.turnsDismissed[m.id]; changed(true); });
     actions.append(b);
   }
   body.append(actions);

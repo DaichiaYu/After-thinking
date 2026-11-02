@@ -54,16 +54,19 @@ inbox/
 
 ## outline.json（使用者的標記）
 
-使用者在擴充功能的「標記對話」頁自己做的，**是使用者的判斷，不是 AI 的推測**。整理這段對話時，有這個檔案就先讀它，照它的分組和重點走。
+使用者在擴充功能的「標記對話」頁自己做的。除了 `turn_hints`，**都是使用者的判斷，不是 AI 的推測**。整理這段對話時，有這個檔案就先讀它，照它的分組和重點走。
 
-- `mode`：`multi_topic`（聊了好幾件事，看 `topics`）或 `single_topic`（一直在聊同一件事，看 `single_topic` 和 `key_points`）。
-- `topics[]`：`id`（A、B…）、`name`、`note`（使用者的補充說明）、`messages`（屬於這個主題的 `message_id`，照順序）。
+- `mode`：`multi_topic`（聊了好幾件事，看 `topics`）或 `single_topic`（一直在聊同一件事，看 `single_topic`）。兩種都可能有 `key_points`。
+- `topics[]`：`id`（A、B…）、`name`、`note`（使用者的補充說明）、`messages`（屬於這個主題的 `message_id`，照順序）。AI 回覆預設和上一句使用者發言同組，使用者也可以把某則 AI 回覆另外分到別組。
 - `untagged`：還沒分到主題的訊息。
 - `key_points[]`：使用者標的關鍵，`speaker` 分出是使用者說的（`author`）還是 AI 說的（`assistant`）。
-- `turns[]`：轉向的地方。`source: auto` 是程式依關鍵字找到、使用者沒有刪掉的；`manual` 是使用者自己標的。
+- `turns[]`：**使用者確認過**的轉向（`source: user`）。`keyword_match: true` 表示原本是程式提示、使用者按了確認。
+- `turn_hints[]`：程式依「其實」「不對」等關鍵字找到、**使用者還沒確認**的可能轉向。只是提示，不能當成使用者的判斷。
+- `dismissed_auto_turns[]`：程式提示過、使用者說不是轉向的。
 - `notes[]`：使用者寫在某則訊息上的備註。
 - `summary`：同樣內容的文字版，編號是依 `order` 排序後的位置（001 是第一則）。
-- `source.source_revision`：做標記時的原文版本。和 `source/metadata.yaml` 的 `source_revision` 不同時，標記可能已經對不上，先跟使用者確認。
+- `source.fingerprint`、`source.message_fingerprints`：做標記時原文的內容指紋（`[message_id, 指紋]`，照順序）。重新擷取時 `message_id` 會照位置重編，同一個編號可能換成別的內容。讀標記前先比對：`source.fingerprint` 和目前原文算出來的不同時，代表原文變過，標記要用指紋對回去，對不上的先跟使用者確認，不要直接照編號用。（指紋算法：`說話者 + "\n" + 內容` 的 FNV-1a 32 位元雜湊，寫成「字數的 36 進位-8 位十六進位」；整份的指紋是把每則指紋用 `|` 接起來，說話者當作 `all` 再算一次。）
+- `source.source_revision`：目前重新擷取不一定會增加這個數字，所以判斷原文有沒有變，以內容指紋為準。
 
 ## source/conversation.jsonl（對話原文）
 

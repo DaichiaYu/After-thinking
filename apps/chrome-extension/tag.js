@@ -4,7 +4,7 @@
 // 結果存成討論資料夾裡的 outline.json（不寫進 source/）。
 
 const OUTLINE_FILE = "outline.json";
-const OUTLINE_VERSION = 2;   // 2：加上內容指紋、轉向分成「確認」和「程式提示」、AI 回覆可以單獨分類
+const OUTLINE_VERSION = 3;   // 3：關鍵段落、轉向提示加上理由、指紋附平台訊息編號
 const AI_PREVIEW = 200;       // AI 回覆先顯示的字數
 const USER_PREVIEW = 1500;    // 使用者訊息超過這個長度才摺疊（通常是貼上的長文件）
 const GAP_HOURS = 6;          // 兩則訊息相隔超過這麼久，畫一條分隔線
@@ -18,10 +18,21 @@ const TURN_WORD_LIST = {
   // 「いや」單獨太常見，只算後面接逗號的
   "日本語": ["実は", "やっぱり", "やはり", "いや、", "いや,", "待って", "訂正", "考え直"]
 };
+// AI 的回覆開頭像在修正方向（「這樣差很多」「那我會大幅修改前面的…」）時，提示前一句使用者發言可能是轉向。
+// 使用者轉向時常常不用固定的詞，AI 的回應反而比較明顯。只看回覆開頭 150 字
+const AI_ACK_HEAD = 150;
+const AI_ACK_LIST = {
+  "中文（繁體）": ["這樣差很多", "我前面是", "我剛剛是", "修改前面", "大幅修改", "調整前面", "放到旁邊", "那我反而", "我誤會了", "誤解了", "原來是這樣"],
+  "中文（簡體）": ["这样差很多", "我刚刚是", "调整前面", "放到旁边", "我误会了", "误解了", "原来是这样"],
+  "English": ["I misunderstood", "my mistake", "that changes", "in that case", "let me revise", "I'll revise", "revise my", "set aside"],
+  "日本語": ["誤解して", "失礼しました", "それなら", "それでしたら", "見直し", "修正します", "前の提案"]
+};
 const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 // 英文詞前後要是單字邊界（避免 instead 抓到 insteadOf 之類），中日文不用
-const TURN_WORDS = new RegExp(Object.values(TURN_WORD_LIST).flat().map((w) =>
+const wordsRe = (list) => new RegExp(Object.values(list).flat().map((w) =>
   /^[a-z]/i.test(w) ? "\\b" + escapeRe(w) + (/[a-z]$/i.test(w) ? "\\b" : "") : escapeRe(w)).join("|"), "i");
+const TURN_WORDS = wordsRe(TURN_WORD_LIST);
+const AI_ACK_WORDS = wordsRe(AI_ACK_LIST);
 const TOPIC_IDS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
 const PALETTE = [
   { stripe: "#3451C7", bg: "#E6EBFB", fg: "#1F3487" },
@@ -56,6 +67,7 @@ const S = {
   turnsConfirmed: {},  // 使用者自己標、或確認過的轉向
   turnsDismissed: {},  // 程式提示、被使用者刪掉的轉向
   notes: {},           // 訊息 id → 備註
+  keyRanges: [],       // 整段標成關鍵：[{ from, to }]（第一則、最後一則的 message_id）
   single: { name: "", note: "" }
 };
 const UI = { view: "time", filter: "all", range: false, sel: new Set(), last: null, exp: {}, picker: null, noteOpen: {}, moved: new Set() };
@@ -70,11 +82,29 @@ const has = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
 const ownTag = (i) => !isAnchor(i) && has(S.tags, msgs[i].id);
 const tagOf = (i) => (ownTag(i) ? S.tags[msgs[i].id] : S.tags[msgs[anchorOf[i]].id]) || null;
 const topicById = (id) => S.topics.find((t) => t.id === id) || null;
+// 關鍵段落：換成位置 [起, 迄]，照順序
+const rangeIdx = () => {
+  const pos = new Map(msgs.map((m, i) => [m.id, i]));
+  return S.keyRanges.map((r) => [pos.get(r.from), pos.get(r.to)]).filter(([a, b]) => a !== undefined && b !== undefined && a <= b)
+    .sort((x, y) => x[0] - y[0]);
+};
+const rangeOf = (i) => rangeIdx().find(([a, b]) => i >= a && i <= b) || null;
+// 一則訊息算不算關鍵：自己被標、或在關鍵段落裡
+const isKeyish = (i) => !!S.keys[msgs[i].id] || !!rangeOf(i);
 const pal = (id) => { const k = S.topics.findIndex((t) => t.id === id); return k < 0 ? NONE : PALETTE[k % PALETTE.length]; };
 const matchesTurnWords = (i) => msgs[i].speaker !== "assistant" && TURN_WORDS.test(msgs[i].content);
+// 緊接在這句後面的 AI 回覆，開頭像在修正方向
+const aiAckAfter = (i) => {
+  const j = i + 1;
+  if (msgs[i].speaker === "assistant" || !msgs[j] || msgs[j].speaker !== "assistant" || anchorOf[j] !== i) return false;
+  return AI_ACK_WORDS.test(msgs[j].content.replace(/^\s*(\[[^\]\n]*\]\s*)*/, "").slice(0, AI_ACK_HEAD));
+};
+// 程式提示的理由："keyword"（你的用詞）、"ai_response"（AI 的回應）
+const hintReasons = (i) => [matchesTurnWords(i) ? "keyword" : null, aiAckAfter(i) ? "ai_response" : null].filter(Boolean);
 // 轉向分兩種：使用者確認過的（算使用者的判斷），和程式依關鍵字提示、還沒確認的
 const turnConfirmed = (i) => !!S.turnsConfirmed[msgs[i].id];
-const turnHint = (i) => matchesTurnWords(i) && !S.turnsDismissed[msgs[i].id] && !turnConfirmed(i);
+const turnHint = (i) => hintReasons(i).length > 0 && !S.turnsDismissed[msgs[i].id] && !turnConfirmed(i);
+const HINT_TEXT = { keyword: "你的用詞", ai_response: "AI 的回應像在修正方向" };
 
 // 內容指紋：說話者＋全文的雜湊。重新擷取後訊息編號可能換人，用它確認標記還指著同一段話
 function fingerprint(m) {
@@ -147,7 +177,8 @@ function parseJsonl(text) {
     id: r.message_id || "line-" + (n + 1),
     speaker: r.speaker === "author" || r.speaker === "assistant" ? r.speaker : "external",
     content: typeof r.content === "string" ? r.content : "",
-    ts: r.timestamp || null
+    ts: r.timestamp || null,
+    pid: r.platform_message_id || null
   }));
 }
 
@@ -170,7 +201,10 @@ function makeResolver(o) {
     return { stats, resolve: (id) => { if (pos.has(id)) return pos.get(id); stats.lost.add(id); return -1; } };
   }
   const oldFp = new Map();
-  old.forEach((pair, k) => { if (Array.isArray(pair)) oldFp.set(pair[0], { f: pair[1], k }); });
+  old.forEach((pair, k) => { if (Array.isArray(pair)) oldFp.set(pair[0], { f: pair[1], k, pid: pair[2] || null }); });
+  // 平台自己的訊息編號（ChatGPT、Claude 有）：內容被重新整理過（例如清掉版面語法）時，用它找回同一則
+  const byPid = new Map();
+  msgs.forEach((m, i) => { if (m.pid) byPid.set(m.pid, i); });
   const byFp = new Map();
   fps.forEach((f, i) => { if (!byFp.has(f)) byFp.set(f, []); byFp.get(f).push(i); });
   const cache = new Map();
@@ -184,6 +218,7 @@ function makeResolver(o) {
       const cands = byFp.get(was.f) || [];
       // 內容一樣的有好幾則時（例如都只說「好」），取離原本位置最近的
       if (cands.length) { r = cands.reduce((best, i) => (Math.abs(i - was.k) < Math.abs(best - was.k) ? i : best)); stats.moved.add(r); }
+      else if (was.pid && byPid.has(was.pid)) { r = byPid.get(was.pid); stats.moved.add(r); }
     }
     if (r < 0) stats.lost.add(id);
     cache.set(id, r);
@@ -220,6 +255,11 @@ function applyOutline(o) {
   S.notes = {};
   (o.notes || []).forEach((n) => { const id = n && n.text && idOf(n.message_id); if (id) S.notes[id] = String(n.text); });
   if (o.single_topic) S.single = { name: String(o.single_topic.name || ""), note: String(o.single_topic.note || "") };
+  S.keyRanges = [];
+  (o.key_ranges || []).forEach((r) => {
+    const a = r ? resolve(r.from_message_id) : -1, b = r ? resolve(r.to_message_id) : -1;
+    if (a >= 0 && b >= a) S.keyRanges.push({ from: msgs[a].id, to: msgs[b].id });
+  });
   stats.sourceChanged = !!(o.source && o.source.fingerprint && o.source.fingerprint !== sourceFingerprint()) ||
     (!stats.checked && o.source && o.source.message_count !== undefined && o.source.message_count !== msgs.length);
   return stats;
@@ -228,12 +268,12 @@ function applyOutline(o) {
 function defaultState() {
   S.mode = null;
   S.topics = [{ id: "A", name: "主題 A", note: "" }];
-  S.tags = {}; S.keys = {}; S.turnsConfirmed = {}; S.turnsDismissed = {}; S.notes = {};
+  S.tags = {}; S.keys = {}; S.turnsConfirmed = {}; S.turnsDismissed = {}; S.notes = {}; S.keyRanges = [];
   S.single = { name: ctx.title || "", note: "" };
   UI.moved = new Set();
 }
 
-// 原文在標記之後變過時，說清楚哪些自動對上、哪些找不到，並在那幾則上標「位置變過」
+// 原文在標記之後變過時，說清楚哪些自動對上、哪些找不到，並在那幾則上標「原文變過」
 function reportResolve(stats) {
   if (!stats) return;
   UI.moved = stats.moved;
@@ -244,7 +284,7 @@ function reportResolve(stats) {
     text = "這份標記是舊格式，沒有內容指紋，而原文的訊息數已經不一樣了。標記可能指到錯的訊息，請逐一核對後再儲存。";
   } else {
     text = "原文在上次標記之後變過（例如重新擷取）。" +
-      (moved ? moved + " 則依內容對到了新位置（畫面上標「位置變過」）。" : "") +
+      (moved ? moved + " 則依內容或平台的訊息編號對回來了（畫面上標「原文變過，請確認」）。" : "") +
       (lost ? lost + " 個標記在新的原文裡找不到同樣的內容，已略過。" : "") +
       (!moved && !lost ? "所有標記都還對得上。" : "請檢查後再儲存。");
   }
@@ -267,7 +307,7 @@ async function startConversation(outline) {
   $("crumb").textContent = ctx.kind === "repo" ? ctx.folder : "從電腦開啟：" + ctx.fileName;
   const nUser = msgs.filter((m) => m.speaker === "author").length;
   const nGaps = msgs.filter((_, i) => gapLabel(i)).length;
-  const nTurns = msgs.filter((_, i) => matchesTurnWords(i)).length;
+  const nTurns = msgs.filter((_, i) => hintReasons(i).length).length;
   $("meta").textContent = [
     ({ chatgpt: "ChatGPT", claude: "Claude", gemini: "Gemini" }[ctx.platform] || ctx.platform || ""),
     msgs.length + " 則（你 " + nUser + " 則、AI " + (msgs.length - nUser) + " 則）",
@@ -447,6 +487,11 @@ function outputText() {
     lines.push("主題：" + (S.single.name || "（未命名）") + (S.single.note ? "（" + S.single.note + "）" : "") + "：" + ranges(msgs.map((_, i) => i)));
   }
   // 關鍵兩種模式都可以標；多主題時沒標就不寫
+  rangeIdx().forEach(([a, b]) => {
+    const part = msgs.slice(a, b + 1);
+    lines.push("關鍵段落：" + (a === b ? pad(a) : pad(a) + "–" + pad(b)) + "（你說的 " + part.filter((m) => m.speaker !== "assistant").length +
+      " 則、AI 說的 " + part.filter((m) => m.speaker === "assistant").length + " 則）");
+  });
   const keyList = (ai) => msgs.map((_, i) => i).filter((i) => S.keys[msgs[i].id] && (msgs[i].speaker === "assistant") === ai).map(pad);
   const uk = keyList(false), ak = keyList(true);
   if (S.mode !== "multi" || uk.length) lines.push("你說的關鍵：" + (uk.length ? uk.join("、") : "無"));
@@ -454,7 +499,7 @@ function outputText() {
   const confirmed = msgs.map((_, i) => i).filter(turnConfirmed);
   const hints = msgs.map((_, i) => i).filter(turnHint);
   if (confirmed.length) lines.push("轉向（你確認的）：" + confirmed.map(pad).join("、"));
-  if (hints.length) lines.push("可能轉向（程式依關鍵字提示，你還沒確認）：" + hints.map(pad).join("、"));
+  if (hints.length) lines.push("可能轉向（程式提示，你還沒確認）：" + hints.map(pad).join("、"));
   const notes = msgs.map((_, i) => i).filter((i) => S.notes[msgs[i].id]);
   if (notes.length) lines.push("備註：\n" + notes.map((i) => "  " + pad(i) + " " + S.notes[msgs[i].id]).join("\n"));
   return lines.join("\n");
@@ -475,7 +520,7 @@ function buildOutline() {
       last_message_id: msgs[msgs.length - 1].id,
       fingerprint: sourceFingerprint(),
       // [message_id, 內容指紋]，照順序。重新擷取後編號可能換人，載入時用它核對
-      message_fingerprints: msgs.map((m) => [m.id, fingerprint(m)])
+      message_fingerprints: msgs.map((m) => (m.pid ? [m.id, fingerprint(m), m.pid] : [m.id, fingerprint(m)]))
     },
     mode: S.mode === "multi" ? "multi_topic" : S.mode === "flow" ? "single_topic" : null,
     numbering: "顯示編號 = 依 order 排序後的位置（001 是第一則）；這個檔案裡一律用 message_id",
@@ -486,9 +531,12 @@ function buildOutline() {
     untagged: all.filter((i) => !tagOf(i)).map((i) => msgs[i].id),
     single_topic: { name: S.single.name, note: S.single.note },
     key_points: all.filter((i) => S.keys[msgs[i].id]).map((i) => ({ message_id: msgs[i].id, speaker: msgs[i].speaker })),
+    // 整段標成關鍵：使用者認為這一整段是核心（不是逐句判斷）
+    key_ranges: rangeIdx().map(([a, b]) => ({ from_message_id: msgs[a].id, to_message_id: msgs[b].id, messages: msgs.slice(a, b + 1).map((m) => m.id) })),
     // turns 只放使用者確認過的；程式提示另外放在 turn_hints，不算使用者的判斷
-    turns: all.filter(turnConfirmed).map((i) => ({ message_id: msgs[i].id, source: "user", keyword_match: matchesTurnWords(i) })),
-    turn_hints: all.filter(turnHint).map((i) => msgs[i].id),
+    // hinted_by：使用者確認前，程式是因為什麼提示的（空的代表使用者自己標的）
+    turns: all.filter(turnConfirmed).map((i) => ({ message_id: msgs[i].id, source: "user", hinted_by: hintReasons(i) })),
+    turn_hints: all.filter(turnHint).map((i) => ({ message_id: msgs[i].id, reasons: hintReasons(i) })),
     dismissed_auto_turns: all.filter((i) => S.turnsDismissed[msgs[i].id]).map((i) => msgs[i].id),
     notes: all.filter((i) => S.notes[msgs[i].id]).map((i) => ({ message_id: msgs[i].id, text: S.notes[msgs[i].id] })),
     summary: outputText()
@@ -598,8 +646,7 @@ function renderTopics() {
   pill.style.color = left ? "var(--warn-fg)" : "var(--ok-fg)";
   $("view-time").setAttribute("aria-pressed", String(UI.view === "time"));
   $("view-topic").setAttribute("aria-pressed", String(UI.view === "topic"));
-  $("range").setAttribute("aria-pressed", String(UI.range));
-  $("range").textContent = UI.range ? "連選：開" : "連選：關";
+  syncRangeToggle();
 }
 
 // 改主題名稱或說明時，就地更新畫面上其他地方，不重畫整個清單
@@ -621,12 +668,21 @@ function addTopic() {
   return id;
 }
 
+function syncRangeToggle() {
+  ["range", "range-flow"].forEach((id) => {
+    $(id).setAttribute("aria-pressed", String(UI.range));
+    $(id).textContent = UI.range ? "連選：開" : "連選：關";
+  });
+}
+
 function renderFlowPanel() {
+  syncRangeToggle();
   $("flow-name").value = S.single.name;
   $("flow-note").value = S.single.note;
   const uk = msgs.filter((m) => S.keys[m.id] && m.speaker !== "assistant").length;
   const ak = msgs.filter((m) => S.keys[m.id] && m.speaker === "assistant").length;
-  $("key-count").textContent = "你說的關鍵 " + uk + " 處、AI 說的關鍵 " + ak + " 處";
+  const nr = rangeIdx().length;
+  $("key-count").textContent = (nr ? "關鍵段落 " + nr + " 段、" : "") + "你說的關鍵 " + uk + " 處、AI 說的關鍵 " + ak + " 處";
   const box = $("filters");
   box.textContent = "";
   [["all", "全部"], ["key", "只看關鍵"], ["user", "你說的關鍵"], ["ai", "AI 說的關鍵"]].forEach(([k, label]) => {
@@ -638,11 +694,20 @@ function renderFlowPanel() {
 
 function renderSelbar() {
   const bar = $("selbar");
-  const show = S.mode === "multi" && UI.sel.size > 0;
+  const show = !!S.mode && UI.sel.size > 0;
   bar.hidden = !show;
   if (!show) return;
   bar.textContent = "";
   bar.append(el("span", { class: "count", text: "已選 " + UI.sel.size + " 句" }));
+  const kr = el("button", { class: "key-range-btn", text: "★ 整段標成關鍵" });
+  kr.addEventListener("click", addKeyRange);
+  bar.append(kr);
+  if (S.mode !== "multi") {
+    const un0 = el("button", { class: "link", text: "取消選取" });
+    un0.addEventListener("click", () => { UI.sel.clear(); UI.last = null; render(); });
+    bar.append(un0);
+    return;
+  }
   S.topics.forEach((t) => {
     const p = pal(t.id);
     const b = el("button", { style: { background: p.bg, color: p.fg }, text: "標成 " + t.id + " " + t.name });
@@ -656,6 +721,23 @@ function renderSelbar() {
   const un = el("button", { class: "link", text: "取消選取" });
   un.addEventListener("click", () => { UI.sel.clear(); UI.last = null; render(); });
   bar.append(nb, clear, un);
+}
+
+// 從第一個選的句子，到最後一個選的句子和它後面的 AI 回覆，整段標成關鍵；和既有段落重疊或相連就合併
+function addKeyRange() {
+  const sel = Array.from(UI.sel).sort((a, b) => a - b);
+  if (!sel.length) return;
+  let lo = sel[0], hi = sel[sel.length - 1];
+  while (hi + 1 < msgs.length && anchorOf[hi + 1] === sel[sel.length - 1]) hi++;
+  const all = rangeIdx().concat([[lo, hi]]).sort((x, y) => x[0] - y[0]);
+  const merged = [];
+  all.forEach(([a, b]) => {
+    const last = merged[merged.length - 1];
+    if (last && a <= last[1] + 1) last[1] = Math.max(last[1], b); else merged.push([a, b]);
+  });
+  S.keyRanges = merged.map(([a, b]) => ({ from: msgs[a].id, to: msgs[b].id }));
+  UI.sel.clear(); UI.last = null; UI.picker = null;
+  changed(true);
 }
 
 // 錨點：設定或清除標籤。AI 回覆：設定自己的分類（"" 代表單獨設成還沒標），followAgain 才回到跟著上一句
@@ -697,7 +779,7 @@ function rowsToShow() {
   } else {
     const pass = (i) => {
       if (UI.filter === "all") return true;
-      if (!S.keys[msgs[i].id]) return false;
+      if (!isKeyish(i)) return false;
       if (UI.filter === "user") return msgs[i].speaker !== "assistant";
       if (UI.filter === "ai") return msgs[i].speaker === "assistant";
       return true;
@@ -757,16 +839,18 @@ function msgRow(i) {
   const tid = tagOf(i);
   const t = topicById(tid);
   const p = pal(tid);
-  const selected = multi && anchor && UI.sel.has(i);
+  const selected = anchor && UI.sel.has(i);
+  const range = rangeOf(i);
   const key = !!S.keys[m.id];
   let stripe = "#E1E4E8";
   if (multi) stripe = p.stripe;
   else if (key) stripe = ai ? "var(--ai-key)" : "var(--user-key)";
 
-  const row = el("div", { class: "msg" + (ai ? " ai" : "") + (selected ? " selected" : ""), style: { borderLeftColor: stripe } });
+  const row = el("div", { class: "msg" + (ai ? " ai" : "") + (selected ? " selected" : "") + (range ? " in-range" : ""), style: { borderLeftColor: stripe } });
 
   // 編號：多主題模式下，錨點可以點來選取
-  if (multi && anchor) {
+  // 編號：你的發言都可以點來選取（分主題、整段標成關鍵用）
+  if (anchor) {
     const b = el("button", { class: "num", text: pad(i), "aria-pressed": String(selected), "aria-label": "選取 " + pad(i) });
     b.addEventListener("click", (e) => pick(i, e));
     row.append(b);
@@ -802,7 +886,7 @@ function msgRow(i) {
     const x = el("button", { "aria-label": "移除 " + pad(i) + " 的轉向", text: "×" });
     x.addEventListener("click", () => {
       delete S.turnsConfirmed[m.id];
-      if (matchesTurnWords(i)) S.turnsDismissed[m.id] = true;
+      if (hintReasons(i).length) S.turnsDismissed[m.id] = true;
       changed(true);
     });
     line1.append(el("span", { class: "turn" }, "轉向", x));
@@ -811,9 +895,18 @@ function msgRow(i) {
     ok.addEventListener("click", () => { S.turnsConfirmed[m.id] = true; changed(true); });
     const x = el("button", { "aria-label": "這不是轉向，移除 " + pad(i) + " 的提示", text: "×" });
     x.addEventListener("click", () => { S.turnsDismissed[m.id] = true; changed(true); });
-    line1.append(el("span", { class: "turn hint" }, "可能轉向？（程式提示）", ok, x));
+    line1.append(el("span", { class: "turn hint" }, "可能轉向？（程式提示：" + hintReasons(i).map((r) => HINT_TEXT[r]).join("、") + "）", ok, x));
   }
-  if (UI.moved.has(i)) line1.append(el("span", { class: "moved", text: "位置變過，請確認" }));
+  if (UI.moved.has(i)) line1.append(el("span", { class: "moved", text: "原文變過，請確認" }));
+  // 關鍵段落：在段落的第一則標出範圍，可以整段移除
+  if (range && range[0] === i) {
+    const x = el("button", { "aria-label": "移除關鍵段落 " + pad(range[0]) + "–" + pad(range[1]), text: "×" });
+    x.addEventListener("click", () => {
+      S.keyRanges = S.keyRanges.filter((r) => r.from !== msgs[range[0]].id);
+      changed(true);
+    });
+    line1.append(el("span", { class: "range-chip" }, "★ 關鍵段落 " + (range[0] === range[1] ? pad(range[0]) : pad(range[0]) + "–" + pad(range[1])), x));
+  }
   body.append(line1);
 
   // 主題選單
@@ -910,7 +1003,8 @@ $("change-mode").addEventListener("click", () => {
 });
 $("view-time").addEventListener("click", () => { UI.view = "time"; render(); });
 $("view-topic").addEventListener("click", () => { UI.view = "topic"; render(); });
-$("range").addEventListener("click", () => { UI.range = !UI.range; renderTopics(); });
+$("range").addEventListener("click", () => { UI.range = !UI.range; syncRangeToggle(); });
+$("range-flow").addEventListener("click", () => { UI.range = !UI.range; syncRangeToggle(); });
 $("flow-name").addEventListener("input", (e) => { S.single.name = e.target.value; changed(false); });
 $("flow-note").addEventListener("input", (e) => { S.single.note = e.target.value; changed(false); });
 $("save").addEventListener("click", save);

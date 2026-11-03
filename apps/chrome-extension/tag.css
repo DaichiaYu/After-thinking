@@ -114,7 +114,7 @@ main.wrap { padding-top: 22px; padding-bottom: 64px; display: flex; flex-directi
 .seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--line-2); border-radius: 8px; overflow: hidden; background: var(--paper); }
 .seg button { border-radius: 0; background: var(--paper); color: var(--ink); font-weight: 500; }
 .seg button[aria-pressed="true"] { background: var(--ink); color: #fff; }
-#range[aria-pressed="true"] { background: var(--ink); color: #fff; border-color: var(--ink); }
+.range-toggle[aria-pressed="true"] { background: var(--ink); color: #fff; border-color: var(--ink); }
 
 .selbar {
   position: sticky; top: 8px; z-index: 5; background: var(--ink); color: #fff; border-radius: 10px;
@@ -144,6 +144,10 @@ button.num[aria-pressed="true"] { background: var(--accent); border-color: var(-
 .turn.hint { background: transparent; border: 1px dashed #d9a54c; }
 .turn button.confirm { width: auto; height: 22px; padding: 0 8px; margin-left: 6px; border-radius: 999px; background: var(--warn-fg); color: #fff; font-size: 12px; font-weight: 600; }
 .chip.quiet { border-style: dashed; background: transparent; color: var(--muted); font-weight: 400; }
+.msg.in-range { box-shadow: inset -5px 0 0 #d9a020; }
+.range-chip { display: inline-flex; align-items: center; gap: 2px; height: 28px; padding: 0 2px 0 10px; border-radius: 999px; background: #fbf0d0; color: #6b4a00; font-size: 13px; font-weight: 600; }
+.range-chip button { width: 24px; height: 24px; padding: 0; border-radius: 50%; background: transparent; color: #6b4a00; font-size: 15px; font-weight: 400; line-height: 1; }
+.selbar .key-range-btn { background: #fbf0d0; color: #6b4a00; }
 .moved { font-size: 12px; padding: 2px 8px; border-radius: 999px; background: #fdeee6; color: #8a3a12; }
 .picker { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px; background: #f7f8fa; border: 1px solid var(--line); border-radius: 8px; }
 .picker .hint { align-self: center; margin-right: 4px; font-size: 12px; }

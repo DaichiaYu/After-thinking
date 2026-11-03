@@ -91,9 +91,10 @@ Without GitHub, use 「從電腦開啟 conversation.jsonl」 (open conversation.
    - Topic names and notes can be edited on the topic cards or directly in the headings of the 「照主題」 (by topic) view. Click × to delete a topic; its messages go back to 「還沒標」 (untagged).
    - The by-topic view puts each topic together while keeping message order, and shows what was skipped, e.g. 「中間跳過 007–008（B 養貓花費）」 (skipped 007–008, topic B).
 4. Key points (both modes): any message can be marked with 「標為關鍵」 (mark as key). They are split automatically by speaker into 「你說的關鍵」 (your key points) and 「AI 說的關鍵」 (the AI's key points). In one-topic mode you can filter to key points only.
+   - When a whole stretch matters, mark it as a **key segment**: click the number of its first message, Shift-click the last one, then 「★ 整段標成關鍵」 (mark whole segment as key). The segment runs to the AI's reply after the last selected message, and is shown with a yellow bar on the right and a 「★ 關鍵段落 013–018」 (key segment) label on its first message (× removes it). Overlapping or adjacent segments are merged. This works in both modes.
 5. Also in both modes:
    - 「＋備註」 (add note): write why a message matters.
-   - Turns: when your message contains one of the words below, the page shows 「可能轉向？（程式提示）」 (possible turn? — program hint). Click 「確認」 (confirm) for it to count as your judgment, or × if it isn't a turn. You can also add one yourself with 「＋標轉向」 (mark turn). Unconfirmed hints are listed separately as "possible turns (keyword hints, not confirmed by you)" and never mixed with your confirmed turns. AI replies are not hinted.
+   - Turns: the page shows 「可能轉向？（程式提示：…）」 (possible turn? — program hint) on your message in two cases: your message contains one of the words below (「你的用詞」, your wording), or the AI's reply right after it opens like a course correction (「AI 的回應像在修正方向」, e.g. "That changes things a lot, earlier I assumed…", "Then I'll substantially revise my earlier recommendation"). People often change direction without any fixed phrase, but the AI's acknowledgement is usually obvious. Click 「確認」 (confirm) for it to count as your judgment, or × if it isn't a turn. You can also add one yourself with 「＋標轉向」 (mark turn). Unconfirmed hints are listed separately as "possible turns (program hints, not confirmed by you)" and never mixed with your confirmed turns. AI replies themselves are never marked as turns.
 
      | Language | Hint words |
      |---|---|
@@ -103,6 +104,15 @@ Without GitHub, use 「從電腦開啟 conversation.jsonl」 (open conversation.
      | Japanese | 実は、やっぱり、やはり、いや、(with a comma)、待って、訂正、考え直 (考え直す, 考え直したい…) |
 
      English is case-insensitive and matches whole words only (`instead` does not match `insteadOf`). These words also appear in sentences that aren't turns (e.g. "Actually, that's right"), so they are only hints for you to confirm.
+
+     Phrases checked in the first 150 characters of the AI's reply:
+
+     | Language | AI response phrases |
+     |---|---|
+     | Chinese (Traditional) | 這樣差很多、我前面是、我剛剛是、修改前面、大幅修改、調整前面、放到旁邊、那我反而、我誤會了、誤解了、原來是這樣 |
+     | Chinese (Simplified) | 这样差很多、我刚刚是、调整前面、放到旁边、我误会了、误解了、原来是这样 (plus the shared forms above) |
+     | English | I misunderstood, my mistake, that changes, in that case, let me revise, I'll revise, revise my, set aside |
+     | Japanese | 誤解して、失礼しました、それなら、それでしたら、見直し、修正します、前の提案 |
    - When two messages are more than 6 hours apart, a divider such as 「隔了 1 天」 (1 day later) is shown (requires original times).
 6. Click 「儲存到 GitHub」 (save to GitHub), or press ⌘S / Ctrl+S. Until you save, a draft is kept on this computer; if you close and reopen the page, it asks whether to continue the draft. Edits made while a save is in progress are not treated as saved; you'll be asked to save again.
 
@@ -110,7 +120,8 @@ Without GitHub, use 「從電腦開啟 conversation.jsonl」 (open conversation.
 
 - `<folder>/outline.json` inside the discussion folder; `source/` is never touched.
 - Messages are referenced by `message_id`, plus a `summary` that matches the 「交給下一步的資料」 (data for the next step) text at the bottom of the page.
-- A content fingerprint is stored for every message. Re-capturing renumbers `message_id` by position, so if an earlier missing message is captured later, every following ID shifts to a different message. When tags are opened, fingerprints are checked: tags are kept only where the content still matches; moved messages are found again by content and marked 「位置變過，請確認」 (position changed, please check); anything not found is dropped, and the page says how many of each. Tags never silently point at the wrong message.
+- A content fingerprint is stored for every message. Re-capturing renumbers `message_id` by position, so if an earlier missing message is captured later, every following ID shifts to a different message. When tags are opened, fingerprints are checked: tags are kept only where the content still matches; moved messages are found again by content, or by the platform's own message ID (ChatGPT and Claude have one) when the text itself was cleaned up, and marked 「原文變過，請確認」 (source changed, please check); anything not found is dropped, and the page says how many of each. Tags never silently point at the wrong message.
+- Tip: tags saved before this version have no platform message IDs. Before re-capturing a conversation you already tagged, open its tags with this version and save once.
 - The matching line in `inbox/index.jsonl` gets `outline_updated_at` and `outline_mode`, which the list page uses to show 「已標記」 (tagged).
 
 ## Batch capture of Gemini conversations (new in v0.4.0)
@@ -171,6 +182,17 @@ Batch capture needs permission to read Gemini pages (`gemini.google.com`); downl
 - Gemini shows only the latest few messages at first; earlier ones load in small batches only when you scroll to the top. The extension keeps scrolling up until the earliest message stays the same several times in a row before reading, so long conversations are slower than on ChatGPT or Claude (possibly a minute or two). Don't click elsewhere meanwhile.
 - Gemini is always read by scrolling, and branches can't be detected. For message times, see "Original times".
 - Only answer text is captured: thinking, source citation cards, and copy buttons on code blocks are left out. Uploaded files and generated images are saved as originals (see "Files and images").
+
+## ChatGPT layout markup (v0.7.0)
+
+ChatGPT replies can contain its own layout markup (`<box>`, `<row>`, `<text>`, `<badge>`, `<Cite/>`, `<Link/>`, `<Chart/>` …) that the site draws as cards. Captured as text, it was noise. It is now converted while capturing:
+
+- Layout tags are removed and their text kept; card indentation is removed so it isn't mistaken for code.
+- `<Link url="…" title="…"/>` → `[title](url)`; `<Entity value="Google"/>` → `Google`; badges → `（text）`; dividers → `---`.
+- Citations become short markers: `[來源]` (source), `[引用記憶]` (from memory), `[引用附件第 133–168 行]` (attachment lines 133–168).
+- `<AsyncImage query="…"/>` → `[網路圖片：…]` (web image); `<Chart/>` → `[圖表：title]` (chart).
+- Only these tag names are touched; any other `<…>`, code blocks, and inline code are left as they are. `metadata.yaml` lists `chatgpt_ui_markup` under `capture.cleaning` when this happened.
+- Conversations captured before this version still contain the markup; re-capture them to clean it (see the tip under "What gets saved" first).
 
 ## Known limitations
 
@@ -269,9 +291,10 @@ After-thinking Capture 是 [After-thinking](../../README.md) 的 Chrome 擴充�
    - 主題名稱和補充說明可以在上面的主題卡改，也可以在「照主題」檢視的標題直接改。按 × 刪除主題，那些句子會變回「還沒標」。
    - 「照主題」檢視把同主題放在一起，組內仍照編號排，中間跳過的會顯示「中間跳過 007–008（B 養貓花費）」。
 4. 關鍵（兩種方式都可以）：每一句都可以按「標為關鍵」，會照發言的人自動分成「你說的關鍵」和「AI 說的關鍵」。「一直在聊同一件事」的上方可以只看關鍵。
+   - 一整段都重要時，標成**關鍵段落**：點第一句的編號，按住 Shift 再點最後一句，按「★ 整段標成關鍵」。段落會延伸到最後一句之後的 AI 回覆，右邊有一條黃線，第一則上標「★ 關鍵段落 013–018」（按 × 移除）。重疊或相連的段落會合併。兩種方式都可以用。
 5. 兩種方式都可以：
    - 「＋備註」：寫下這句為什麼重要。
-   - 轉向：你的發言裡出現下面這些詞，程式會提示「可能轉向？（程式提示）」。按「確認」才算你的判斷，按 × 表示不是；也可以自己按「＋標轉向」。沒確認的提示會另外列成「可能轉向（程式依關鍵字提示，你還沒確認）」，不會混進你確認的轉向。AI 的回覆不會被提示。
+   - 轉向：兩種情況程式會在你的發言上提示「可能轉向？（程式提示：…）」：你的發言裡有下面這些詞（「你的用詞」），或緊接著的 AI 回覆開頭像在修正方向（「AI 的回應像在修正方向」，例如「這樣差很多耶，我前面是用…」「那我會大幅修改前面的推薦」）。轉向時常常不會用固定的詞，AI 的回應反而比較明顯。按「確認」才算你的判斷，按 × 表示不是；也可以自己按「＋標轉向」。沒確認的提示會另外列成「可能轉向（程式提示，你還沒確認）」，不會混進你確認的轉向。AI 的回覆本身不會被標成轉向。
 
      | 語言 | 提示詞 |
      |---|---|
@@ -281,6 +304,15 @@ After-thinking Capture 是 [After-thinking](../../README.md) 的 Chrome 擴充�
      | 日本語 | 実は、やっぱり、やはり、いや、（後面接逗號）、待って、訂正、考え直（考え直す、考え直したい…） |
 
      英文不分大小寫，而且要是完整的單字（`instead` 不會抓到 `insteadOf`）。這些詞也常出現在不是轉向的句子裡（例如 "Actually, that's right"），所以只當提示，要你確認。
+
+     AI 回覆開頭 150 字內檢查這些說法：
+
+     | 語言 | AI 的回應 |
+     |---|---|
+     | 中文（繁體） | 這樣差很多、我前面是、我剛剛是、修改前面、大幅修改、調整前面、放到旁邊、那我反而、我誤會了、誤解了、原來是這樣 |
+     | 中文（簡體） | 这样差很多、我刚刚是、调整前面、放到旁边、我误会了、误解了、原来是这样（和繁體字形相同的也會對到） |
+     | English | I misunderstood, my mistake, that changes, in that case, let me revise, I'll revise, revise my, set aside |
+     | 日本語 | 誤解して、失礼しました、それなら、それでしたら、見直し、修正します、前の提案 |
    - 兩則訊息相隔超過 6 小時，會畫一條「隔了 1 天」的分隔線（要有原始時間才有）。
 6. 按「儲存到 GitHub」（或 ⌘S／Ctrl+S）。還沒儲存前會自動存草稿在這台電腦，關掉再開會問要不要接著用。儲存途中又改的地方不會被當成已儲存，會提示你再存一次。
 
@@ -288,7 +320,8 @@ After-thinking Capture 是 [After-thinking](../../README.md) 的 Chrome 擴充�
 
 - 存在討論資料夾裡：`<資料夾>/outline.json`，不會動到 `source/`。
 - 檔案裡用 `message_id` 指向訊息，另外附一段 `summary`，是畫面最下方「交給下一步的資料」那段文字。
-- 也存每則訊息的內容指紋。重新擷取後 `message_id` 是照位置重新編的，前面補抓到一則，後面的編號就會換人；打開標記時會用指紋核對：內容一樣才沿用，換位置的照內容找回來並標「位置變過，請確認」，找不到的略過，並在上方說明各有幾個。不會悄悄指錯。
+- 也存每則訊息的內容指紋。重新擷取後 `message_id` 是照位置重新編的，前面補抓到一則，後面的編號就會換人；打開標記時會用指紋核對：內容一樣才沿用，換位置的照內容找回來；內容被整理過（例如清掉 ChatGPT 的版面語法）的，用平台自己的訊息編號找回來（ChatGPT、Claude 有）。找回來的標「原文變過，請確認」，找不到的略過，並在上方說明各有幾個。不會悄悄指錯。
+- 提醒：這一版以前存的標記沒有平台的訊息編號。已經標過的對話要重新擷取前，先用這一版打開標記、按一次儲存。
 - `inbox/index.jsonl` 裡對應的那行會加上 `outline_updated_at`、`outline_mode`，清單頁用它顯示「已標記」。
 
 ## 批量擷取 Gemini 對話（v0.4.0 新增）
@@ -349,6 +382,17 @@ inbox 裡的對話還不是 After-thinking 的討論工作區（沒有 `state.ya
 - Gemini 只會先顯示最近幾則，越早的訊息要捲到頂才會一小批一小批載入。擴充功能會自動一直往上捲，直到最早那則連續幾次都沒變才開始讀，所以長對話會比 ChatGPT、Claude 慢（可能要一兩分鐘），期間請不要點其他地方。
 - Gemini 一律用捲動讀取，偵測不到分支。訊息時間見「原始時間」。
 - 只擷取回答本文：思考過程、引用來源小卡、程式碼區塊上的複製按鈕都不會抓進來。上傳的檔案和生成的圖片會存原檔（見「檔案和圖片」）。
+
+## ChatGPT 的版面語法（v0.7.0）
+
+ChatGPT 的回覆裡會夾著它自己的版面語法（`<box>`、`<row>`、`<text>`、`<badge>`、`<Cite/>`、`<Link/>`、`<Chart/>`…），網站上畫成卡片，存成文字就是雜訊。現在擷取時會轉成一般文字：
+
+- 版面標籤拿掉、留下裡面的文字；卡片的縮排也拿掉，免得被當成程式碼。
+- `<Link url="…" title="…"/>` → `[標題](網址)`；`<Entity value="Google"/>` → `Google`；標籤（badge）→ `（文字）`；分隔線 → `---`。
+- 引用留簡短記號：`[來源]`、`[引用記憶]`、`[引用附件第 133–168 行]`。
+- `<AsyncImage query="…"/>` → `[網路圖片：…]`；`<Chart/>` → `[圖表：標題]`。
+- 只處理這些標籤名稱，其他 `<…>`、程式碼區塊、行內程式碼都不動。有處理時，`metadata.yaml` 的 `capture.cleaning` 會記 `chatgpt_ui_markup`。
+- 這一版以前擷取的對話還留著這些語法，重新擷取就會清掉（重新擷取前先看「存成什麼」的提醒）。
 
 ## 已知限制
 

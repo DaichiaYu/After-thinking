@@ -82,8 +82,8 @@
           <button id="view-time" aria-pressed="true">照時間</button>
           <button id="view-topic" aria-pressed="false">照主題</button>
         </div>
-        <button id="range" class="secondary" aria-pressed="false">連選：關</button>
-        <span class="hint grow">點每句旁邊的主題標籤就能直接改。要一次改很多句：點編號選取，按住 Shift 再點另一個編號，中間整串一起選。AI 的回覆預設跟著上一句你的發言，岔題時按「另外分類」。</span>
+        <button id="range" class="secondary range-toggle" aria-pressed="false">連選：關</button>
+        <span class="hint grow">點每句旁邊的主題標籤就能直接改。要一次改很多句：點編號選取，按住 Shift 再點另一個編號，中間整串一起選，也可以「整段標成關鍵」。AI 的回覆預設跟著上一句你的發言，岔題時按「另外分類」。</span>
       </div>
     </div>
 
@@ -100,7 +100,8 @@
       </div>
       <div class="toolbar">
         <div id="filters" class="seg" role="group" aria-label="顯示範圍"></div>
-        <span class="hint grow">每一句都可以按「標為關鍵」。是你說的還是 AI 說的，會照發言的人自動分開。</span>
+        <button id="range-flow" class="secondary range-toggle" aria-pressed="false">連選：關</button>
+        <span class="hint grow">每一句都可以按「標為關鍵」，會照發言的人分成你說的和 AI 說的。一整段都重要時：點第一句的編號，按住 Shift 再點最後一句，按「整段標成關鍵」。</span>
       </div>
     </div>
 

@@ -118,8 +118,22 @@ async function pathExists(config, branch, path) {
   throw new Error("無法確認資料夾是否存在（" + r.status + "）");
 }
 
-// 用一個 commit 一次寫入所有檔案，避免只上傳一半
-async function commitFiles(config, branch, files, message) {
+// 用一個 commit 一次寫入所有檔案，避免只上傳一半。
+// updateIndex（可省略）：(擷取紀錄的每一行) => 新的每一行，或 null 表示不改。
+// 擷取紀錄一定要在提交當下、從最新的那個提交讀，不能用之前讀到的舊副本，
+// 不然批量擷取、單段擷取、標記頁同時在寫時，會互相蓋掉對方的紀錄。
+// 分支在這期間被別人更新（422）時，重新讀、重新算，最多試 4 次。
+async function commitFiles(config, branch, files, message, updateIndex) {
+  for (let attempt = 0; ; attempt++) {
+    try { return await commitOnce(config, branch, files, message, updateIndex); }
+    catch (e) {
+      if (!e.conflict || attempt >= 3) throw e;
+      await new Promise((r) => setTimeout(r, 1000 + attempt * 1500));
+    }
+  }
+}
+
+async function commitOnce(config, branch, files, message, updateIndex) {
   const repo = "/repos/" + config.repo;
   const ref = await gh(config.token, "GET", repo + "/git/ref/heads/" + encodeURIComponent(branch));
   if (ref.status === 404 || ref.status === 409) throw new Error("倉庫是空的或找不到分支「" + branch + "」。請先在 GitHub 上為倉庫建立一個 README。");
@@ -127,6 +141,11 @@ async function commitFiles(config, branch, files, message) {
   const parentSha = ref.json.object.sha;
   const parent = await gh(config.token, "GET", repo + "/git/commits/" + parentSha);
   if (!parent.ok) throw new Error("讀取最新提交失敗（" + parent.status + "）");
+  files = files.slice();
+  if (updateIndex) {
+    const rows = updateIndex(parseCaptureIndex(await readRawFile(config, parentSha, CAPTURE_INDEX_PATH)));
+    if (rows) files.push({ path: CAPTURE_INDEX_PATH, content: serializeCaptureIndex(rows) });
+  }
   // 圖片等二進位檔要先建立 blob，再放進樹裡
   const entries = [];
   for (const f of files) {
@@ -145,7 +164,7 @@ async function commitFiles(config, branch, files, message) {
   });
   if (!commit.ok) throw new Error("建立提交失敗（" + commit.status + "）");
   const update = await gh(config.token, "PATCH", repo + "/git/refs/heads/" + encodeURIComponent(branch), { sha: commit.json.sha });
-  if (update.status === 422) throw new Error("上傳時倉庫剛好有其他更新，請再試一次。");
+  if (update.status === 422) { const e = new Error("上傳時倉庫剛好有其他更新，請再試一次。"); e.conflict = true; throw e; }
   if (!update.ok) throw new Error("更新分支失敗（" + update.status + "）");
   return commit.json.sha;
 }
@@ -173,18 +192,28 @@ async function readRawFile(config, branch, path) {
   return res.text();
 }
 
-async function readCaptureIndex(config, branch) {
-  const raw = await readRawFile(config, branch, CAPTURE_INDEX_PATH);
+function parseCaptureIndex(raw) {
   if (!raw) return [];
   return raw.split("\n").filter((l) => l.trim()).map((l) => { try { return JSON.parse(l); } catch (e) { return null; } })
     .filter(Boolean);
 }
 
+// 只用來顯示（例如「抓過了沒」）；要寫回去時改用 commitFiles 的 updateIndex
+async function readCaptureIndex(config, branch) {
+  return parseCaptureIndex(await readRawFile(config, branch, CAPTURE_INDEX_PATH));
+}
+
 const captureKey = (row) => row.platform + ":" + row.conversation_id;
 
-// 同一個資料夾重新擷取時取代舊的那行；不同資料夾就新增一行
+// 同一個資料夾重新擷取時取代舊的那行；不同資料夾就新增一行。
+// 標記（outline.json）還在資料夾裡，所以舊那行的標記紀錄要留著
+const KEEP_ON_RECAPTURE = ["outline_updated_at", "outline_mode"];
 function upsertCaptureRow(rows, entry) {
-  return rows.filter((r) => !(captureKey(r) === captureKey(entry) && r.folder === entry.folder)).concat([entry]);
+  const same = (r) => captureKey(r) === captureKey(entry) && r.folder === entry.folder;
+  const old = rows.find(same);
+  const row = Object.assign({}, entry);
+  if (old) KEEP_ON_RECAPTURE.forEach((k) => { if (old[k] !== undefined && row[k] === undefined) row[k] = old[k]; });
+  return rows.filter((r) => !same(r)).concat([row]);
 }
 
 const serializeCaptureIndex = (rows) => rows.map((r) => JSON.stringify(r)).join("\n") + "\n";

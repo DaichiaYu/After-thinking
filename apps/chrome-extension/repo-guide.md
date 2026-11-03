@@ -65,7 +65,10 @@ inbox/
 - `dismissed_auto_turns[]`：程式提示過、使用者說不是轉向的。
 - `notes[]`：使用者寫在某則訊息上的備註。
 - `summary`：同樣內容的文字版，編號是依 `order` 排序後的位置（001 是第一則）。
-- `source.fingerprint`、`source.message_fingerprints`：做標記時原文的內容指紋（`[message_id, 指紋]`，照順序）。重新擷取時 `message_id` 會照位置重編，同一個編號可能換成別的內容。讀標記前先比對：`source.fingerprint` 和目前原文算出來的不同時，代表原文變過，標記要用指紋對回去，對不上的先跟使用者確認，不要直接照編號用。（指紋算法：`說話者 + "\n" + 內容` 的 FNV-1a 32 位元雜湊，寫成「字數的 36 進位-8 位十六進位」；整份的指紋是把每則指紋用 `|` 接起來，說話者當作 `all` 再算一次。）
+- `source.fingerprint`、`source.message_fingerprints`：做標記時原文的內容指紋（`[message_id, 指紋]`，照順序）。重新擷取時 `message_id` 會照位置重編，同一個編號可能換成別的內容。讀標記前先比對：`source.fingerprint` 和目前原文算出來的不同時，代表原文變過，標記要用指紋對回去，對不上的先跟使用者確認，不要直接照編號用。
+  - 指紋算法：字串 `說話者 + "\n" + 內容`，以 **UTF-16 編碼單位**（JavaScript 字串的 `length` 和 `charCodeAt`）計算。對每個單位做 FNV-1a 32 位元雜湊（起始值 `0x811c9dc5`，先 XOR 再乘 `0x01000193`，取 32 位元），寫成「單位數的 36 進位-8 位小寫十六進位」，例如 `40-56c897f4`。
+  - 注意：不是 Python 的 `len()`。emoji 等字在 UTF-16 是 2 個單位，用字元數算會對不上。Python 要先 `s.encode("utf-16-le")`，每 2 bytes 當一個單位。
+  - 整份的指紋：把每則的指紋照順序用 `|` 接起來當作內容，說話者當作 `all`，再算一次。
 - `source.source_revision`：目前重新擷取不一定會增加這個數字，所以判斷原文有沒有變，以內容指紋為準。
 
 ## source/conversation.jsonl（對話原文）

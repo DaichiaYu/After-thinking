@@ -507,18 +507,15 @@ async function save() {
     if (ctx.kind === "repo") {
       showStatus("儲存中…", true);
       const files = [{ path: ctx.folder + OUTLINE_FILE, content }];
-      const rows = await readCaptureIndex(config, branch);
-      if (rows.some((r) => r.folder === ctx.folder)) {
-        rows.forEach((r) => {
-          if (r.folder !== ctx.folder) return;
-          r.outline_updated_at = outline.updated_at;
-          r.outline_mode = outline.mode;
-        });
-        files.push({ path: CAPTURE_INDEX_PATH, content: serializeCaptureIndex(rows) });
-      }
       // 根目錄指引檔說明了 outline.json，舊版的順便更新
       try { files.push(...await repoGuideFiles(config, branch)); } catch (e) { /* 指引檔失敗不影響儲存 */ }
-      await commitFiles(config, branch, files, "After-thinking: outline " + ctx.folder + " (" + (outline.mode || "no mode") + ")");
+      // 擷取紀錄在提交當下從最新版本讀，標上「已標記」；找不到這個資料夾就不動
+      await commitFiles(config, branch, files, "After-thinking: outline " + ctx.folder + " (" + (outline.mode || "no mode") + ")",
+        (rows) => {
+          if (!rows.some((r) => r.folder === ctx.folder)) return null;
+          return rows.map((r) => (r.folder === ctx.folder
+            ? Object.assign({}, r, { outline_updated_at: outline.updated_at, outline_mode: outline.mode }) : r));
+        });
       showStatus("已儲存到 " + config.repo + " 的 " + ctx.folder + OUTLINE_FILE);
     } else {
       const a = el("a", { href: URL.createObjectURL(new Blob([content], { type: "application/json" })), download: OUTLINE_FILE });

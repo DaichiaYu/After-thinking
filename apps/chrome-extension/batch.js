@@ -21,10 +21,10 @@ let guideDone = false;     // 這次已經確認過根目錄的 AGENTS.md
 
 // 讀寫 index 的函式在 github.js（readCaptureIndex、upsertCaptureRow）
 
-async function commitWithRetry(files, message) {
+async function commitWithRetry(files, message, updateIndex) {
   const waits = [15000, 60000];
   for (let attempt = 0; ; attempt++) {
-    try { return await commitFiles(config, branch, files, message); }
+    try { return await commitFiles(config, branch, files, message, updateIndex); }
     catch (e) {
       if (attempt >= waits.length) throw e;
       $("current").textContent = "上傳失敗（" + e.message + "），" + waits[attempt] / 1000 + " 秒後重試…";
@@ -205,13 +205,15 @@ async function captureOne(chat) {
   const files = [
     { path: folder + "source/conversation.jsonl", content: buildJsonl(items) },
     { path: folder + "source/metadata.yaml", content: buildMetadata(items.length, items.length, "gemini", page, "batch") },
-    ...attachmentFiles.map((f) => ({ path: folder + "source/" + f.path, base64: f.base64 })),
-    { path: CAPTURE_INDEX_PATH, content: serializeCaptureIndex(upsertCaptureRow(index, entry)) }
+    ...attachmentFiles.map((f) => ({ path: folder + "source/" + f.path, base64: f.base64 }))
   ];
   if (!guideDone) files.push(...await repoGuideFiles(config, branch));
-  await commitWithRetry(files, "After-thinking inbox: gemini " + chat.id + " (" + items.length + " messages)");
+  // 擷取紀錄在提交當下從最新版本讀（別的頁面可能剛寫過，例如標記頁）
+  let latest = null;
+  await commitWithRetry(files, "After-thinking inbox: gemini " + chat.id + " (" + items.length + " messages)",
+    (rows) => (latest = upsertCaptureRow(rows, entry)));
   guideDone = true;
-  index = upsertCaptureRow(index, entry);
+  index = latest || upsertCaptureRow(index, entry);
   capturedIds.add("gemini:" + chat.id);
   return entry;
 }

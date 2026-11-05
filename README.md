@@ -4,7 +4,7 @@
 
 If all you need is the conclusion, a normal summary is usually enough. After-thinking is for the cases where **how you got there** is worth keeping too.
 
-It reconstructs where a discussion started, how it branched, where the reasoning materially changed, who introduced important ideas, whether you adopted them, and what remains unfinished. It only works from the source material you provide; thoughts that never appeared in the conversation are not treated as known facts.
+It reconstructs where a discussion started, how it branched, where the reasoning materially changed, who introduced important ideas, whether you adopted them, and what remains unfinished. The source can be the conversation you are already in, or captured conversation files. Thoughts that never appeared in the available source are not treated as known facts.
 
 [繁體中文版](#繁體中文版)
 
@@ -49,12 +49,46 @@ See the complete small example in [`examples/simple-discussion/`](examples/simpl
 
 After-thinking currently provides the method specification, templates, examples, and a capture extension. There is not yet a one-click analysis program; the six stages are carried out by the AI tool you choose according to the repository rules.
 
-1. Install the capture extension described below and save the conversation as source files.
-2. Prepare a GitHub repository for the analysis results. A private repository is recommended for personal conversations. When a single captured conversation is uploaded through the extension, it can automatically create a `discussions/<discussion-id>/` workspace.
-3. Let your AI read both this method repository and your analysis repository. Ask it to start from [`AGENTS.md`](AGENTS.md) and execute the current stage. If your AI tool can read GitHub repositories directly, provide the repositories; otherwise upload the required files. If it cannot write back to GitHub, save the generated files into the workspace yourself.
-4. Progress is stored in `state.yaml`. In a later session, ask the AI to read it first and continue from the saved next action.
+You can start in **two ways**:
 
-Gemini batch captures are first placed in `inbox/`; move the conversations you want to analyze into `discussions/`.
+### Option A — Start directly from the conversation you are already in
+
+If you have already discussed a topic with your AI and the relevant conversation is still available in the current chat, you can simply ask that AI to use this repository's method and write the analysis into a repository you specify.
+
+For example:
+
+> Read the After-thinking repository, follow its method, and organize this conversation into my specified analysis repository. Start from `AGENTS.md`.
+
+**Advantages**
+- No export or capture step is required.
+- Fastest way to start while the discussion context is still available.
+- Useful when you want to organize a conversation immediately after finishing it.
+
+**Limitations**
+- The AI may not have reliable access to the entire earlier conversation if the chat is extremely long, truncated, or moved across sessions.
+- The original source is less portable and less reproducible if you later want another AI or collaborator to rerun the analysis.
+- If the AI cannot write to your GitHub repository directly, you still need to save the generated files yourself.
+
+### Option B — Capture or export the conversation first *(recommended for long-term use)*
+
+Use After-thinking Capture or another export method to save the conversation as source files, then let your AI analyze those files according to this repository.
+
+**Advantages**
+- Creates a stable source snapshot that can be reviewed, rerun, and handed to another AI later.
+- Better for long conversations, source revisions, missing-message recovery, and repeated analysis.
+- Makes it easier to audit what the analysis was actually based on.
+
+**Limitations**
+- Requires an extra capture/download/upload step before analysis.
+- Slightly more setup than starting directly in the current chat.
+
+In either case:
+
+1. Prepare a GitHub repository for the analysis results. A private repository is recommended for personal conversations.
+2. Let your AI read this method repository and your analysis repository. Ask it to start from [`AGENTS.md`](AGENTS.md) and execute the current stage.
+3. Progress is stored in `state.yaml`. In a later session, ask the AI to read it first and continue from the saved next action.
+
+When a single captured conversation is uploaded through the extension, it can automatically create a `discussions/<discussion-id>/` workspace. Gemini batch captures are first placed in `inbox/`; move the conversations you want to analyze into `discussions/`.
 
 ## Capture extension: After-thinking Capture
 
@@ -99,7 +133,7 @@ You can also find me on X: [@daisyyu0214](https://x.com/daisyyu0214).
 
 如果只需要結論，一般摘要通常就夠了。After-thinking 是給「怎麼想到這裡」也值得留下的時候用的。
 
-它會根據對話紀錄，還原討論從哪裡開始、如何分支、在哪裡改變方向，以及重要觀點是由誰提出、你最後是否採納，還有哪些問題沒有走完。它只看得到你提供的內容；你在對話之外想過的事，它不會知道，也不會當成已知事實。
+它會根據對話紀錄，還原討論從哪裡開始、如何分支、在哪裡改變方向，以及重要觀點是由誰提出、你最後是否採納，還有哪些問題沒有走完。分析來源可以是你正在使用的這個對話框，也可以是另外擷取下來的對話檔案；沒有出現在可用來源裡的想法，它不會當成已知事實。
 
 ## 什麼時候用得上
 
@@ -142,12 +176,46 @@ You can also find me on X: [@daisyyu0214](https://x.com/daisyyu0214).
 
 目前提供的是方法規格、範本、範例和擷取擴充功能，還沒有一鍵執行的分析程式；六個階段由你選用的 AI 按照倉庫規格執行。
 
-1. 安裝擷取擴充功能（見下一節），把對話存成檔案。
-2. 準備一個放分析結果的 GitHub 倉庫，個人對話建議設為私人。用擴充功能擷取單段對話並上傳時，可以自動建立 `discussions/<討論編號>/` 工作區。
-3. 讓 AI 同時讀這個方法倉庫和你的分析倉庫，請它從 [`AGENTS.md`](AGENTS.md) 開始執行目前階段。你的 AI 工具如果能直接讀 GitHub，就直接提供倉庫；不能的話，再把需要的檔案上傳給它。AI 不能直接寫回 GitHub 時，把它產出的檔案存回工作區即可。
-4. 進度記在工作區的 `state.yaml`。下次換新對話或新工作階段時，先讓 AI 讀它，就能從上次停下的位置接著做。
+你有 **兩種開始方式**：
 
-批量擷取的 Gemini 對話會先放在 `inbox/`，挑出要分析的再移到 `discussions/`。
+### 方法 A：直接從現在這個對話開始
+
+如果你已經和 AI 討論完某個主題，而且相關內容仍然在目前這個對話裡，可以直接請現在這個 AI 讀取 After-thinking 倉庫，按照裡面的規格整理目前對話，並把結果寫到你指定的分析倉庫。
+
+例如可以直接說：
+
+> 請讀取 After-thinking 倉庫，按照裡面的方式整理目前這段對話，寫入我指定的分析倉庫，從 `AGENTS.md` 開始執行。
+
+**優點**
+- 不需要先下載或擷取對話，最快可以直接開始。
+- 剛討論完就能立刻整理，操作成本最低。
+- 很適合單次討論結束後，順手把思考過程保存下來。
+
+**限制**
+- 如果對話非常長、較早內容已經超出 AI 當下能可靠讀取的範圍，分析來源可能不完整。
+- 之後如果想換另一個 AI、換工作階段或重新驗證，比較不容易完整重現當時的原始來源。
+- 如果目前使用的 AI 不能直接寫入 GitHub，仍需要自己把它產出的檔案存回分析倉庫。
+
+### 方法 B：先擷取或匯出對話，再開始分析（長期使用較推薦）
+
+先用 After-thinking Capture 或其他匯出方式把對話保存成檔案，再讓 AI 根據這些檔案執行 After-thinking。
+
+**優點**
+- 有一份固定的原始對話，可以反覆檢查、重跑，也能換另一個 AI 接手。
+- 對超長對話、之後補漏訊息、版本更新或重新分析更穩定。
+- 比較容易確認「這次分析到底是根據哪些原始內容做的」。
+
+**限制**
+- 分析前多一道擷取、下載或上傳步驟。
+- 比直接在原對話裡開始稍微麻煩一點。
+
+不論用哪一種方式：
+
+1. 準備一個放分析結果的 GitHub 倉庫，個人對話建議設為私人。
+2. 讓 AI 讀這個方法倉庫和你的分析倉庫，請它從 [`AGENTS.md`](AGENTS.md) 開始執行目前階段。
+3. 進度記在工作區的 `state.yaml`。下次換新對話或新工作階段時，先讓 AI 讀它，就能從上次停下的位置接著做。
+
+用擴充功能擷取單段對話並上傳時，可以自動建立 `discussions/<討論編號>/` 工作區。批量擷取的 Gemini 對話會先放在 `inbox/`，挑出要分析的再移到 `discussions/`。
 
 ## 擷取擴充功能：After-thinking Capture
 

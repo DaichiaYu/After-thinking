@@ -189,6 +189,10 @@ async function getActiveTab() {
 let lastScrollLog = null;
 let lastApiLog = null;
 
+document.getElementById("open-tags").addEventListener("click", () => {
+  chrome.tabs.create({ url: chrome.runtime.getURL("tag.html") });
+});
+
 document.getElementById("open-batch").addEventListener("click", () => {
   chrome.tabs.create({ url: chrome.runtime.getURL("batch.html") });
 });
@@ -335,6 +339,7 @@ async function main() {
     if (!prepared) return;
     uploadBtn.disabled = true;
     openResult.hidden = true;
+    document.getElementById("open-tag").hidden = true;
     status.textContent = "檢查倉庫中…";
     try {
       const check = await checkRepo(config);
@@ -376,21 +381,22 @@ async function main() {
         { path: folder + "state.yaml", content: buildState(config, id) },
         { path: folder + "corrections.yaml", content: CORRECTIONS_TEMPLATE }
       ];
-      // 記到擷取紀錄，之後批量擷取和這個視窗都會知道這段抓過了
-      if (conversationId) {
-        const rows = await readCaptureIndex(config, branch);
-        const entry = buildCaptureEntry(platform, conversationId, page.title, page.url, folder, kept, page, "manual_click");
-        files.push({ path: CAPTURE_INDEX_PATH, content: serializeCaptureIndex(upsertCaptureRow(rows, entry)) });
-      }
+      // 記到擷取紀錄，之後批量擷取和這個視窗都會知道這段抓過了（提交當下從最新版本讀）
+      const entry = conversationId
+        ? buildCaptureEntry(platform, conversationId, page.title, page.url, folder, kept, page, "manual_click") : null;
       files.push(...await repoGuideFiles(config, branch));
       await commitFiles(config, branch, files,
-        "After-thinking: capture " + id + " (" + platform + ", " + kept.length + " messages)");
+        "After-thinking: capture " + id + " (" + platform + ", " + kept.length + " messages)",
+        entry ? (rows) => upsertCaptureRow(rows, entry) : null);
       confirmBox.hidden = true;
       status.textContent = "已上傳 " + kept.length + " 則訊息到 " + config.repo + " 的 " + folder;
       const url = "https://github.com/" + config.repo + "/tree/" + encodeURIComponent(branch) + "/" +
         folder.split("/").filter(Boolean).map(encodeURIComponent).join("/");
       openResult.hidden = false;
       openResult.onclick = () => chrome.tabs.create({ url });
+      const openTag = document.getElementById("open-tag");
+      openTag.hidden = false;
+      openTag.onclick = () => chrome.tabs.create({ url: chrome.runtime.getURL("tag.html?folder=" + encodeURIComponent(folder)) });
       pending = null;
     } catch (e) {
       status.textContent = "上傳失敗：" + e.message + "（倉庫沒有被修改）";

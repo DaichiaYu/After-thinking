@@ -1,6 +1,6 @@
 // After-thinking Capture — 共用的擷取與輸出程式（popup.js 和 batch.js 都會用到）
 
-const VERSION = "0.6.0";
+const VERSION = "0.7.0";
 
 function detectPlatform(url) {
   const host = new URL(url).hostname;
@@ -37,8 +37,80 @@ async function captureViaApi(platform) {
     if (!text) return marks;
     return speaker === "author" ? marks + "\n\n" + text : text + "\n\n" + marks;
   };
+  // <chatgpt-markup>
+  // ChatGPT 的回覆夾著它自己的版面語法（<box>、<row>、<text>、<Cite/>、<Link/>…），網站上畫成卡片，
+  // 存成文字就是雜訊。轉成一般文字：容器標籤拿掉、連結變 [標題](網址)、引用留簡短記號、圖表留標題。
+  // 只認得下面列的標籤名稱，其他 <...> 原樣保留；``` 程式碼區塊和 `行內程式碼` 都不動。
+  const cleanChatgptMarkup = (text) => {
+    const NAMES = "box|row|col|column|stack|grid|grid-item|list|list-item|text|caption|title|badge|card|icon|favicon|divider|spacer|Cite|MemoryCite|FileCite|Entity|Link|AsyncImage|Image|Chart";
+    const KNOWN = new RegExp("^(" + NAMES + ")$");
+    const CONTAINERS = /^(box|row|col|column|stack|grid|grid-item|list|list-item|text|caption|title|badge|card)$/;
+    if (!new RegExp("</?(" + NAMES + ")[\\s/>]").test(text)) return { text, changed: false };
+    const str = (raw, name) => { const m = raw.match(new RegExp("\\b" + name + "=\"([^\"]*)\"")); return m ? m[1] : ""; };
+    const num = (raw, name) => { const m = raw.match(new RegExp("\\b" + name + "=\\{\\s*(\\d+)\\s*\\}")); return m ? m[1] : ""; };
+    const jsonStr = (raw, key) => { const m = raw.match(new RegExp("\"" + key + "\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"")); return m ? m[1] : ""; };
+    // 讀一個標籤：屬性裡可能有 {...}、引號，裡面的 > 不算結尾
+    const readTag = (s, at) => {
+      const m = /^<(\/?)([A-Za-z][\w-]*)/.exec(s.slice(at, at + 40));
+      if (!m || !KNOWN.test(m[2])) return null;
+      let k = at + m[0].length, depth = 0, quote = null;
+      for (; k < s.length; k++) {
+        const c = s[k];
+        if (quote) { if (c === "\\") k++; else if (c === quote) quote = null; continue; }
+        if (c === "\"") { quote = c; continue; }
+        if (c === "{") depth++;
+        else if (c === "}") depth--;
+        else if (c === ">" && depth <= 0) break;
+      }
+      if (k >= s.length) return null;
+      const raw = s.slice(at + m[0].length, k);
+      return { end: k + 1, name: m[2], closing: m[1] === "/", selfClosing: /\/\s*$/.test(raw), raw };
+    };
+    const render = (t) => {
+      const n = t.name, raw = t.raw;
+      if (t.closing) return n === "badge" ? "）" : "";
+      if (CONTAINERS.test(n)) {
+        if (t.selfClosing) return "";
+        return n === "badge" ? "（" : n === "list-item" ? "- " : "";
+      }
+      if (n === "Link") { const u = str(raw, "url"), ti = str(raw, "title"); return u && ti ? "[" + ti + "](" + u + ")" : (u || ti); }
+      if (n === "Cite") return "[來源]";
+      if (n === "MemoryCite") return "[引用記憶]";
+      if (n === "FileCite") { const a = num(raw, "line_range_start"), b = num(raw, "line_range_end"); return a && b ? "[引用附件第 " + a + "–" + b + " 行]" : "[引用附件]"; }
+      if (n === "Entity") return str(raw, "value");
+      if (n === "AsyncImage" || n === "Image") { const q = str(raw, "query") || str(raw, "alt"); return q ? "[網路圖片：" + q + "]" : "[網路圖片]"; }
+      if (n === "Chart") { const ti = jsonStr(raw, "title") || jsonStr(raw, "description"); return ti ? "[圖表：" + ti + "]" : "[圖表]"; }
+      if (n === "divider") return "\n---\n";
+      return "";   // icon、favicon、spacer
+    };
+    const cleanPart = (part) => {
+      let out = "", depth = 0, inCode = false, lineStart = true;
+      for (let k = 0; k < part.length;) {
+        const c = part[k];
+        if (lineStart && depth > 0 && (c === " " || c === "\t")) { k++; continue; }   // 卡片裡的縮排拿掉
+        lineStart = false;
+        if (c === "\n") { out += c; k++; lineStart = true; inCode = false; continue; }
+        if (c === "`") { inCode = !inCode; out += c; k++; continue; }
+        if (c === "<" && !inCode) {
+          const t = readTag(part, k);
+          if (t) {
+            out += render(t);
+            if (CONTAINERS.test(t.name) && !t.selfClosing) depth = Math.max(0, depth + (t.closing ? -1 : 1));
+            k = t.end;
+            continue;
+          }
+        }
+        out += c; k++;
+      }
+      return out;
+    };
+    const cleaned = text.split(/(```[\s\S]*?```)/).map((part, k) => (k % 2 ? part : cleanPart(part))).join("")
+      .replace(/^[ \t]+$/gm, "").replace(/\n{3,}/g, "\n\n").trim();
+    return { text: cleaned, changed: cleaned !== text };
+  };
+  // </chatgpt-markup>
   const result = (items, extra) => ({
-    items, strategy: extra.strategy, cleaning: [], title: document.title, url: location.href,
+    items, strategy: extra.strategy, cleaning: extra.cleaning || [], title: document.title, url: location.href,
     scroll: null, api: { ...log, ok: true }, branches: extra.branches, conversation_created_at: extra.created
   });
 
@@ -116,6 +188,10 @@ async function captureViaApi(platform) {
         const last = items.filter((i) => i.speaker === "assistant").pop();
         if (last) last.attachments = last.attachments.concat(pendingGenerated);
       }
+      let markupCleaned = 0;
+      items.forEach((i) => {
+        if (i.speaker === "assistant") { const c = cleanChatgptMarkup(i.text); if (c.changed) { i.text = c.text; markupCleaned++; } }
+      });
       items.forEach((i) => { i.content = withMarkers(i.text, i.attachments, i.speaker); delete i.text; });
 
       // 分支點：有兩個以上「看得見的」後續訊息的位置
@@ -125,7 +201,8 @@ async function captureViaApi(platform) {
           ["user", "assistant"].includes(conv.mapping[k].message.author.role));
         if (kids.length > 1) branchPoints++;
       });
-      return result(items, { strategy: "chatgpt:backend-api", branches: branchPoints, created: iso(conv.create_time) });
+      return result(items, { strategy: "chatgpt:backend-api", branches: branchPoints, created: iso(conv.create_time),
+        cleaning: markupCleaned ? ["chatgpt_ui_markup"] : [] });
     }
 
     if (platform === "claude") {

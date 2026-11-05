@@ -17,10 +17,12 @@ inbox/
         conversation.jsonl     對話原文，一行一則訊息
         metadata.yaml          擷取資訊（平台、網址、時間、擷取方式、警告）
         attachments/           對話裡的圖片和檔案原檔（有抓到才會有）
+      outline.json             使用者自己做的標記：主題分組或關鍵（有標才會有）
   undated/                     找不到原始時間的對話
   gemini-<對話編號>/           較早版本擷取的對話（還沒依月份分）
 {{ROOT}}<討論編號>/            已經挑出來、要用 After-thinking 分析的討論
   source/                      同上
+  outline.json                 同上（有標才會有）
   state.yaml                   分析進度
   corrections.yaml             使用者的修正
   analysis/                    分析結果
@@ -46,8 +48,29 @@ inbox/
 | `messages` / `author_messages` / `chars` | 訊息數、使用者訊息數、總字數 |
 | `attachments` / `attachments_saved` / `attachments_missing` | 附件數、有存原檔的、沒拿到原檔的 |
 | `warnings` | 擷取時的警告，例如 `timed_out`、`possible_gaps`、`truncated_messages` |
+| `outline_updated_at` / `outline_mode` | 使用者最後一次儲存標記的時間、標記方式（有標才會有） |
 
 同一段對話可能有好幾行（例如先批量進 inbox，之後又單段擷取進討論資料夾）。
+
+## outline.json（使用者的標記）
+
+使用者在擴充功能的「標記對話」頁自己做的。除了 `turn_hints`，**都是使用者的判斷，不是 AI 的推測**。整理這段對話時，有這個檔案就先讀它，照它的分組和重點走。
+
+- `mode`：`multi_topic`（聊了好幾件事，看 `topics`）或 `single_topic`（一直在聊同一件事，看 `single_topic`）。兩種都可能有 `key_points`。
+- `topics[]`：`id`（A、B…）、`name`、`note`（使用者的補充說明）、`messages`（屬於這個主題的 `message_id`，照順序）。AI 回覆預設和上一句使用者發言同組，使用者也可以把某則 AI 回覆另外分到別組。
+- `untagged`：還沒分到主題的訊息。
+- `key_points[]`：使用者逐則標的關鍵，`speaker` 分出是使用者說的（`author`）還是 AI 說的（`assistant`）。
+- `key_ranges[]`：使用者整段標成關鍵的段落（`from_message_id`、`to_message_id`、`messages`）。意思是「這一整段是核心」，不是段落裡每一句都逐句判斷過。
+- `turns[]`：**使用者確認過**的轉向（`source: user`）。`hinted_by` 是確認前程式提示的理由（空的代表使用者自己標的）。
+- `turn_hints[]`：程式提示、**使用者還沒確認**的可能轉向（`message_id`、`reasons`）。`reasons` 有 `keyword`（使用者的用詞，例如「其實」「不對」）和 `ai_response`（緊接著的 AI 回覆開頭像在修正方向）。只是提示，不能當成使用者的判斷。
+- `dismissed_auto_turns[]`：程式提示過、使用者說不是轉向的。
+- `notes[]`：使用者寫在某則訊息上的備註。
+- `summary`：同樣內容的文字版，編號是依 `order` 排序後的位置（001 是第一則）。
+- `source.fingerprint`、`source.message_fingerprints`：做標記時原文的內容指紋（`[message_id, 指紋]`，有平台訊息編號時是 `[message_id, 指紋, platform_message_id]`，照順序）。內容對不上、但 `platform_message_id` 對得上的，是同一則訊息被重新整理過（例如清掉 ChatGPT 的版面語法），請使用者確認。重新擷取時 `message_id` 會照位置重編，同一個編號可能換成別的內容。讀標記前先比對：`source.fingerprint` 和目前原文算出來的不同時，代表原文變過，標記要用指紋對回去，對不上的先跟使用者確認，不要直接照編號用。
+  - 指紋算法：字串 `說話者 + "\n" + 內容`，以 **UTF-16 編碼單位**（JavaScript 字串的 `length` 和 `charCodeAt`）計算。對每個單位做 FNV-1a 32 位元雜湊（起始值 `0x811c9dc5`，先 XOR 再乘 `0x01000193`，取 32 位元），寫成「單位數的 36 進位-8 位小寫十六進位」，例如 `40-56c897f4`。
+  - 注意：不是 Python 的 `len()`。emoji 等字在 UTF-16 是 2 個單位，用字元數算會對不上。Python 要先 `s.encode("utf-16-le")`，每 2 bytes 當一個單位。
+  - 整份的指紋：把每則的指紋照順序用 `|` 接起來當作內容，說話者當作 `all`，再算一次。
+- `source.source_revision`：目前重新擷取不一定會增加這個數字，所以判斷原文有沒有變，以內容指紋為準。
 
 ## source/conversation.jsonl（對話原文）
 
@@ -62,6 +85,8 @@ inbox/
 
 使用者上傳的附件放在那則訊息開頭，AI 生成的放在那則回答結尾。
 
+ChatGPT 回覆裡的版面語法在擷取時已經轉成一般文字（`metadata.yaml` 的 `capture.cleaning` 有 `chatgpt_ui_markup`），留下這些記號：`[來源]`（引用來源，原本的網址沒有保留）、`[引用記憶]`（ChatGPT 用了它對使用者的記憶）、`[引用附件第 a–b 行]`、`[網路圖片：搜尋詞]`、`[圖表：標題]`；`（文字）` 原本是標籤。較早擷取的對話可能還留著 `<box>`、`<Cite/>` 這類原始語法。
+
 ## 怎麼找東西
 
 - 依時間：看 `inbox/<年-月>/`，或用 `index.jsonl` 的 `started_at`。
@@ -73,4 +98,5 @@ inbox/
 
 - `source/` 底下的檔案是原始紀錄，不要修改。
 - 分類、摘要、整理的結果另外寫成新檔案，不要寫進 `source/`。
+- `outline.json` 是使用者的標記，不要自己改寫；有不同看法時另外提出，讓使用者決定。
 - 要分析某段討論時，依照 After-thinking 倉庫的 `AGENTS.md` 執行。

@@ -1,7 +1,238 @@
-# After-thinking Capture v0.6.0
+# After-thinking Capture v0.7.0
 
-把 ChatGPT、Claude 或 Gemini 網頁上的對話擷取成 After-thinking 的原文檔。
-這一版是「按圖示模式」（manual_click）：只有你按下擴充功能圖示時，才會讀取目前這個分頁。
+> **Capture ChatGPT, Claude, and Gemini conversations as After-thinking source files, then tag them yourself before any AI analysis.**
+
+[繁體中文版](#繁體中文版)
+
+After-thinking Capture is the Chrome extension for [After-thinking](../../README.md). It handles the first two steps of the workflow:
+
+1. **Capture** — copy a whole ChatGPT, Claude, or Gemini conversation into After-thinking source files (`conversation.jsonl` and `metadata.yaml`), uploaded to your own private GitHub repository or downloaded to your computer.
+2. **Tag** — read through the conversation yourself before handing it to an AI: group it into topics, mark key points and turns. No AI is involved; the result is saved as `outline.json`, so later AI work follows your own judgment.
+
+The extension reads the current tab only when you click its icon (`manual_click` mode); it never listens in the background. Conversations go only to the GitHub repository you configure, with no other server in between.
+
+The extension's interface is in Traditional Chinese. Button and label names below are quoted in Chinese with an English gloss.
+
+## Features
+
+| Feature | What it does |
+|---|---|
+| Single capture | Open a conversation and click the icon. It scrolls through, expands collapsed long messages, and lets you untick messages you don't want |
+| Batch capture (Gemini) | Reads every conversation in Gemini's sidebar and captures them one by one into `inbox/`, skipping ones already captured |
+| Attachments and original times (Gemini) | Downloads uploaded files and images and AI-generated images; recovers each message's original time |
+| Capture log | `inbox/index.jsonl` records every capture, so you know what has been captured and what has been tagged |
+| Tagging | Group into topics or mark key points, turns, and notes; saved as `outline.json` (v0.7.0) |
+| Repository guide | Writes an `AGENTS.md` at the repository root so any AI reading your data later knows how it is organized |
+
+## Supported platforms and languages
+
+| Item | Support |
+|---|---|
+| Platforms | ChatGPT, Claude, Gemini (batch capture, attachment files, and original times are Gemini-only for now) |
+| Extension interface | Traditional Chinese only, for now |
+| Conversation content | Any language. Text is copied as-is, never translated or rewritten |
+| Site interface language | Traditional Chinese, Simplified Chinese, English. The extension must recognize the site's "Show more" / "Show less" buttons to expand collapsed long messages, and Gemini batch capture must recognize the sidebar's "Show more". If the site is set to another language (e.g. Japanese): ChatGPT and Claude are read from the site's own data first and are unaffected; on Gemini, or whenever scroll reading is used, collapsed long messages may stay collapsed and may not be detected — check message lengths after capturing |
+| "Possible turn" hints on the tagging page | Traditional Chinese, Simplified Chinese, English, Japanese (word list under "Tagging conversations") |
+
+## Install (developer mode)
+
+1. Unzip to get the `after-thinking-capture` folder.
+2. Go to `chrome://extensions`.
+3. Turn on "Developer mode" (top right).
+4. Click "Load unpacked" and choose the `after-thinking-capture` folder.
+5. Optionally pin After-thinking Capture from the puzzle-piece icon in the toolbar.
+
+## GitHub setup (first time)
+
+1. Create a **private** repository on GitHub and tick "Add a README".
+2. In `chrome://extensions`, find After-thinking Capture → "Details" → "Extension options", or click 「GitHub 設定」 (GitHub settings) in the extension popup.
+3. Follow the steps on the settings page to create a fine-grained token with read and write access to that repository's Contents only, paste it, and click 「儲存並測試連線」 (save and test connection).
+
+## Usage
+
+1. Open a ChatGPT, Claude, or Gemini conversation (no need to scroll).
+2. Click the extension icon. It scrolls from top to bottom, expands collapsed long messages, then scrolls back. Don't click elsewhere while it reads, or the popup will close.
+3. Check the message list and untick anything you don't want.
+4. Click 「上傳到 GitHub」 (upload to GitHub), review the confirmation, then click 「確定上傳」 (confirm). The files are written in one commit to `discussions/<discussion-id>/`: `source/conversation.jsonl`, `source/metadata.yaml`, `state.yaml`, `corrections.yaml`.
+5. Or click 「只下載檔案」 (download only) to save them to your Downloads folder.
+
+## Please test and report
+
+Try one short and one long conversation on each platform and report:
+
+1. Whether the message counts (yours and the AI's) match the real conversation.
+2. Whether the first and last messages are correct.
+3. Whether `conversation.jsonl` has missing text, duplicates, or stray button text (such as "Copy" or "Regenerate").
+4. For Claude: whether thinking or tool results got mixed into answers.
+5. For Gemini: whether "Show thinking" content got mixed in, and whether answers with code picked up button text such as "content_copy".
+
+## Tagging conversations (new in v0.7.0)
+
+Read through a conversation yourself before handing it to an AI, and group it into topics or mark what matters. This page **uses no AI**: numbering, truncation, and turn hints are all done by plain code.
+
+Three ways to open it (each opens a new tab):
+
+- After a single capture finishes uploading, click 「標記這段對話」 (tag this conversation).
+- At the bottom of the extension popup, click 「標記擷取過的對話」 (tag captured conversations) and pick one from the list (tagged ones are marked; you can search titles).
+- After a batch capture finishes, click 「開始標記對話」 (start tagging).
+
+Without GitHub, use 「從電腦開啟 conversation.jsonl」 (open conversation.jsonl from your computer) on the list page; select `outline.json` at the same time to continue earlier tagging.
+
+### How to tag
+
+1. First choose what the conversation is like (you can change this later; tags are kept):
+   - 「聊了好幾件事」 (**several topics**): group messages with topic tags; important messages can still be marked as key.
+   - 「一直在聊同一件事」 (**one topic throughout**): no grouping, just mark key content.
+2. Every message is numbered (from 001). Your messages are shown in full (collapsed only past 1,500 characters); AI replies show the first 200 characters, with 「展開全文」 (show full text) to expand.
+3. Several topics:
+   - Click the topic tag next to a message to change it; the menu also has 「＋ 新主題」 (new topic).
+   - AI replies follow your previous message by default. When the AI drifts off-topic or answers several questions at once, click 「另外分類」 (categorize separately) on that reply; 「改回跟著 00X」 (follow 00X again) in the menu undoes it.
+   - To change many messages at once: click a number to select it, then Shift-click another number to select everything in between. If Shift is awkward on a trackpad, turn on 「連選」 (range select).
+   - Topic names and notes can be edited on the topic cards or directly in the headings of the 「照主題」 (by topic) view. Click × to delete a topic; its messages go back to 「還沒標」 (untagged).
+   - The by-topic view puts each topic together while keeping message order, and shows what was skipped, e.g. 「中間跳過 007–008（B 養貓花費）」 (skipped 007–008, topic B).
+4. Key points (both modes): any message can be marked with 「標為關鍵」 (mark as key). They are split automatically by speaker into 「你說的關鍵」 (your key points) and 「AI 說的關鍵」 (the AI's key points). In one-topic mode you can filter to key points only.
+   - When a whole stretch matters, mark it as a **key segment**: click the number of its first message, Shift-click the last one, then 「★ 整段標成關鍵」 (mark whole segment as key). The segment runs to the AI's reply after the last selected message, and is shown with a yellow bar on the right and a 「★ 關鍵段落 013–018」 (key segment) label on its first message (× removes it). Overlapping or adjacent segments are merged. This works in both modes.
+5. Also in both modes:
+   - 「＋備註」 (add note): write why a message matters.
+   - Turns: the page shows 「可能轉向？（程式提示：…）」 (possible turn? — program hint) on your message in two cases: your message contains one of the words below (「你的用詞」, your wording), or the AI's reply right after it opens like a course correction (「AI 的回應像在修正方向」, e.g. "That changes things a lot, earlier I assumed…", "Then I'll substantially revise my earlier recommendation"). People often change direction without any fixed phrase, but the AI's acknowledgement is usually obvious. Click 「確認」 (confirm) for it to count as your judgment, or × if it isn't a turn. You can also add one yourself with 「＋標轉向」 (mark turn). Unconfirmed hints are listed separately as "possible turns (program hints, not confirmed by you)" and never mixed with your confirmed turns. AI replies themselves are never marked as turns.
+
+     | Language | Hint words |
+     |---|---|
+     | Chinese (Traditional) | 其實、不對、改成、改為、算了、等等、等一下、回到剛剛、回到前面、重新想、換個方向 |
+     | Chinese (Simplified) | 其实、不对、改为、回到刚刚、换个方向 (words written the same in both scripts, such as 改成 and 算了, also match) |
+     | English | actually, on second thought, wait, (with a comma), no wait, never mind, nevermind, scratch that, I was wrong, let me rethink, instead, change of plan(s) |
+     | Japanese | 実は、やっぱり、やはり、いや、(with a comma)、待って、訂正、考え直 (考え直す, 考え直したい…) |
+
+     English is case-insensitive and matches whole words only (`instead` does not match `insteadOf`). These words also appear in sentences that aren't turns (e.g. "Actually, that's right"), so they are only hints for you to confirm.
+
+     Phrases checked in the first 150 characters of the AI's reply:
+
+     | Language | AI response phrases |
+     |---|---|
+     | Chinese (Traditional) | 這樣差很多、我前面是、我剛剛是、修改前面、大幅修改、調整前面、放到旁邊、那我反而、我誤會了、誤解了、原來是這樣 |
+     | Chinese (Simplified) | 这样差很多、我刚刚是、调整前面、放到旁边、我误会了、误解了、原来是这样 (plus the shared forms above) |
+     | English | I misunderstood, my mistake, that changes, in that case, let me revise, I'll revise, revise my, set aside |
+     | Japanese | 誤解して、失礼しました、それなら、それでしたら、見直し、修正します、前の提案 |
+   - When two messages are more than 6 hours apart, a divider such as 「隔了 1 天」 (1 day later) is shown (requires original times).
+6. Click 「儲存到 GitHub」 (save to GitHub), or press ⌘S / Ctrl+S. Until you save, a draft is kept on this computer; if you close and reopen the page, it asks whether to continue the draft. Edits made while a save is in progress are not treated as saved; you'll be asked to save again.
+
+### What gets saved
+
+- `<folder>/outline.json` inside the discussion folder; `source/` is never touched.
+- Messages are referenced by `message_id`, plus a `summary` that matches the 「交給下一步的資料」 (data for the next step) text at the bottom of the page.
+- A content fingerprint is stored for every message. Re-capturing renumbers `message_id` by position, so if an earlier missing message is captured later, every following ID shifts to a different message. When tags are opened, fingerprints are checked: tags are kept only where the content still matches; moved messages are found again by content, or by the platform's own message ID (ChatGPT and Claude have one) when the text itself was cleaned up, and marked 「原文變過，請確認」 (source changed, please check); anything not found is dropped, and the page says how many of each. Tags never silently point at the wrong message.
+- Tip: tags saved before this version have no platform message IDs. Before re-capturing a conversation you already tagged, open its tags with this version and save once.
+- The matching line in `inbox/index.jsonl` gets `outline_updated_at` and `outline_mode`, which the list page uses to show 「已標記」 (tagged).
+
+## Batch capture of Gemini conversations (new in v0.4.0)
+
+Use this when you have many conversations and don't want to open them one by one.
+
+1. Finish the GitHub setup above.
+2. Click the extension icon, then 「批量擷取 Gemini 對話」 (batch capture Gemini conversations) at the bottom. A new tab opens.
+3. Click 「讀取 Gemini 對話清單」 (read Gemini conversation list). A Gemini window opens, scrolls through the sidebar, and lists every conversation. Ones already captured are marked 「已擷取」 (captured) and unticked by default.
+4. Click 「開始擷取」 (start capture). The extension opens each conversation, loads it fully, and uploads it. Each conversation is its own commit, so anything already uploaded is kept if you stop or close the page midway.
+5. Keep the Gemini window visible (not minimized) while capturing; you can do other things. Each conversation takes from a few dozen seconds to two minutes.
+
+Upload locations (separate from single capture's `discussions/`):
+
+- `inbox/<year-month>/gemini-<conversation-id>/source/`: `conversation.jsonl`, `metadata.yaml`, and `attachments/` when there are attachments
+- The month is **the month the conversation started** (original time); conversations without an original time go to `inbox/undated/`
+- `inbox/index.jsonl`: the capture log, one line per capture (title, URL, folder, batch or single, conversation start and last times, message count, characters, attachment count, warnings). Later sorting also starts from this file.
+- Conversations captured before v0.5.0 are in `inbox/gemini-<conversation-id>/` (no month); `index.jsonl` is authoritative for locations.
+
+## Knowing what has been captured (v0.5.0)
+
+- Single captures uploaded to GitHub are also logged in `inbox/index.jsonl`, so both capture modes recognize each other.
+- Batch list: captured conversations show 「已擷取 10/25（批量）」 (captured Oct 25, batch) or 「（單段）」 (single), greyed out and unticked by default. Tick one again to re-capture it; it overwrites the same folder.
+- Single capture popup: opening a conversation that was captured before shows, at the top, when it was captured, how many messages it had, where it is stored, and how many messages have been added since.
+- Conversations saved with "download only" are not logged.
+
+## Files and images (v0.6.0: Gemini saves originals)
+
+Images and files in Gemini conversations are downloaded to `source/attachments/`. Their original position in the message gets a marker pointing to the file, and they are also listed in the `attachments` field of `conversation.jsonl`:
+
+- Files you uploaded: `[附件：報告.pdf → attachments/01.pdf]`, `[圖片：attachments/02.png]`, placed at the start of your message.
+- Images the AI generated: `[AI 生成的圖片：attachments/03.png]`, placed at the end of that answer.
+- Originals that couldn't be fetched are written as `[附件：報告.pdf（未取得原檔）]` (original not fetched); the capture log's `attachments_missing` counts them, and the batch page mentions them when finished. You can put the files into that `attachments/` folder yourself later.
+- Files over 20 MB are not downloaded.
+- ChatGPT and Claude still keep markers only (`[附件：filename]`), without downloading originals.
+
+## Original times (v0.6.0, Gemini)
+
+Gemini doesn't show times on screen. When a Gemini page loads, the extension listens in on the conversation data the page itself fetches from Google and recovers each turn's time from it (no extra requests are sent; the data stays in that tab).
+
+- Recovered times go into each message's `timestamp`, and into `conversation_created_at`, `conversation_updated_at`, and `time_source` in `metadata.yaml`.
+- Gemini's data format isn't public, so times may not be found after Google changes it; such conversations go into `inbox/undated/` and everything else works as usual.
+- Single capture: after installing a new version, reload any Gemini page that was already open before times can be captured (the popup tells you).
+
+## Root guide file (AGENTS.md)
+
+On the first upload, an `AGENTS.md` (folder map, file formats, how to find things, rules for AI) is created at the repository root, plus a `CLAUDE.md` pointing to it. Any AI looking through your data later reads it first to understand the repository.
+
+- The file is updated together with the extension when the guide changes.
+- To write your own, delete the marker on the first line of `AGENTS.md` and it will never be overwritten. An existing `CLAUDE.md` is never touched.
+
+Conversations in `inbox/` are not yet After-thinking discussion workspaces (no `state.yaml`). After sorting, move the ones you want to analyze into `discussions/`.
+
+Batch capture needs permission to read Gemini pages (`gemini.google.com`); downloading images needs permission for Google image URLs (`googleusercontent.com`, `usercontent.google.com`). Chrome may ask you to approve these when updating from an older version.
+
+## Gemini notes
+
+- Gemini shows only the latest few messages at first; earlier ones load in small batches only when you scroll to the top. The extension keeps scrolling up until the earliest message stays the same several times in a row before reading, so long conversations are slower than on ChatGPT or Claude (possibly a minute or two). Don't click elsewhere meanwhile.
+- Gemini is always read by scrolling, and branches can't be detected. For message times, see "Original times".
+- Only answer text is captured: thinking, source citation cards, and copy buttons on code blocks are left out. Uploaded files and generated images are saved as originals (see "Files and images").
+
+## ChatGPT layout markup (v0.7.0)
+
+ChatGPT replies can contain its own layout markup (`<box>`, `<row>`, `<text>`, `<badge>`, `<Cite/>`, `<Link/>`, `<Chart/>` …) that the site draws as cards. Captured as text, it was noise. It is now converted while capturing:
+
+- Layout tags are removed and their text kept; card indentation is removed so it isn't mistaken for code.
+- `<Link url="…" title="…"/>` → `[title](url)`; `<Entity value="Google"/>` → `Google`; badges → `（text）`; dividers → `---`.
+- Citations become short markers: `[來源]` (source), `[引用記憶]` (from memory), `[引用附件第 133–168 行]` (attachment lines 133–168).
+- `<AsyncImage query="…"/>` → `[網路圖片：…]` (web image); `<Chart/>` → `[圖表：title]` (chart).
+- Only these tag names are touched; any other `<…>`, code blocks, and inline code are left as they are. `metadata.yaml` lists `chatgpt_ui_markup` under `capture.cleaning` when this happened.
+- Conversations captured before this version still contain the markup; re-capture them to clean it (see the tip under "What gets saved" first).
+
+## Known limitations
+
+- Capture rules may break when the sites change and will need updating.
+- What's captured is the text shown on screen; Markdown formatting (bold, tables, etc.) becomes plain text.
+- Only the path currently shown is captured; other branches created by editing or regenerating are not.
+- ChatGPT and Claude times come from the site's data; when scroll reading is used, `timestamp` is null. For Gemini, see "Original times".
+- `metadata.yaml` has a new `capture` field; After-thinking's `docs/source-format.md` still needs to document it.
+
+---
+
+# 繁體中文版
+
+After-thinking Capture 是 [After-thinking](../../README.md) 的 Chrome 擴充功能，負責整理流程最前面的兩步：
+
+1. **擷取**：把 ChatGPT、Claude 或 Gemini 網頁上的對話完整抓下來，存成 After-thinking 的原文檔（`conversation.jsonl` 和 `metadata.yaml`），上傳到你自己的私人 GitHub 倉庫，或下載到電腦。
+2. **標記**：在交給 AI 整理之前，你自己先看一遍，分主題、標出關鍵和轉向。這一步不用 AI，結果存成 `outline.json`，之後的 AI 照你的判斷走。
+
+只有你按下擴充功能圖示時才會讀取目前這個分頁（「按圖示模式」，manual_click），不會在背景監聽。對話只會送到你自己設定的 GitHub 倉庫，不經過其他伺服器。
+
+## 功能一覽
+
+| 功能 | 說明 |
+|---|---|
+| 單段擷取 | 打開一段對話，按圖示。自動捲完、展開被摺疊的長訊息，可以取消勾選不要的訊息 |
+| 批量擷取（Gemini） | 讀 Gemini 側邊欄的所有對話，一段段抓進 `inbox/`，抓過的自動跳過 |
+| 附件和原始時間（Gemini） | 下載上傳的檔案、圖片和 AI 生成的圖；補上每一則的原始時間 |
+| 擷取紀錄 | `inbox/index.jsonl` 記下每次擷取，知道哪些抓過、哪些已標記 |
+| 標記對話 | 分主題或標關鍵、轉向、備註，存成 `outline.json`（v0.7.0） |
+| 倉庫指引 | 在倉庫根目錄寫一份 `AGENTS.md`，讓之後來讀資料的 AI 知道怎麼用 |
+
+## 支援的平台和語言
+
+| 項目 | 支援 |
+|---|---|
+| 平台 | ChatGPT、Claude、Gemini（批量擷取、附件原檔、原始時間目前只有 Gemini） |
+| 擴充功能的介面 | 繁體中文（目前只有這個） |
+| 對話內容 | 任何語言都可以，原文照抄，不翻譯也不改寫 |
+| 網站本身的介面語言 | 繁體中文、簡體中文、英文。擴充功能要認得網站上「顯示更多」「顯示較少」之類的按鈕，才能自動展開摺疊的長訊息，Gemini 批量擷取也要認得側邊欄的「顯示更多」。網站設成其他語言（例如日文）時：ChatGPT、Claude 優先直接讀網站資料，不受影響；但 Gemini，以及改用捲動讀取的時候，摺疊的長訊息可能沒展開、也不一定偵測得到，擷取後請檢查訊息長度 |
+| 標記頁的「可能轉向」提示 | 繁體中文、簡體中文、英文、日文（提示詞見下方「標記對話」） |
 
 ## 安裝（開發人員模式）
 
@@ -34,6 +265,64 @@
 3. 打開 `conversation.jsonl`，內容有沒有缺字、重複，或混進按鈕文字（例如「複製」「重新生成」）。
 4. Claude 的回答如果有思考過程或工具結果，有沒有被一起抓進來。
 5. Gemini：開啟「顯示思路」的回答，思考內容有沒有混進來；有程式碼的回答，有沒有多出「content_copy」之類的按鈕文字。
+
+## 標記對話（v0.7.0 新增）
+
+在交給 AI 整理之前，自己先看一遍對話，分主題或標出關鍵。這一頁**不會用到 AI**：編號、截短、轉向提示都是程式做的。
+
+打開方式（三種都會開一個新分頁）：
+
+- 單段擷取上傳完成後，按「標記這段對話」。
+- 擴充功能視窗最下面按「標記擷取過的對話」，從清單裡挑（已標記的會標出來，可以搜尋標題）。
+- 批量擷取完成後，按「開始標記對話」。
+
+沒有用 GitHub 的話，可以在清單頁「從電腦開啟 conversation.jsonl」；要接著標之前的結果，同時選 `outline.json`。
+
+### 怎麼標
+
+1. 先選這段對話比較像哪一種（之後可以改，標記會留著）：
+   - **聊了好幾件事**：用主題標籤分組，重要的句子一樣可以標成關鍵。
+   - **一直在聊同一件事**：不分組，只標出關鍵內容。
+2. 每一則都有編號（001 起）。你的發言顯示全文（超過 1500 字才摺疊），AI 的回覆先顯示 200 字，按「展開全文」看完整內容。
+3. 聊了好幾件事：
+   - 點每句旁邊的主題標籤直接改，選單裡也可以「＋ 新主題」。
+   - AI 的回覆預設跟著上一句你的發言。AI 岔題、或一次回答好幾個問題時，按那則回覆的「另外分類」單獨改；選單裡的「改回跟著 00X」可以恢復。
+   - 一次改很多句：點編號選取，按住 Shift 再點另一個編號，中間整串一起選；用觸控板不方便按 Shift 時，打開「連選」。
+   - 主題名稱和補充說明可以在上面的主題卡改，也可以在「照主題」檢視的標題直接改。按 × 刪除主題，那些句子會變回「還沒標」。
+   - 「照主題」檢視把同主題放在一起，組內仍照編號排，中間跳過的會顯示「中間跳過 007–008（B 養貓花費）」。
+4. 關鍵（兩種方式都可以）：每一句都可以按「標為關鍵」，會照發言的人自動分成「你說的關鍵」和「AI 說的關鍵」。「一直在聊同一件事」的上方可以只看關鍵。
+   - 一整段都重要時，標成**關鍵段落**：點第一句的編號，按住 Shift 再點最後一句，按「★ 整段標成關鍵」。段落會延伸到最後一句之後的 AI 回覆，右邊有一條黃線，第一則上標「★ 關鍵段落 013–018」（按 × 移除）。重疊或相連的段落會合併。兩種方式都可以用。
+5. 兩種方式都可以：
+   - 「＋備註」：寫下這句為什麼重要。
+   - 轉向：兩種情況程式會在你的發言上提示「可能轉向？（程式提示：…）」：你的發言裡有下面這些詞（「你的用詞」），或緊接著的 AI 回覆開頭像在修正方向（「AI 的回應像在修正方向」，例如「這樣差很多耶，我前面是用…」「那我會大幅修改前面的推薦」）。轉向時常常不會用固定的詞，AI 的回應反而比較明顯。按「確認」才算你的判斷，按 × 表示不是；也可以自己按「＋標轉向」。沒確認的提示會另外列成「可能轉向（程式提示，你還沒確認）」，不會混進你確認的轉向。AI 的回覆本身不會被標成轉向。
+
+     | 語言 | 提示詞 |
+     |---|---|
+     | 中文（繁體） | 其實、不對、改成、改為、算了、等等、等一下、回到剛剛、回到前面、重新想、換個方向 |
+     | 中文（簡體） | 其实、不对、改为、回到刚刚、换个方向（和繁體字形相同的也會對到，例如改成、算了） |
+     | English | actually, on second thought, wait,（後面接逗號）, no wait, never mind, nevermind, scratch that, I was wrong, let me rethink, instead, change of plan(s) |
+     | 日本語 | 実は、やっぱり、やはり、いや、（後面接逗號）、待って、訂正、考え直（考え直す、考え直したい…） |
+
+     英文不分大小寫，而且要是完整的單字（`instead` 不會抓到 `insteadOf`）。這些詞也常出現在不是轉向的句子裡（例如 "Actually, that's right"），所以只當提示，要你確認。
+
+     AI 回覆開頭 150 字內檢查這些說法：
+
+     | 語言 | AI 的回應 |
+     |---|---|
+     | 中文（繁體） | 這樣差很多、我前面是、我剛剛是、修改前面、大幅修改、調整前面、放到旁邊、那我反而、我誤會了、誤解了、原來是這樣 |
+     | 中文（簡體） | 这样差很多、我刚刚是、调整前面、放到旁边、我误会了、误解了、原来是这样（和繁體字形相同的也會對到） |
+     | English | I misunderstood, my mistake, that changes, in that case, let me revise, I'll revise, revise my, set aside |
+     | 日本語 | 誤解して、失礼しました、それなら、それでしたら、見直し、修正します、前の提案 |
+   - 兩則訊息相隔超過 6 小時，會畫一條「隔了 1 天」的分隔線（要有原始時間才有）。
+6. 按「儲存到 GitHub」（或 ⌘S／Ctrl+S）。還沒儲存前會自動存草稿在這台電腦，關掉再開會問要不要接著用。儲存途中又改的地方不會被當成已儲存，會提示你再存一次。
+
+### 存成什麼
+
+- 存在討論資料夾裡：`<資料夾>/outline.json`，不會動到 `source/`。
+- 檔案裡用 `message_id` 指向訊息，另外附一段 `summary`，是畫面最下方「交給下一步的資料」那段文字。
+- 也存每則訊息的內容指紋。重新擷取後 `message_id` 是照位置重新編的，前面補抓到一則，後面的編號就會換人；打開標記時會用指紋核對：內容一樣才沿用，換位置的照內容找回來；內容被整理過（例如清掉 ChatGPT 的版面語法）的，用平台自己的訊息編號找回來（ChatGPT、Claude 有）。找回來的標「原文變過，請確認」，找不到的略過，並在上方說明各有幾個。不會悄悄指錯。
+- 提醒：這一版以前存的標記沒有平台的訊息編號。已經標過的對話要重新擷取前，先用這一版打開標記、按一次儲存。
+- `inbox/index.jsonl` 裡對應的那行會加上 `outline_updated_at`、`outline_mode`，清單頁用它顯示「已標記」。
 
 ## 批量擷取 Gemini 對話（v0.4.0 新增）
 
@@ -93,6 +382,17 @@ inbox 裡的對話還不是 After-thinking 的討論工作區（沒有 `state.ya
 - Gemini 只會先顯示最近幾則，越早的訊息要捲到頂才會一小批一小批載入。擴充功能會自動一直往上捲，直到最早那則連續幾次都沒變才開始讀，所以長對話會比 ChatGPT、Claude 慢（可能要一兩分鐘），期間請不要點其他地方。
 - Gemini 一律用捲動讀取，偵測不到分支。訊息時間見「原始時間」。
 - 只擷取回答本文：思考過程、引用來源小卡、程式碼區塊上的複製按鈕都不會抓進來。上傳的檔案和生成的圖片會存原檔（見「檔案和圖片」）。
+
+## ChatGPT 的版面語法（v0.7.0）
+
+ChatGPT 的回覆裡會夾著它自己的版面語法（`<box>`、`<row>`、`<text>`、`<badge>`、`<Cite/>`、`<Link/>`、`<Chart/>`…），網站上畫成卡片，存成文字就是雜訊。現在擷取時會轉成一般文字：
+
+- 版面標籤拿掉、留下裡面的文字；卡片的縮排也拿掉，免得被當成程式碼。
+- `<Link url="…" title="…"/>` → `[標題](網址)`；`<Entity value="Google"/>` → `Google`；標籤（badge）→ `（文字）`；分隔線 → `---`。
+- 引用留簡短記號：`[來源]`、`[引用記憶]`、`[引用附件第 133–168 行]`。
+- `<AsyncImage query="…"/>` → `[網路圖片：…]`；`<Chart/>` → `[圖表：標題]`。
+- 只處理這些標籤名稱，其他 `<…>`、程式碼區塊、行內程式碼都不動。有處理時，`metadata.yaml` 的 `capture.cleaning` 會記 `chatgpt_ui_markup`。
+- 這一版以前擷取的對話還留著這些語法，重新擷取就會清掉（重新擷取前先看「存成什麼」的提醒）。
 
 ## 已知限制
 

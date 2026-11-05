@@ -9,6 +9,7 @@ This file is the normative Stage 2 contract.
 - `source/*`
 - usable Stage 1
 - active corrections targeting `T*` or `R*`
+- `outline.json` when present (author's pre-analysis outline; segmentation and confirmed turns follow it as defined in `../docs/user-outline.md`)
 
 ## Output
 `analysis/02-topic-map.md` with common YAML front matter.
@@ -55,6 +56,8 @@ The retention test is argumentative dependency: if removing a turn would materia
 Do not infer dependency from adjacency alone. If the source does not support that a turn materially shaped the later state, keep the sequence without claiming a trigger relationship, or mark the trigger source/dependency as unclear.
 
 ## Segmentation rule
+When `outline.json` is present, its topics define segmentation; see `../docs/user-outline.md`. Otherwise:
+
 Judge both semantic relation and argumentative relation. Low semantic similarity can remain in one reasoning chain when the argumentative dependency is strong; similar wording can still be a separate Topic when it answers a different question.
 
 ## Execution exit criteria

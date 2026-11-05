@@ -14,6 +14,7 @@ Cross-Stage normative rules:
 - `output-format.md` — common run metadata.
 - `analysis-boundary.md` — analysis is independent from publication.
 - `workspace-write-contract.md` — destination and write ordering.
+- `user-outline.md` — how the author's optional pre-analysis outline (`outline.json`) constrains Stages 1–2.
 
 ## Runtime invariants
 

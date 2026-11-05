@@ -95,7 +95,7 @@ When a single captured conversation is uploaded through the extension, it can au
 After-thinking Capture extracts conversations from the web versions of ChatGPT, Claude, and Gemini and saves them in the source format expected by After-thinking.
 
 - **How it works**: Open a conversation and click the extension icon. It can scroll through the conversation and expand collapsed long messages.
-- **Manual tagging (v0.7.0)**: After capture, open the tagging page to group topics, mark key messages or segments, identify important turns, and add notes before AI analysis. Tags are saved in `outline.json`; the tagging step itself does not use AI.
+- **Manual tagging (v0.7.0)**: After capture, open the tagging page to group topics, mark key messages or segments, identify important turns, and add notes before AI analysis. Tags are saved in `outline.json`; the tagging page itself never calls an AI. For long conversations, you can optionally ask an AI of your choice to draft the tags first (`outline.ai.json`) and review them on the same page: untouched suggestions count as agreed but stay marked as AI-generated. Stages 1–2 then follow your tags instead of re-segmenting the conversation ([`docs/user-outline.md`](docs/user-outline.md)).
 - **Where it saves**: Upload to a GitHub repository you choose, or download the files only to your computer.
 - **Gemini**: Multiple conversations can be captured in a batch, including original images and attached files where supported.
 - **Installation**: It is currently loaded manually through Chrome Developer Mode and is not yet published in the Chrome Web Store.
@@ -223,7 +223,7 @@ You can also find me on X: [@daisyyu0214](https://x.com/daisyyu0214).
 從 ChatGPT、Claude、Gemini 網頁版擷取對話，存成 After-thinking 需要的原始檔。
 
 - **用法**：打開對話，按擴充功能圖示。會自動捲完整段對話、展開被摺疊的長訊息。
-- **手動標記（v0.7.0）**：擷取後可以開啟標記頁面，自行分主題、標出關鍵訊息或段落、重要轉折，並加上備註。標記會存成 `outline.json`，標記過程本身不使用 AI。
+- **手動標記（v0.7.0）**：擷取後可以開啟標記頁面，自行分主題、標出關鍵訊息或段落、重要轉折，並加上備註。標記會存成 `outline.json`，標記頁本身不會呼叫 AI。對話太長時，也可以先請你喜歡的 AI 標一版（`outline.ai.json`），再到同一頁檢查：沒改的建議當作同意，但會保留「這是 AI 標的」紀錄。之後第一、二階段會照你的標記分析，不再自己重新切分（見 [`docs/user-outline.md`](docs/user-outline.md)）。
 - **存到哪**：上傳到你自己的 GitHub 倉庫，或只下載到電腦。
 - **Gemini**：可以一次批量擷取多段對話，也會保存支援的圖片和檔案原檔。
 - **安裝**：目前用 Chrome 的開發人員模式手動載入，還沒上架 Chrome 線上應用程式商店。

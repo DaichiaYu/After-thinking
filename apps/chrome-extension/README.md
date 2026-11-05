@@ -116,6 +116,48 @@ Without GitHub, use 「從電腦開啟 conversation.jsonl」 (open conversation.
    - When two messages are more than 6 hours apart, a divider such as 「隔了 1 天」 (1 day later) is shown (requires original times).
 6. Click 「儲存到 GitHub」 (save to GitHub), or press ⌘S / Ctrl+S. Until you save, a draft is kept on this computer; if you close and reopen the page, it asks whether to continue the draft. Edits made while a save is in progress are not treated as saved; you'll be asked to save again.
 
+### Let an AI draft the tags first
+
+For long conversations you don't want to read from the top, ask an AI of your choice to tag a first draft, then review it here. The AI's suggestion is saved as `outline.ai.json` and never written into `outline.json` directly. The 「請 AI 先標一版」 (let an AI draft first) panel at the top of the tagging page offers two ways:
+
+- **Let the AI write into the repository** (for AIs that can read and write GitHub, such as Claude Code, Codex, or Claude with GitHub connected): click 「複製指令」 (copy instructions) and paste them to the AI. The instructions name the repository, branch, folder and format, and allow it to write only `<folder>/outline.ai.json`. When it's done, click 「AI 寫好了，重新讀取」 (the AI is done, reload). The page also reads the latest `outline.ai.json` every time it opens.
+- **Download a file for any AI**: click 「下載給 AI 的檔案」 (download file for AI) to get a Markdown file with the instructions and the full numbered conversation, and give it to any AI together with the suggested one-line prompt. Then import the `outline.ai.json` it returns with 「匯入 AI 給的檔案」 (import file), or paste its reply. You can also select `outline.ai.json` together with `conversation.jsonl` on the list page.
+
+Before showing anything, the page checks the suggestion: format, message IDs that don't exist, your messages the AI left out of every topic, and whether the AI saw the same version of the conversation (source fingerprint). Problems are listed, with 「複製給 AI 的修正指令」 (copy fix instructions) to send back to the same AI. If the source doesn't match, the suggestion can only be applied with an explicit warning.
+
+Applying: 「套用 AI 建議」 (apply) when you haven't tagged anything; otherwise 「只補我還沒標的地方」 (fill only what I haven't tagged) or 「整份換成 AI 建議」 (replace everything). AI alternative splits can be switched to with one click, and places the AI was unsure about are listed with links to the messages.
+
+After applying, AI suggestions are shown with dashed borders and a 「建議 ·」 prefix, with the AI's reasons under the message:
+
+- **Leave it**: counts as agreement. It is saved as `ai_unreviewed` ("AI-generated, the user did not object"), together with whether it was ever on your screen.
+- **✓ / 確認 (confirm)**, choosing the same topic again, or editing a topic name: saved as `ai_confirmed`. 「全部確認」 (confirm all) does this for everything still untouched.
+- **Change or remove it**: becomes your own tag, and the AI suggestion is recorded as rejected.
+
+When the AI writes a new `outline.ai.json` later, the panel shows 「有新的 AI 建議」 (new AI suggestion) and lists how it differs from the version you reviewed. Old versions stay in the repository's Git history. How analysis uses each origin is defined in After-thinking's [`docs/user-outline.md`](../../docs/user-outline.md).
+
+`outline.ai.json` format:
+
+```json
+{
+  "format": "after-thinking/outline-suggestion",
+  "format_version": 1,
+  "generated_at": "2026-11-05T07:00:00Z",
+  "generated_by": "model name",
+  "source_fingerprint": "copied from the instructions",
+  "message_count": 24,
+  "mode": "multi_topic",
+  "topics": [{ "id": "A", "name": "…", "note": "…", "spans": [{ "from": "msg-000001", "to": "msg-000012" }] }],
+  "single_topic": null,
+  "turns": [{ "message_id": "msg-000011", "reason": "…" }],
+  "key_points": [{ "message_id": "msg-000017", "reason": "…" }],
+  "key_ranges": [{ "from": "msg-000013", "to": "msg-000018", "reason": "…" }],
+  "uncertain": [{ "message_id": "msg-000013", "question": "…" }],
+  "alternatives": [{ "label": "…", "topics": [] }]
+}
+```
+
+Every message of yours must fall inside some topic's `spans`; an AI reply belongs with your previous message unless a span puts it elsewhere. Turns are placed on your message. Display numbers (`"013"`) are accepted as well as message IDs.
+
 ### What gets saved
 
 - `<folder>/outline.json` inside the discussion folder; `source/` is never touched.
@@ -315,6 +357,27 @@ After-thinking Capture 是 [After-thinking](../../README.md) 的 Chrome 擴充�
      | 日本語 | 誤解して、失礼しました、それなら、それでしたら、見直し、修正します、前の提案 |
    - 兩則訊息相隔超過 6 小時，會畫一條「隔了 1 天」的分隔線（要有原始時間才有）。
 6. 按「儲存到 GitHub」（或 ⌘S／Ctrl+S）。還沒儲存前會自動存草稿在這台電腦，關掉再開會問要不要接著用。儲存途中又改的地方不會被當成已儲存，會提示你再存一次。
+
+### 請 AI 先標一版
+
+對話太長、不想從頭看時，可以請你喜歡的 AI 先標一版，再到這裡檢查。AI 的建議存成 `outline.ai.json`，不會直接寫進 `outline.json`。標記頁上方的「請 AI 先標一版」有兩種做法：
+
+- **讓 AI 直接寫進倉庫**（能讀寫 GitHub 的 AI，例如 Claude Code、Codex、有接 GitHub 的 Claude）：按「複製指令」貼給 AI。指令裡寫好倉庫、分支、資料夾和格式，而且只准它寫 `<資料夾>/outline.ai.json`。它寫好後按「AI 寫好了，重新讀取」。之後每次打開標記頁，也都會讀最新的 `outline.ai.json`。
+- **下載檔案給任何 AI**：按「下載給 AI 的檔案」，得到一個包含說明和編號好完整對話的 Markdown 檔，連同建議的那句提示詞一起丟給 AI。再用「匯入 AI 給的檔案」匯入它給的 `outline.ai.json`，或貼上它的回覆。也可以在清單頁和 `conversation.jsonl` 一起選。
+
+顯示之前會先檢查：格式、原文裡沒有的編號、你有哪些訊息 AI 沒分到主題、AI 看的是不是同一版原文（原文指紋）。有問題會列出來，並提供「複製給 AI 的修正指令」，貼回同一個 AI。原文對不上時，只能在明確警告下套用。
+
+套用：還沒標過時按「套用 AI 建議」；已經標過時可以選「只補我還沒標的地方」或「整份換成 AI 建議」。AI 另外提的分法可以一鍵切換；AI 拿不定主意的地方會列出來，點編號跳到那則訊息。
+
+套用後，AI 的建議用虛線和「建議 ·」標示，AI 的理由顯示在訊息下方：
+
+- **不動它**：當作你同意，存成 `ai_unreviewed`（「自動生成，使用者沒有反駁」），並記下它有沒有出現在你的畫面上過。
+- **按 ✓ 或「確認」**、再選一次同一個主題、或改了主題名稱：存成 `ai_confirmed`。「全部確認」會把還沒動的全部確認。
+- **改掉或刪掉**：變成你自己的標記，並記下你否決了這個 AI 建議。
+
+AI 之後又寫了新的 `outline.ai.json`，會顯示「有新的 AI 建議」，並列出和你處理過的那版差在哪。舊版本留在倉庫的 Git 歷史裡。分析時怎麼看待這幾種來源，寫在 After-thinking 的 [`docs/user-outline.md`](../../docs/user-outline.md)。
+
+`outline.ai.json` 的格式見上方英文版。你的每一則訊息都要落在某個主題的 `spans` 裡；AI 回覆預設跟著你的前一則，除非 spans 把它放到別的主題。轉向標在你的訊息上。除了 message_id，也接受顯示編號（`"013"`）。
 
 ### 存成什麼
 

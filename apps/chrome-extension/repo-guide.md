@@ -18,11 +18,13 @@ inbox/
         metadata.yaml          擷取資訊（平台、網址、時間、擷取方式、警告）
         attachments/           對話裡的圖片和檔案原檔（有抓到才會有）
       outline.json             使用者自己做的標記：主題分組或關鍵（有標才會有）
+      outline.ai.json          AI 先標的建議，給使用者審閱用（有請 AI 標才會有）
   undated/                     找不到原始時間的對話
   gemini-<對話編號>/           較早版本擷取的對話（還沒依月份分）
 {{ROOT}}<討論編號>/            已經挑出來、要用 After-thinking 分析的討論
   source/                      同上
   outline.json                 同上（有標才會有）
+  outline.ai.json              同上（有請 AI 標才會有）
   state.yaml                   分析進度
   corrections.yaml             使用者的修正
   analysis/                    分析結果
@@ -66,6 +68,14 @@ inbox/
 - `dismissed_auto_turns[]`：程式提示過、使用者說不是轉向的。
 - `notes[]`：使用者寫在某則訊息上的備註。
 - `summary`：同樣內容的文字版，編號是依 `order` 排序後的位置（001 是第一則）。
+- **每一項的來源**（v4 起）：`origin` 是 `user`（使用者自己標的）、`ai_confirmed`（AI 建議、使用者確認或改過）或 `ai_unreviewed`（AI 建議、使用者沒動，預設當作同意）。`ai_unreviewed` 另外有 `seen`：`false` 代表從沒出現在使用者的畫面上，可靠度較低。主題分配的來源在 `topics[].ai_unreviewed_messages`、`ai_confirmed_messages`、`unseen_ai_messages`，沒列到的是使用者自己標的；主題本身的來源在 `name_origin`。
+- `ai_suggestion`：根據哪一版 AI 建議整理的（`generated_by`、`generated_at`、`content_fingerprint`、`snapshot`），以及 `rejected`：使用者改掉或刪掉的 AI 建議。被否決的建議，不要再當成使用者沒考慮過而提出來。
+
+## outline.ai.json（AI 的建議）
+
+AI 依使用者的要求先標的一版，格式是 `after-thinking/outline-suggestion`。**這只是給使用者審閱的建議，不是使用者的判斷**：分析時不要讀它當依據，也不能優先於 `outline.json`。使用者在擴充功能裡接受、修改或刪掉之後，結果才寫進 `outline.json`。
+
+如果使用者請你（AI）寫這個檔案：只寫 `<資料夾>/outline.ai.json`，不要動 `outline.json` 和 `source/`；照擴充功能給的指令和格式寫，`source_fingerprint` 照抄指令裡的值。分析時怎麼用 `outline.json`，見 After-thinking 倉庫的 `docs/user-outline.md`。
 - `source.fingerprint`、`source.message_fingerprints`：做標記時原文的內容指紋（`[message_id, 指紋]`，有平台訊息編號時是 `[message_id, 指紋, platform_message_id]`，照順序）。內容對不上、但 `platform_message_id` 對得上的，是同一則訊息被重新整理過（例如清掉 ChatGPT 的版面語法），請使用者確認。重新擷取時 `message_id` 會照位置重編，同一個編號可能換成別的內容。讀標記前先比對：`source.fingerprint` 和目前原文算出來的不同時，代表原文變過，標記要用指紋對回去，對不上的先跟使用者確認，不要直接照編號用。
   - 指紋算法：字串 `說話者 + "\n" + 內容`，以 **UTF-16 編碼單位**（JavaScript 字串的 `length` 和 `charCodeAt`）計算。對每個單位做 FNV-1a 32 位元雜湊（起始值 `0x811c9dc5`，先 XOR 再乘 `0x01000193`，取 32 位元），寫成「單位數的 36 進位-8 位小寫十六進位」，例如 `40-56c897f4`。
   - 注意：不是 Python 的 `len()`。emoji 等字在 UTF-16 是 2 個單位，用字元數算會對不上。Python 要先 `s.encode("utf-16-le")`，每 2 bytes 當一個單位。
@@ -98,5 +108,5 @@ ChatGPT 回覆裡的版面語法在擷取時已經轉成一般文字（`metadata
 
 - `source/` 底下的檔案是原始紀錄，不要修改。
 - 分類、摘要、整理的結果另外寫成新檔案，不要寫進 `source/`。
-- `outline.json` 是使用者的標記，不要自己改寫；有不同看法時另外提出，讓使用者決定。
+- `outline.json` 是使用者的標記，不要自己改寫；有不同看法時另外提出，讓使用者決定。要提建議，就寫成 `outline.ai.json`。
 - 要分析某段討論時，依照 After-thinking 倉庫的 `AGENTS.md` 執行。

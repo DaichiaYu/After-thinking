@@ -4,7 +4,7 @@
 // 結果存成討論資料夾裡的 outline.json（不寫進 source/）。
 
 const OUTLINE_FILE = "outline.json";
-const OUTLINE_VERSION = 3;   // 3：關鍵段落、轉向提示加上理由、指紋附平台訊息編號
+const OUTLINE_VERSION = 4;   // 4：每一項記來源（使用者／AI 建議確認過／AI 建議沒動）、AI 建議的紀錄
 const AI_PREVIEW = 200;       // AI 回覆先顯示的字數
 const USER_PREVIEW = 1500;    // 使用者訊息超過這個長度才摺疊（通常是貼上的長文件）
 const GAP_HOURS = 6;          // 兩則訊息相隔超過這麼久，畫一條分隔線
@@ -68,7 +68,14 @@ const S = {
   turnsDismissed: {},  // 程式提示、被使用者刪掉的轉向
   notes: {},           // 訊息 id → 備註
   keyRanges: [],       // 整段標成關鍵：[{ from, to }]（第一則、最後一則的 message_id）
-  single: { name: "", note: "" }
+  single: { name: "", note: "" },
+  // 每一項的來源。沒有記錄的是使用者自己標的；"ai" = AI 建議、使用者沒動；"ai_confirmed" = AI 建議、使用者確認或改過
+  // tags 的 key 是錨點（或另外分類的 AI 回覆）的 message_id；names 的 key 是主題 id；ranges 的 key 是段落第一則的 message_id
+  origin: { tags: {}, names: {}, keys: {}, ranges: {}, turns: {} },
+  aiReasons: { keys: {}, ranges: {}, turns: {} },   // AI 給的理由
+  aiRejected: [],      // 使用者改掉或刪掉的 AI 建議
+  aiSeen: {},          // 出現在畫面上過的訊息 id（判斷「沒動」是不是根本沒看到）
+  aiSuggestion: null   // 套用的是哪一版 AI 建議（outline.ai.json）
 };
 const UI = { view: "time", filter: "all", range: false, sel: new Set(), last: null, exp: {}, picker: null, noteOpen: {}, moved: new Set() };
 
@@ -105,6 +112,27 @@ const hintReasons = (i) => [matchesTurnWords(i) ? "keyword" : null, aiAckAfter(i
 const turnConfirmed = (i) => !!S.turnsConfirmed[msgs[i].id];
 const turnHint = (i) => hintReasons(i).length > 0 && !S.turnsDismissed[msgs[i].id] && !turnConfirmed(i);
 const HINT_TEXT = { keyword: "你的用詞", ai_response: "AI 的回應像在修正方向" };
+
+// ── AI 建議的來源紀錄 ──
+const ORIGIN_OUT = { ai: "ai_unreviewed", ai_confirmed: "ai_confirmed" };
+const originOf = (kind, key) => ORIGIN_OUT[S.origin[kind][key]] || "user";
+const aiPending = (kind, key) => S.origin[kind][key] === "ai";
+// 主題分配的來源記在錨點上；另外分類的 AI 回覆記在自己身上
+const tagKey = (i) => (ownTag(i) ? msgs[i].id : msgs[anchorOf[i]].id);
+// 使用者改掉或刪掉 AI 建議：記成否決，這一項變成使用者自己的
+function touchAi(kind, key, action, aiValue, newValue) {
+  if (!S.origin[kind][key]) return;
+  S.aiRejected.push({ kind, ref: key, action, ai_value: aiValue === undefined ? null : aiValue,
+    new_value: newValue === undefined ? null : newValue, at: new Date().toISOString() });
+  delete S.origin[kind][key];
+  if (S.aiReasons[kind]) delete S.aiReasons[kind][key];
+}
+function confirmAi(kind, key) {
+  if (S.origin[kind][key] !== "ai") return;
+  S.origin[kind][key] = "ai_confirmed";
+  changed(true);
+}
+const seenAny = (ids) => ids.some((id) => S.aiSeen[id]);
 
 // 內容指紋：說話者＋全文的雜湊。重新擷取後訊息編號可能換人，用它確認標記還指著同一段話
 function fingerprint(m) {
@@ -249,7 +277,7 @@ function applyOutline(o) {
   (o.key_points || []).forEach((k) => { const id = k && idOf(k.message_id); if (id) S.keys[id] = true; });
   S.turnsConfirmed = {};
   // v1 的 "manual" 和 v2 的 "user" 都是使用者自己的；v1 的 "auto" 只是程式提示，重新由程式判斷
-  (o.turns || []).forEach((t) => { const id = t && (t.source === "manual" || t.source === "user") && idOf(t.message_id); if (id) S.turnsConfirmed[id] = true; });
+  // （轉向在下面跟來源一起讀；v1 的 "auto" 只是程式提示，重新由程式判斷）
   S.turnsDismissed = {};
   (o.dismissed_auto_turns || []).forEach((mid) => { const id = idOf(mid); if (id) S.turnsDismissed[id] = true; });
   S.notes = {};
@@ -260,6 +288,41 @@ function applyOutline(o) {
     const a = r ? resolve(r.from_message_id) : -1, b = r ? resolve(r.to_message_id) : -1;
     if (a >= 0 && b >= a) S.keyRanges.push({ from: msgs[a].id, to: msgs[b].id });
   });
+  // 來源紀錄（v4 起）
+  const ORIGIN_IN = { ai_unreviewed: "ai", ai_confirmed: "ai_confirmed" };
+  (o.topics || []).forEach((t) => {
+    if (ORIGIN_IN[t.name_origin]) S.origin.names[t.id] = ORIGIN_IN[t.name_origin];
+    [["ai_unreviewed_messages", "ai"], ["ai_confirmed_messages", "ai_confirmed"]].forEach(([field, v]) =>
+      (t[field] || []).forEach((mid) => { const i = resolve(mid); if (i >= 0) S.origin.tags[tagKey(i)] = v; }));
+  });
+  (o.key_points || []).forEach((k) => {
+    const id = k && idOf(k.message_id);
+    if (!id) return;
+    if (ORIGIN_IN[k.origin]) S.origin.keys[id] = ORIGIN_IN[k.origin];
+    if (k.ai_reason) S.aiReasons.keys[id] = String(k.ai_reason);
+  });
+  (o.key_ranges || []).forEach((r) => {
+    const id = r && idOf(r.from_message_id);
+    if (!id) return;
+    if (ORIGIN_IN[r.origin]) S.origin.ranges[id] = ORIGIN_IN[r.origin];
+    if (r.ai_reason) S.aiReasons.ranges[id] = String(r.ai_reason);
+  });
+  (o.turns || []).forEach((t) => {
+    const id = t && ["user", "manual", "ai_confirmed", "ai_unreviewed"].includes(t.origin || t.source) && idOf(t.message_id);
+    if (!id) return;
+    S.turnsConfirmed[id] = true;
+    if (ORIGIN_IN[t.origin]) S.origin.turns[id] = ORIGIN_IN[t.origin];
+    if (t.ai_reason) S.aiReasons.turns[id] = String(t.ai_reason);
+  });
+  if (o.ai_suggestion && typeof o.ai_suggestion === "object") {
+    const a = o.ai_suggestion;
+    S.aiRejected = Array.isArray(a.rejected) ? a.rejected : [];
+    (a.seen_messages || []).forEach((mid) => { const id = idOf(mid); if (id) S.aiSeen[id] = true; });
+    if (a.content_fingerprint) {
+      S.aiSuggestion = Object.assign({}, a);
+      delete S.aiSuggestion.rejected; delete S.aiSuggestion.seen_messages;
+    }
+  }
   stats.sourceChanged = !!(o.source && o.source.fingerprint && o.source.fingerprint !== sourceFingerprint()) ||
     (!stats.checked && o.source && o.source.message_count !== undefined && o.source.message_count !== msgs.length);
   return stats;
@@ -269,6 +332,9 @@ function defaultState() {
   S.mode = null;
   S.topics = [{ id: "A", name: "主題 A", note: "" }];
   S.tags = {}; S.keys = {}; S.turnsConfirmed = {}; S.turnsDismissed = {}; S.notes = {}; S.keyRanges = [];
+  S.origin = { tags: {}, names: {}, keys: {}, ranges: {}, turns: {} };
+  S.aiReasons = { keys: {}, ranges: {}, turns: {} };
+  S.aiRejected = []; S.aiSeen = {}; S.aiSuggestion = null;
   S.single = { name: ctx.title || "", note: "" };
   UI.moved = new Set();
 }
@@ -344,6 +410,10 @@ async function startConversation(outline) {
   $("top-actions").hidden = false;
   $("save").textContent = ctx.kind === "repo" ? "儲存到 GitHub" : "下載 outline.json";
   showMain();
+  // 請 AI 先標一版：長對話、還沒標過的，預設打開
+  renderAiPanel();
+  if (!savedAt && msgs.length >= 30) $("ai-panel").open = true;
+  if (ctx.kind === "repo") loadAiFromRepo(true);
 }
 
 async function loadFromRepo(folder) {
@@ -381,19 +451,25 @@ async function loadFromRepo(folder) {
 
 async function loadFromFiles(files) {
   const list = Array.from(files);
-  // .jsonl 是對話；.json 當作標記檔（瀏覽器重複下載時會改名成 outline (1).json，所以不看檔名）
+  // .jsonl 是對話；.json 看內容分辨是標記檔還是 AI 建議（瀏覽器重複下載會改檔名，所以不看檔名）
   const conv = list.find((f) => /\.jsonl$/i.test(f.name)) || list.find((f) => !/\.json$/i.test(f.name));
-  const out = list.find((f) => f !== conv && /\.json$/i.test(f.name));
   if (!conv) throw new Error("請選 conversation.jsonl");
   msgs = parseJsonl(await conv.text());
   if (!msgs.length) throw new Error("這份對話是空的");
-  let outline = null;
-  if (out) {
-    try { outline = JSON.parse(await out.text()); } catch (e) { outline = null; }
-    if (!outline || !outline.outline_version) { outline = null; showStatus(out.name + " 不是標記檔，先當作沒有標記。", true); }
+  let outline = null, aiRaw = null;
+  for (const f of list.filter((x) => x !== conv)) {
+    const text = await f.text();
+    let obj = null;
+    try { obj = JSON.parse(text); } catch (e) {
+      try { obj = parseAiText(text); } catch (e2) { obj = null; }   // AI 回的文字可能包在 ```json 裡
+    }
+    if (obj && obj.outline_version) outline = obj;
+    else if (obj && (obj.format === "after-thinking/outline-suggestion" || obj.spans || obj.mode)) aiRaw = text;
+    else showStatus(f.name + " 不是標記檔也不是 AI 建議，略過。", true, true);
   }
   ctx = { kind: "file", fileName: conv.name, folder: null, title: conv.name.replace(/\.jsonl?$/i, ""), platform: null, revision: 1 };
   await startConversation(outline);
+  if (aiRaw) takeAi(aiRaw, "file");
 }
 
 // ── 選對話清單 ──
@@ -455,6 +531,7 @@ function changed(full) {
   editVersion++;
   updateTop();
   if (full) render(); else { renderOutput(); renderSelbar(); }
+  if (typeof renderAiPanel === "function") renderAiPanel();
   clearTimeout(draftTimer);
   draftTimer = setTimeout(() => {
     try { chrome.storage.local.set({ [draftKey()]: { outline: buildOutline() } }); } catch (e) { /* 存不了草稿不影響 */ }
@@ -502,11 +579,36 @@ function outputText() {
   if (hints.length) lines.push("可能轉向（程式提示，你還沒確認）：" + hints.map(pad).join("、"));
   const notes = msgs.map((_, i) => i).filter((i) => S.notes[msgs[i].id]);
   if (notes.length) lines.push("備註：\n" + notes.map((i) => "  " + pad(i) + " " + S.notes[msgs[i].id]).join("\n"));
+  const p = aiPendingCounts();
+  if (p.total) lines.push("AI 建議、你沒有動的（預設當作同意）：" + p.parts.join("、"));
   return lines.join("\n");
+}
+
+// AI 建議裡使用者還沒動的項目數
+function aiPendingCounts() {
+  const n = (kind) => Object.values(S.origin[kind]).filter((v) => v === "ai").length;
+  const tagMsgs = msgs.filter((_, i) => tagOf(i) && aiPending("tags", tagKey(i))).length;
+  const c = { tags: tagMsgs, names: n("names"), keys: n("keys"), ranges: n("ranges"), turns: n("turns") };
+  const parts = [];
+  if (c.names) parts.push("主題 " + c.names + " 個");
+  if (c.tags) parts.push("主題分配 " + c.tags + " 則");
+  if (c.keys) parts.push("關鍵 " + c.keys + " 則");
+  if (c.ranges) parts.push("關鍵段落 " + c.ranges + " 段");
+  if (c.turns) parts.push("轉向 " + c.turns + " 處");
+  return { c, parts, total: c.names + c.tags + c.keys + c.ranges + c.turns };
 }
 
 function buildOutline() {
   const all = msgs.map((_, i) => i);
+  const rangeIds = (a, b) => msgs.slice(a, b + 1).map((m) => m.id);
+  // 每一項的來源；AI 建議沒動的，另外記有沒有出現在畫面上過
+  const withOrigin = (obj, kind, key, ids, reasonKind) => {
+    const o = originOf(kind, key);
+    obj.origin = o;
+    if (o === "ai_unreviewed") obj.seen = seenAny(ids);
+    if (reasonKind && S.aiReasons[reasonKind][key]) obj.ai_reason = S.aiReasons[reasonKind][key];
+    return obj;
+  };
   return {
     outline_version: OUTLINE_VERSION,
     created_with: "after-thinking-capture " + VERSION,
@@ -524,21 +626,40 @@ function buildOutline() {
     },
     mode: S.mode === "multi" ? "multi_topic" : S.mode === "flow" ? "single_topic" : null,
     numbering: "顯示編號 = 依 order 排序後的位置（001 是第一則）；這個檔案裡一律用 message_id",
-    topics: S.topics.map((t) => ({
-      id: t.id, name: t.name, note: t.note,
-      messages: all.filter((i) => tagOf(i) === t.id).map((i) => msgs[i].id)
-    })),
+    // 主題分配的來源：沒列在 ai_*_messages 裡的，都是使用者自己標的
+    topics: S.topics.map((t) => {
+      const mine = all.filter((i) => tagOf(i) === t.id);
+      const by = (o) => mine.filter((i) => originOf("tags", tagKey(i)) === o);
+      return {
+        id: t.id, name: t.name, note: t.note, name_origin: originOf("names", t.id),
+        messages: mine.map((i) => msgs[i].id),
+        ai_unreviewed_messages: by("ai_unreviewed").map((i) => msgs[i].id),
+        ai_confirmed_messages: by("ai_confirmed").map((i) => msgs[i].id),
+        unseen_ai_messages: by("ai_unreviewed").filter((i) => !S.aiSeen[tagKey(i)]).map((i) => msgs[i].id)
+      };
+    }),
     untagged: all.filter((i) => !tagOf(i)).map((i) => msgs[i].id),
     single_topic: { name: S.single.name, note: S.single.note },
-    key_points: all.filter((i) => S.keys[msgs[i].id]).map((i) => ({ message_id: msgs[i].id, speaker: msgs[i].speaker })),
+    key_points: all.filter((i) => S.keys[msgs[i].id]).map((i) =>
+      withOrigin({ message_id: msgs[i].id, speaker: msgs[i].speaker }, "keys", msgs[i].id, [msgs[i].id], "keys")),
     // 整段標成關鍵：使用者認為這一整段是核心（不是逐句判斷）
-    key_ranges: rangeIdx().map(([a, b]) => ({ from_message_id: msgs[a].id, to_message_id: msgs[b].id, messages: msgs.slice(a, b + 1).map((m) => m.id) })),
+    key_ranges: rangeIdx().map(([a, b]) => withOrigin({ from_message_id: msgs[a].id, to_message_id: msgs[b].id, messages: rangeIds(a, b) },
+      "ranges", msgs[a].id, rangeIds(a, b), "ranges")),
     // turns 只放使用者確認過的；程式提示另外放在 turn_hints，不算使用者的判斷
     // hinted_by：使用者確認前，程式是因為什麼提示的（空的代表使用者自己標的）
-    turns: all.filter(turnConfirmed).map((i) => ({ message_id: msgs[i].id, source: "user", hinted_by: hintReasons(i) })),
+    // origin：user（使用者自己標）、ai_confirmed、ai_unreviewed（AI 建議、使用者沒動，預設當作同意）
+    turns: all.filter(turnConfirmed).map((i) =>
+      withOrigin({ message_id: msgs[i].id, hinted_by: hintReasons(i) }, "turns", msgs[i].id, [msgs[i].id], "turns")),
     turn_hints: all.filter(turnHint).map((i) => ({ message_id: msgs[i].id, reasons: hintReasons(i) })),
     dismissed_auto_turns: all.filter((i) => S.turnsDismissed[msgs[i].id]).map((i) => msgs[i].id),
     notes: all.filter((i) => S.notes[msgs[i].id]).map((i) => ({ message_id: msgs[i].id, text: S.notes[msgs[i].id] })),
+    // 根據哪一版 AI 建議（outline.ai.json）整理的，以及使用者否決了哪些建議
+    ai_suggestion: S.aiSuggestion || S.aiRejected.length
+      ? Object.assign({}, S.aiSuggestion || {}, {
+        rejected: S.aiRejected,
+        seen_messages: all.filter((i) => S.aiSeen[msgs[i].id]).map((i) => msgs[i].id)
+      })
+      : null,
     summary: outputText()
   };
 }
@@ -623,18 +744,21 @@ function renderTopics() {
       const n = Object.values(S.tags).filter((v) => v === t.id).length;
       S.topics = S.topics.filter((x) => x !== t);
       // 錨點變回還沒標；另外分類的 AI 回覆變回跟著上一句
-      Object.keys(S.tags).forEach((k) => { if (S.tags[k] === t.id) delete S.tags[k]; });
+      Object.keys(S.tags).forEach((k) => { if (S.tags[k] === t.id) { touchAi("tags", k, "removed", t.id); delete S.tags[k]; } });
+      touchAi("names", t.id, "removed", t.name);
       if (!S.topics.length) S.topics = [{ id: nextTopicId(), name: "新主題", note: "" }];
       showStatus("已刪除主題 " + t.id + (n ? "，原本的 " + n + " 句變成還沒標" : ""));
       changed(true);
     });
-    box.append(el("div", { class: "topic", style: { borderTopColor: p.stripe } },
+    const nameSugg = aiPending("names", t.id);
+    box.append(el("div", { class: "topic" + (nameSugg ? " ai-sugg" : ""), style: { borderTopColor: p.stripe } },
       el("div", { class: "row" },
         el("span", { class: "topic-id", style: { background: p.bg, color: p.fg }, text: t.id }),
         name,
         el("span", { class: "topic-count", text: count + " 則" }),
         del),
-      note));
+      note,
+      nameSugg ? el("div", { class: "ai-note" }, "AI 建議的主題，改名稱或說明就算確認", okButton("names", t.id, "主題")) : null));
   });
   const add = el("button", { class: "add-topic", text: "＋ 新增主題" });
   add.addEventListener("click", () => { addTopic(); changed(true); });
@@ -652,6 +776,7 @@ function renderTopics() {
 // 改主題名稱或說明時，就地更新畫面上其他地方，不重畫整個清單
 // （重畫會讓離開輸入框後的第一下點擊落空）
 function topicEdited(t) {
+  if (S.origin.names[t.id] === "ai") S.origin.names[t.id] = "ai_confirmed";   // 改了 AI 取的名稱 = 確認這個主題
   const active = document.activeElement;
   document.querySelectorAll('[data-topic-name="' + t.id + '"]').forEach((n) => { if (n !== active) n.value = t.name; });
   document.querySelectorAll('[data-topic-note="' + t.id + '"]').forEach((n) => { if (n !== active) n.value = t.note; });
@@ -729,6 +854,8 @@ function addKeyRange() {
   if (!sel.length) return;
   let lo = sel[0], hi = sel[sel.length - 1];
   while (hi + 1 < msgs.length && anchorOf[hi + 1] === sel[sel.length - 1]) hi++;
+  // 和新段落重疊或相連的 AI 建議段落，被併進使用者的新段落：記成改過
+  rangeIdx().forEach(([a, b]) => { if (a <= hi + 1 && b >= lo - 1) touchAi("ranges", msgs[a].id, "changed", [msgs[a].id, msgs[b].id]); });
   const all = rangeIdx().concat([[lo, hi]]).sort((x, y) => x[0] - y[0]);
   const merged = [];
   all.forEach(([a, b]) => {
@@ -744,6 +871,12 @@ function addKeyRange() {
 function assign(idxs, topicId) {
   idxs.forEach((i) => {
     const id = msgs[i].id;
+    // AI 建議過這一則的主題：選同一個 = 確認；選別的或清掉 = 否決
+    if (S.origin.tags[id]) {
+      const was = has(S.tags, id) ? (S.tags[id] || null) : null;
+      if (was === (topicId || null)) { if (S.origin.tags[id] === "ai") S.origin.tags[id] = "ai_confirmed"; }
+      else touchAi("tags", id, topicId ? "changed" : "removed", was, topicId || null);
+    }
     if (!isAnchor(i)) S.tags[id] = topicId || "";
     else if (topicId) S.tags[id] = topicId;
     else delete S.tags[id];
@@ -812,6 +945,29 @@ function renderList() {
   });
   list.append(frag);
   window.scrollTo(0, scrollY);
+  watchSeen(list);
+}
+
+// 記下哪些訊息出現在畫面上過：AI 建議沒動的項目，「看過沒改」和「根本沒看到」意思不同。只記錄，不算修改
+let seenObserver = null;
+function watchSeen(list) {
+  if (!window.IntersectionObserver) return;
+  if (seenObserver) seenObserver.disconnect();
+  // 露出三成以上，或很長的訊息佔了畫面四成以上，就算看過
+  seenObserver = new IntersectionObserver((entries) => entries.forEach((e) => {
+    if (!e.isIntersecting) return;
+    if (e.intersectionRatio < 0.3 && e.intersectionRect.height < window.innerHeight * 0.4) return;
+    S.aiSeen[e.target.dataset.mid] = true;
+    seenObserver.unobserve(e.target);
+  }), { threshold: [0, 0.05, 0.1, 0.2, 0.3] });
+  list.querySelectorAll(".msg[data-mid]").forEach((n) => { if (!S.aiSeen[n.dataset.mid]) seenObserver.observe(n); });
+}
+
+// AI 建議沒動的項目旁邊的「✓」：按了就算確認
+function okButton(kind, key, label) {
+  const b = el("button", { class: "ok-btn", "aria-label": "確認 AI 建議的" + label, title: "確認這個 AI 建議", text: "✓" });
+  b.addEventListener("click", (e) => { e.stopPropagation(); confirmAi(kind, key); });
+  return b;
 }
 
 function groupHead(r) {
@@ -846,9 +1002,9 @@ function msgRow(i) {
   if (multi) stripe = p.stripe;
   else if (key) stripe = ai ? "var(--ai-key)" : "var(--user-key)";
 
-  const row = el("div", { class: "msg" + (ai ? " ai" : "") + (selected ? " selected" : "") + (range ? " in-range" : ""), style: { borderLeftColor: stripe } });
+  const row = el("div", { class: "msg" + (ai ? " ai" : "") + (selected ? " selected" : "") + (range ? " in-range" : ""),
+    style: { borderLeftColor: stripe }, "data-mid": m.id });
 
-  // 編號：多主題模式下，錨點可以點來選取
   // 編號：你的發言都可以點來選取（分主題、整段標成關鍵用）
   if (anchor) {
     const b = el("button", { class: "num", text: pad(i), "aria-pressed": String(selected), "aria-label": "選取 " + pad(i) });
@@ -862,11 +1018,14 @@ function msgRow(i) {
   const line1 = el("div", { class: "line1" }, el("span", { class: "who", text: who(m) }));
   const own = ownTag(i);
   if (multi && (anchor || own)) {
-    const chip = el("button", { class: "chip", "aria-expanded": String(UI.picker === i),
+    const sugg = aiPending("tags", m.id);
+    const chip = el("button", { class: "chip" + (sugg ? " ai-sugg" : ""), "aria-expanded": String(UI.picker === i),
       style: { background: p.bg, color: p.fg, borderColor: t ? p.stripe : "#C9CED6" },
-      "data-chip-topic": tid || "", text: (t ? t.id + " " + t.name : "還沒標") + " ▾" });
+      title: originOf("tags", m.id) === "ai_confirmed" ? "AI 建議，你確認過" : "",
+      "data-chip-topic": tid || "", text: (sugg ? "建議 · " : "") + (t ? t.id + " " + t.name : "還沒標") + " ▾" });
     chip.addEventListener("click", () => { UI.picker = UI.picker === i ? null : i; renderList(); });
     line1.append(chip);
+    if (sugg) line1.append(okButton("tags", m.id, "主題"));
     if (own) line1.append(el("span", { class: "follow", text: "另外分類" }));
   } else if (multi) {
     line1.append(el("span", { class: "follow", text: "跟著 " + pad(anchorOf[i]) }));
@@ -876,20 +1035,33 @@ function msgRow(i) {
   }
   // 關鍵：兩種模式都可以標
   const on = ai ? { bg: "var(--ai-key)", fg: "#fff" } : { bg: "var(--user-key)", fg: "#fff" };
-  const kb = el("button", { class: "chip" + (multi && !key ? " quiet" : ""), "aria-pressed": String(key),
+  const keySugg = key && aiPending("keys", m.id);
+  const kb = el("button", { class: "chip" + (multi && !key ? " quiet" : "") + (keySugg ? " ai-sugg" : ""), "aria-pressed": String(key),
     style: key ? { background: on.bg, color: on.fg, borderColor: on.bg } : {},
-    text: key ? (ai ? "★ AI 說的關鍵" : "★ 你說的關鍵") : "☆ 標為關鍵" });
-  kb.addEventListener("click", () => { if (key) delete S.keys[m.id]; else S.keys[m.id] = true; if (!multi) renderFlowPanel(); changed(true); });
+    text: key ? (keySugg ? "建議 · " : "") + (ai ? "★ AI 說的關鍵" : "★ 你說的關鍵") : "☆ 標為關鍵" });
+  kb.addEventListener("click", () => {
+    if (key) { touchAi("keys", m.id, "removed", true); delete S.keys[m.id]; } else S.keys[m.id] = true;
+    if (!multi) renderFlowPanel();
+    changed(true);
+  });
   line1.append(kb);
+  if (keySugg) line1.append(okButton("keys", m.id, "關鍵"));
   // 轉向：程式提示要使用者確認才算數
   if (turnConfirmed(i)) {
     const x = el("button", { "aria-label": "移除 " + pad(i) + " 的轉向", text: "×" });
     x.addEventListener("click", () => {
+      touchAi("turns", m.id, "removed", true);
       delete S.turnsConfirmed[m.id];
       if (hintReasons(i).length) S.turnsDismissed[m.id] = true;
       changed(true);
     });
-    line1.append(el("span", { class: "turn" }, "轉向", x));
+    if (aiPending("turns", m.id)) {
+      const ok = el("button", { class: "confirm", text: "確認" });
+      ok.addEventListener("click", () => confirmAi("turns", m.id));
+      line1.append(el("span", { class: "turn ai-sugg" }, "轉向（AI 建議）", ok, x));
+    } else {
+      line1.append(el("span", { class: "turn", title: originOf("turns", m.id) === "ai_confirmed" ? "AI 建議，你確認過" : "" }, "轉向", x));
+    }
   } else if (turnHint(i)) {
     const ok = el("button", { class: "confirm", text: "確認" });
     ok.addEventListener("click", () => { S.turnsConfirmed[m.id] = true; changed(true); });
@@ -902,12 +1074,23 @@ function msgRow(i) {
   if (range && range[0] === i) {
     const x = el("button", { "aria-label": "移除關鍵段落 " + pad(range[0]) + "–" + pad(range[1]), text: "×" });
     x.addEventListener("click", () => {
+      touchAi("ranges", msgs[range[0]].id, "removed", [msgs[range[0]].id, msgs[range[1]].id]);
       S.keyRanges = S.keyRanges.filter((r) => r.from !== msgs[range[0]].id);
       changed(true);
     });
-    line1.append(el("span", { class: "range-chip" }, "★ 關鍵段落 " + (range[0] === range[1] ? pad(range[0]) : pad(range[0]) + "–" + pad(range[1])), x));
+    const rid = msgs[range[0]].id;
+    const rs = aiPending("ranges", rid);
+    line1.append(el("span", { class: "range-chip" + (rs ? " ai-sugg" : "") },
+      (rs ? "建議 · " : "") + "★ 關鍵段落 " + (range[0] === range[1] ? pad(range[0]) : pad(range[0]) + "–" + pad(range[1])),
+      rs ? okButton("ranges", rid, "關鍵段落") : null, x));
   }
   body.append(line1);
+  // AI 給的理由（還在、而且是這一則的）
+  const why = [];
+  if (turnConfirmed(i) && S.origin.turns[m.id] && S.aiReasons.turns[m.id]) why.push("轉向：" + S.aiReasons.turns[m.id]);
+  if (key && S.origin.keys[m.id] && S.aiReasons.keys[m.id]) why.push("關鍵：" + S.aiReasons.keys[m.id]);
+  if (range && range[0] === i && S.origin.ranges[m.id] && S.aiReasons.ranges[m.id]) why.push("關鍵段落：" + S.aiReasons.ranges[m.id]);
+  if (why.length) body.append(el("div", { class: "ai-reason", text: "AI 的理由｜" + why.join("　") }));
 
   // 主題選單
   if (multi && UI.picker === i) {
@@ -927,7 +1110,7 @@ function msgRow(i) {
     box.append(none, nb);
     if (own) {
       const back = el("button", { style: { background: "#fff", color: "#3D4450", borderColor: "#C9CED6" }, text: "改回跟著 " + pad(anchorOf[i]) });
-      back.addEventListener("click", () => { delete S.tags[m.id]; UI.picker = null; changed(true); });
+      back.addEventListener("click", () => { touchAi("tags", m.id, "removed", S.tags[m.id] || null); delete S.tags[m.id]; UI.picker = null; changed(true); });
       box.append(back);
     }
     body.append(box);

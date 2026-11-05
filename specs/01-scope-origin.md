@@ -9,6 +9,7 @@ This file is the normative Stage 1 contract.
 - `source/conversation.jsonl`
 - `source/metadata.yaml`
 - active corrections targeting Stage 1 anchors
+- `outline.json` when present (author's pre-analysis outline; see `../docs/user-outline.md` — it locates evidence, it is not evidence of the initial position)
 
 ## Output
 `analysis/01-scope-origin.md`

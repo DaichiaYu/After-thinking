@@ -38,7 +38,7 @@
       <label class="file-btn">從電腦開啟 conversation.jsonl
         <input id="file" type="file" accept=".jsonl,.json" multiple>
       </label>
-      <p class="hint">要接著標之前存的結果，可以同時選 <code>conversation.jsonl</code> 和 <code>outline.json</code>。</p>
+      <p class="hint">要接著標之前存的結果，可以同時選 <code>conversation.jsonl</code> 和 <code>outline.json</code>；有 AI 給的 <code>outline.ai.json</code> 也可以一起選。</p>
     </div>
   </section>
 
@@ -49,6 +49,44 @@
       <button id="drop-draft" class="secondary">丟掉草稿</button>
     </div>
   </div>
+
+  <!-- 請 AI 先標一版 -->
+  <details id="ai-panel" class="card ai-panel" hidden>
+    <summary><span class="ai-title">請 AI 先標一版</span> <span id="ai-status" class="muted"></span></summary>
+    <div class="ai-body">
+      <p class="hint">對話太長、不想從頭看時，可以請你喜歡的 AI 先標一版，再到這裡看它怎麼標。AI 的建議會用虛線顯示，你可以接受、修改或刪掉；<strong>沒動的會當作你同意</strong>，但會記下這是 AI 標的、你沒有反駁。</p>
+      <div id="ai-current" class="ai-current"></div>
+      <div class="ai-ways">
+        <section id="ai-way-b" class="ai-way">
+          <h3>讓 AI 直接寫進倉庫</h3>
+          <p class="hint">適合能讀寫 GitHub 的 AI，例如 Claude Code、Codex、有接 GitHub 的 Claude。它只會寫一個 <code>outline.ai.json</code>，不會動你的標記和原文。</p>
+          <div class="row wrap-row">
+            <button id="ai-copy-b">複製指令</button>
+            <button id="ai-reload" class="secondary">AI 寫好了，重新讀取</button>
+          </div>
+        </section>
+        <section class="ai-way">
+          <h3>下載檔案給任何 AI</h3>
+          <ol class="hint steps">
+            <li>下載檔案（說明和編號好的完整對話）。</li>
+            <li>把檔案和下面這句話一起丟給 AI。</li>
+            <li>把 AI 給的 <code>outline.ai.json</code> 匯入。</li>
+          </ol>
+          <div class="row wrap-row"><button id="ai-download">下載給 AI 的檔案</button></div>
+          <div class="prompt-box"><span id="ai-prompt-a"></span><button id="ai-copy-a" class="secondary small">複製這句話</button></div>
+          <div class="row wrap-row">
+            <label class="file-btn">匯入 AI 給的檔案<input id="ai-file" type="file" accept=".json,.txt,.md"></label>
+          </div>
+          <details class="paste">
+            <summary>或貼上 AI 回的文字</summary>
+            <label for="ai-paste" class="sr-only">AI 回的文字</label>
+            <textarea id="ai-paste" rows="6" placeholder="把 AI 回的 outline.ai.json（或整段回覆）貼在這裡"></textarea>
+            <button id="ai-paste-go" class="secondary">讀取</button>
+          </details>
+        </section>
+      </div>
+    </div>
+  </details>
 
   <!-- 選整理方式 -->
   <section id="mode-choice" hidden>
@@ -123,5 +161,6 @@
 <script src="capture.js"></script>
 <script src="guide.js"></script>
 <script src="tag.js"></script>
+<script src="tag-ai.js"></script>
 </body>
 </html>

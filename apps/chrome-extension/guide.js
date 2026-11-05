@@ -2,7 +2,7 @@
 // 給之後來查資料的 AI（或人）看的地圖：資料夾怎麼排、每個檔案是什麼、怎麼找東西。
 // 只有在檔案不存在、或是由本擴充功能產生且版本較舊時才會寫入；使用者自己寫的 AGENTS.md 不會被覆蓋。
 
-const GUIDE_VERSION = 4;
+const GUIDE_VERSION = 5;
 const GUIDE_MARK = "<!-- managed-by: after-thinking-capture guide_version=";
 
 // 指引內容在 repo-guide.md，{{ROOT}} 換成討論資料夾的位置

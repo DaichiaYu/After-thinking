@@ -123,9 +123,11 @@ async function pathExists(config, branch, path) {
 // 擷取紀錄一定要在提交當下、從最新的那個提交讀，不能用之前讀到的舊副本，
 // 不然批量擷取、單段擷取、標記頁同時在寫時，會互相蓋掉對方的紀錄。
 // 分支在這期間被別人更新（422）時，重新讀、重新算，最多試 4 次。
-async function commitFiles(config, branch, files, message, updateIndex) {
+// updates（可省略）：[{ path, fn }]，其他也要「提交當下從最新版本讀、再改」的檔案（例如 inbox/labels.json）。
+// fn(目前內容或 null) => 新內容，或 null 表示不改。
+async function commitFiles(config, branch, files, message, updateIndex, updates) {
   for (let attempt = 0; ; attempt++) {
-    try { return await commitOnce(config, branch, files, message, updateIndex); }
+    try { return await commitOnce(config, branch, files, message, updateIndex, updates); }
     catch (e) {
       if (!e.conflict || attempt >= 3) throw e;
       await new Promise((r) => setTimeout(r, 1000 + attempt * 1500));
@@ -133,7 +135,7 @@ async function commitFiles(config, branch, files, message, updateIndex) {
   }
 }
 
-async function commitOnce(config, branch, files, message, updateIndex) {
+async function commitOnce(config, branch, files, message, updateIndex, updates) {
   const repo = "/repos/" + config.repo;
   const ref = await gh(config.token, "GET", repo + "/git/ref/heads/" + encodeURIComponent(branch));
   if (ref.status === 404 || ref.status === 409) throw new Error("倉庫是空的或找不到分支「" + branch + "」。請先在 GitHub 上為倉庫建立一個 README。");
@@ -146,6 +148,11 @@ async function commitOnce(config, branch, files, message, updateIndex) {
     const rows = updateIndex(parseCaptureIndex(await readRawFile(config, parentSha, CAPTURE_INDEX_PATH)));
     if (rows) files.push({ path: CAPTURE_INDEX_PATH, content: serializeCaptureIndex(rows) });
   }
+  for (const u of updates || []) {
+    const content = u.fn(await readRawFile(config, parentSha, u.path));
+    if (content !== null && content !== undefined) files.push({ path: u.path, content });
+  }
+  if (!files.length) return parentSha;   // 沒有要改的
   // 圖片等二進位檔要先建立 blob，再放進樹裡
   const entries = [];
   for (const f of files) {

@@ -1,4 +1,4 @@
-# After-thinking Capture v0.7.0
+# After-thinking Capture v0.8.0
 
 > **Capture ChatGPT, Claude, and Gemini conversations as After-thinking source files, then tag them yourself before any AI analysis.**
 
@@ -12,6 +12,16 @@ After-thinking Capture is the Chrome extension for [After-thinking](../../README
 The extension reads the current tab only when you click its icon (`manual_click` mode); it never listens in the background. Conversations go only to the GitHub repository you configure, with no other server in between.
 
 The extension's interface is in Traditional Chinese. Button and label names below are quoted in Chinese with an English gloss.
+
+## What's new in v0.8.0
+
+- **Preview before choosing**: the tagging page opens with every question you asked (numbered; ones longer than 50 characters are collapsed), so you can see the conversation before deciding "several topics" or "one topic". If an AI has already drafted tags, its view is shown there too.
+- **「這篇不用整理」 (no need to organize)**: a third choice for small talk, duplicates, or conversations with little in them. Pick a reason; no `outline.json` is written, and the list shows the status.
+- **Also related to another topic**: a message keeps one main topic, and can additionally be marked as related to other topics (`also_messages` in `outline.json`).
+- **Review tools**: on the tagging page, jump up and down through pending key points and turns (AI suggestions you haven't touched, plus program hints), and confirm or reject them in place. A collapsible outline on the right lists every key point and turn.
+- **Conversation list**: sort by conversation time, capture time, last tagged time, or label order, grouped by date; preview the questions in each conversation; set a status (未處理 to do / 已整理 done / 不用整理 skip), your own labels, and a note; open the original chat. [Details](#conversation-list-v080)
+- The 「連選」 (range select) switch is gone: Shift-click, or 「選到這裡」 (select to here) on the message you want to stop at.
+- The popup shows 「打開標記頁」 (open tagging page) when the conversation you're on was already captured.
 
 ## What's new in v0.7.0
 
@@ -30,7 +40,8 @@ The extension's interface is in Traditional Chinese. Button and label names belo
 | Batch capture (Gemini) | Reads every conversation in Gemini's sidebar and captures them one by one into `inbox/`, skipping ones already captured |
 | Attachments and original times (Gemini) | Downloads uploaded files and images and AI-generated images; recovers each message's original time |
 | Capture log | `inbox/index.jsonl` records every capture, so you know what has been captured and what has been tagged |
-| Tagging | Group into topics or mark key points, key segments, turns, and notes; saved as `outline.json` (v0.7.0) |
+| Tagging | Preview your questions first, then group into topics or mark key points, key segments, turns, and notes; saved as `outline.json` (v0.7.0; preview, also-related topics and review tools in v0.8.0) |
+| Conversation list | Sort and group captured conversations, preview their questions, track status, labels, and notes in `inbox/labels.json` (v0.8.0) |
 | AI-drafted tags | Let any AI draft the tags as `outline.ai.json`, then accept, edit, or reject them on the tagging page; each tag records its origin (v0.7.0) |
 | ChatGPT markup cleanup | Converts ChatGPT's layout markup to plain text with short markers while capturing (v0.7.0) |
 | Repository guide | Writes an `AGENTS.md` at the repository root so any AI reading your data later knows how it is organized |
@@ -93,18 +104,20 @@ Without GitHub, use 「從電腦開啟 conversation.jsonl」 (open conversation.
 
 ### How to tag
 
-1. First choose what the conversation is like (you can change this later; tags are kept):
+1. The page opens with a preview: every question you asked, numbered, with ones over 50 characters collapsed (「全部展開」 expands all). Dividers show long breaks; an orange edge marks questions where a turn may have happened. If an AI has drafted tags, a line above says how it sees the conversation. Then choose (you can change this later; tags are kept):
    - 「聊了好幾件事」 (**several topics**): group messages with topic tags; important messages can still be marked as key.
    - 「一直在聊同一件事」 (**one topic throughout**): no grouping, just mark key content.
+   - 「這篇不用整理」 (**no need to organize**): pick a reason (small talk, duplicate, little information, other) and an optional note. Nothing is written to `outline.json`; the status goes into `inbox/labels.json` and shows on the list. Only for conversations opened from GitHub.
 2. Every message is numbered (from 001). Your messages are shown in full (collapsed only past 1,500 characters); AI replies show the first 200 characters, with 「展開全文」 (show full text) to expand.
 3. Several topics:
    - Click the topic tag next to a message to change it; the menu also has 「＋ 新主題」 (new topic).
    - AI replies follow your previous message by default. When the AI drifts off-topic or answers several questions at once, click 「另外分類」 (categorize separately) on that reply; 「改回跟著 00X」 (follow 00X again) in the menu undoes it.
-   - To change many messages at once: click a number to select it, then Shift-click another number to select everything in between. If Shift is awkward on a trackpad, turn on 「連選」 (range select).
+   - To change many messages at once: click a number to select it, then Shift-click another number, or click 「選到這裡」 (select to here, shown when you point at a message), to select everything in between.
+   - **Also related**: a message has one main topic. When it also matters to another topic, open its topic menu and add 「也跟這些主題有關」 (also related to these topics). It stays in its main topic; in the by-topic view it also appears, dashed, under the other topic. After-thinking groups by main topic and consults these messages when working on the other topic.
    - Topic names and notes can be edited on the topic cards or directly in the headings of the 「照主題」 (by topic) view. Click × to delete a topic; its messages go back to 「還沒標」 (untagged).
    - The by-topic view puts each topic together while keeping message order, and shows what was skipped, e.g. 「中間跳過 007–008（B 養貓花費）」 (skipped 007–008, topic B).
 4. Key points (both modes): any message can be marked with 「標為關鍵」 (mark as key). They are split automatically by speaker into 「你說的關鍵」 (your key points) and 「AI 說的關鍵」 (the AI's key points). In one-topic mode you can filter to key points only.
-   - When a whole stretch matters, mark it as a **key segment**: click the number of its first message, Shift-click the last one, then 「★ 整段標成關鍵」 (mark whole segment as key). The segment runs to the AI's reply after the last selected message, and is shown with a yellow bar on the right and a 「★ 關鍵段落 013–018」 (key segment) label on its first message (× removes it). Overlapping or adjacent segments are merged. This works in both modes.
+   - When a whole stretch matters, mark it as a **key segment**: click the number of its first message, Shift-click the last one (or use 「選到這裡」), then 「★ 整段標成關鍵」 (mark whole segment as key). The segment runs to the AI's reply after the last selected message, and is shown with a yellow bar on the right and a 「★ 關鍵段落 013–018」 (key segment) label on its first message (× removes it). Overlapping or adjacent segments are merged. This works in both modes.
 5. Also in both modes:
    - 「＋備註」 (add note): write why a message matters.
    - Turns: the page shows 「可能轉向？（程式提示：…）」 (possible turn? — program hint) on your message in two cases: your message contains one of the words below (「你的用詞」, your wording), or the AI's reply right after it opens like a course correction (「AI 的回應像在修正方向」, e.g. "That changes things a lot, earlier I assumed…", "Then I'll substantially revise my earlier recommendation"). People often change direction without any fixed phrase, but the AI's acknowledgement is usually obvious. Click 「確認」 (confirm) for it to count as your judgment, or × if it isn't a turn. You can also add one yourself with 「＋標轉向」 (mark turn). Unconfirmed hints are listed separately as "possible turns (program hints, not confirmed by you)" and never mixed with your confirmed turns. AI replies themselves are never marked as turns.
@@ -127,7 +140,12 @@ Without GitHub, use 「從電腦開啟 conversation.jsonl」 (open conversation.
      | English | I misunderstood, my mistake, that changes, in that case, let me revise, I'll revise, revise my, set aside |
      | Japanese | 誤解して、失礼しました、それなら、それでしたら、見直し、修正します、前の提案 |
    - When two messages are more than 6 hours apart, a divider such as 「隔了 1 天」 (1 day later) is shown (requires original times).
-6. Click 「儲存到 GitHub」 (save to GitHub), or press ⌘S / Ctrl+S. Until you save, a draft is kept on this computer; if you close and reopen the page, it asks whether to continue the draft. Edits made while a save is in progress are not treated as saved; you'll be asked to save again.
+   - **Key point vs. turn**: a key point means the content of that message matters, and is read first. A turn means the direction changed there: the message itself may say little, but what comes before and after must be understood separately, and earlier conclusions may no longer hold.
+6. Review tools (both modes), in the bar that stays at the top while you scroll:
+   - Choose what to step through: 「待確認」 (pending: AI-suggested key points, key segments, and turns you haven't touched, plus program turn hints), 「關鍵」 (key), 「轉向」 (turns), or 「全部」 (all). Topic assignments are not included, since after an AI draft every message would be pending.
+   - ↑ / ↓ (or the K / J keys) jump to the previous or next one, keeping the surrounding messages on screen. For a pending item, 「確認」 (confirm) or 「不是」 (reject) acts on it and moves to the next.
+   - 「目錄」 (outline) opens a panel listing every key point and turn with its number, topic, source (yours, AI suggestion, AI suggestion you confirmed, program hint), and the start of the message. Click one to jump to it; pending ones can be confirmed or rejected there. It stays closed unless you open it.
+7. Click 「儲存到 GitHub」 (save to GitHub), or press ⌘S / Ctrl+S. Until you save, a draft is kept on this computer; if you close and reopen the page, it asks whether to continue the draft. Edits made while a save is in progress are not treated as saved; you'll be asked to save again.
 
 ### Let an AI draft the tags first
 
@@ -178,6 +196,32 @@ Every message of yours must fall inside some topic's `spans`; an AI reply belong
 - A content fingerprint is stored for every message. Re-capturing renumbers `message_id` by position, so if an earlier missing message is captured later, every following ID shifts to a different message. When tags are opened, fingerprints are checked: tags are kept only where the content still matches; moved messages are found again by content, or by the platform's own message ID (ChatGPT and Claude have one) when the text itself was cleaned up, and marked 「原文變過，請確認」 (source changed, please check); anything not found is dropped, and the page says how many of each. Tags never silently point at the wrong message.
 - Tip: tags saved before this version have no platform message IDs. Before re-capturing a conversation you already tagged, open its tags with this version and save once.
 - The matching line in `inbox/index.jsonl` gets `outline_updated_at` and `outline_mode`, which the list page uses to show 「已標記」 (tagged).
+- Messages also related to another topic are listed under that topic as `also_messages` (outline version 5). They are not moved out of their main topic.
+
+## Conversation list (v0.8.0)
+
+The page you get from 「標記擷取過的對話」 (tag captured conversations) in the popup.
+
+- **Sort**: 「對話時間」 (conversation time, grouped by month), 「擷取時間」 (capture time, grouped by day, handy for checking what you just did), 「最後標記時間」 (last tagged, by day), or 「標籤順序」 (label order, see below). Your choice is remembered.
+- **Question preview**: each conversation shows the first five and last two questions you asked (the end often shows where it ended up), each collapsed past 50 characters. 「看全部 N 個問題」 (see all N questions) reads the conversation and lists every question. Previews are written into `inbox/index.jsonl` at capture time (`preview_questions`); for conversations captured before v0.8.0, 「補上預覽」 (add previews) reads each one once and writes them back.
+- **Filter and search**: by status, by 「還沒標記」 (not tagged yet), and by label; search covers titles, previewed questions, and notes.
+- **Status, labels, notes**: 「狀態、標籤、備註」 (status, labels, notes) on each conversation. Status is 未處理 (to do), 已整理 (done), or 不用整理 (no need to organize, with a reason). Labels are your own: create, rename, recolor, reorder, and delete them in 「管理標籤」 (manage labels). The order of labels is their priority: with 「標籤順序」 sorting, conversations with the top label come first. Changes save to GitHub automatically after a moment.
+- **Back to the original**: 「打開原對話 ↗」 (open original chat) on each conversation and at the top of the tagging page. In the other direction, when you open the popup on a chat that was already captured, it offers 「打開標記頁」 (open tagging page).
+
+Status, labels, and notes are saved in `inbox/labels.json`, separate from the capture log, so the two never overwrite each other:
+
+```json
+{
+  "format": "after-thinking/conversation-labels",
+  "format_version": 1,
+  "labels": [{ "id": "l3x9a", "name": "先整理", "color": 0 }],
+  "conversations": {
+    "inbox/2026-10/gemini-abc123/": { "status": "skip", "skip_reason": "chat", "skip_note": "", "labels": ["l3x9a"], "note": "…", "updated_at": "…" }
+  }
+}
+```
+
+`status` is `done` or `skip` (missing means to do); `skip_reason` is `chat`, `duplicate`, `no_info`, or `other`. The `labels` array order is the priority order.
 
 ## Batch capture of Gemini conversations (new in v0.4.0)
 
@@ -270,6 +314,16 @@ After-thinking Capture 是 [After-thinking](../../README.md) 的 Chrome 擴充�
 
 只有你按下擴充功能圖示時才會讀取目前這個分頁（「按圖示模式」，manual_click），不會在背景監聽。對話只會送到你自己設定的 GitHub 倉庫，不經過其他伺服器。
 
+## v0.8.0 新功能
+
+- **先預覽再選**：標記頁一打開先列出你問過的所有問題（有編號，超過 50 字先收起來），看過再決定是「聊了好幾件事」還是「一直在聊同一件事」。AI 已經先標過的話，也會在這裡說它怎麼看。
+- **這篇不用整理**：第三個選項，給閒聊、重複、沒什麼資訊的對話。選個理由就好，不產生 `outline.json`，清單上會顯示狀態。
+- **也跟別的主題有關**：一句只有一個主要主題，但可以另外標「也跟 B 有關」（`outline.json` 的 `also_messages`）。
+- **檢查工具**：標記頁上方可以用上下鍵在待確認的關鍵、轉向之間跳（AI 建議你還沒動的，加上程式提示），直接確認或否決。右邊有可以收起來的目錄，列出所有關鍵和轉向。
+- **對話清單**：可以照對話時間、擷取時間、最後標記時間或標籤順序排，依日期分組；預覽每段對話問過的問題；設定狀態（未處理／已整理／不用整理）、自訂標籤和備註；打開原對話。（見「對話清單」）
+- 拿掉「連選」開關：按住 Shift 點，或在要選到的那句按「選到這裡」。
+- 在已經擷取過的對話上打開擴充功能，會顯示「打開標記頁」。
+
 ## v0.7.0 新功能
 
 - **標記頁**：挑一段擷取過的對話自己標記：分主題（照時間或照主題檢視）、關鍵和**關鍵段落**、轉向、備註。AI 回覆預設跟著你的前一句，也可以另外分類。（見「標記對話」）
@@ -287,7 +341,8 @@ After-thinking Capture 是 [After-thinking](../../README.md) 的 Chrome 擴充�
 | 批量擷取（Gemini） | 讀 Gemini 側邊欄的所有對話，一段段抓進 `inbox/`，抓過的自動跳過 |
 | 附件和原始時間（Gemini） | 下載上傳的檔案、圖片和 AI 生成的圖；補上每一則的原始時間 |
 | 擷取紀錄 | `inbox/index.jsonl` 記下每次擷取，知道哪些抓過、哪些已標記 |
-| 標記對話 | 分主題或標關鍵、關鍵段落、轉向、備註，存成 `outline.json`（v0.7.0） |
+| 標記對話 | 先預覽你問過的問題，再分主題或標關鍵、關鍵段落、轉向、備註，存成 `outline.json`（v0.7.0；預覽、也相關的主題、檢查工具是 v0.8.0） |
+| 對話清單 | 排序、分組、預覽問題，記處理狀態、自訂標籤和備註（`inbox/labels.json`）（v0.8.0） |
 | 請 AI 先標一版 | 讓任何 AI 先標成 `outline.ai.json`，再到標記頁接受、修改或否決；每個標記都記來源（v0.7.0） |
 | 清掉 ChatGPT 的版面語法 | 擷取時把 ChatGPT 的版面語法轉成一般文字和簡短記號（v0.7.0） |
 | 倉庫指引 | 在倉庫根目錄寫一份 `AGENTS.md`，讓之後來讀資料的 AI 知道怎麼用 |
@@ -350,18 +405,20 @@ After-thinking Capture 是 [After-thinking](../../README.md) 的 Chrome 擴充�
 
 ### 怎麼標
 
-1. 先選這段對話比較像哪一種（之後可以改，標記會留著）：
+1. 打開先是預覽：列出你問過的所有問題，有編號，超過 50 字的先收起來（「全部展開」一次打開）。隔很久的地方有分隔線，左邊有橘線的是程式覺得可能轉向的地方。AI 先標過的話，上方會說它怎麼看。看完再選（之後可以改，標記會留著）：
    - **聊了好幾件事**：用主題標籤分組，重要的句子一樣可以標成關鍵。
    - **一直在聊同一件事**：不分組，只標出關鍵內容。
+   - **這篇不用整理**：選理由（閒聊、重複了、沒什麼資訊、其他），可以補一句說明。不會寫 `outline.json`，狀態存在 `inbox/labels.json`，清單上會顯示。只有從 GitHub 打開的對話可以用。
 2. 每一則都有編號（001 起）。你的發言顯示全文（超過 1500 字才摺疊），AI 的回覆先顯示 200 字，按「展開全文」看完整內容。
 3. 聊了好幾件事：
    - 點每句旁邊的主題標籤直接改，選單裡也可以「＋ 新主題」。
    - AI 的回覆預設跟著上一句你的發言。AI 岔題、或一次回答好幾個問題時，按那則回覆的「另外分類」單獨改；選單裡的「改回跟著 00X」可以恢復。
-   - 一次改很多句：點編號選取，按住 Shift 再點另一個編號，中間整串一起選；用觸控板不方便按 Shift 時，打開「連選」。
+   - 一次改很多句：點編號選取，再按住 Shift 點另一個編號，或在那句按「選到這裡」（滑鼠移到句子上才出現），中間整串一起選。
+   - **也跟別的主題有關**：一句只有一個主要主題。它也跟別的主題有關時，打開它的主題選單，在「也跟這些主題有關」加上去。它還是留在主要主題；「照主題」檢視裡，也會用虛線出現在另一個主題下。After-thinking 照主要主題分組，整理另一個主題時也會參考這一句。
    - 主題名稱和補充說明可以在上面的主題卡改，也可以在「照主題」檢視的標題直接改。按 × 刪除主題，那些句子會變回「還沒標」。
    - 「照主題」檢視把同主題放在一起，組內仍照編號排，中間跳過的會顯示「中間跳過 007–008（B 養貓花費）」。
 4. 關鍵（兩種方式都可以）：每一句都可以按「標為關鍵」，會照發言的人自動分成「你說的關鍵」和「AI 說的關鍵」。「一直在聊同一件事」的上方可以只看關鍵。
-   - 一整段都重要時，標成**關鍵段落**：點第一句的編號，按住 Shift 再點最後一句，按「★ 整段標成關鍵」。段落會延伸到最後一句之後的 AI 回覆，右邊有一條黃線，第一則上標「★ 關鍵段落 013–018」（按 × 移除）。重疊或相連的段落會合併。兩種方式都可以用。
+   - 一整段都重要時，標成**關鍵段落**：點第一句的編號，按住 Shift 再點最後一句（或按「選到這裡」），按「★ 整段標成關鍵」。段落會延伸到最後一句之後的 AI 回覆，右邊有一條黃線，第一則上標「★ 關鍵段落 013–018」（按 × 移除）。重疊或相連的段落會合併。兩種方式都可以用。
 5. 兩種方式都可以：
    - 「＋備註」：寫下這句為什麼重要。
    - 轉向：兩種情況程式會在你的發言上提示「可能轉向？（程式提示：…）」：你的發言裡有下面這些詞（「你的用詞」），或緊接著的 AI 回覆開頭像在修正方向（「AI 的回應像在修正方向」，例如「這樣差很多耶，我前面是用…」「那我會大幅修改前面的推薦」）。轉向時常常不會用固定的詞，AI 的回應反而比較明顯。按「確認」才算你的判斷，按 × 表示不是；也可以自己按「＋標轉向」。沒確認的提示會另外列成「可能轉向（程式提示，你還沒確認）」，不會混進你確認的轉向。AI 的回覆本身不會被標成轉向。
@@ -384,7 +441,12 @@ After-thinking Capture 是 [After-thinking](../../README.md) 的 Chrome 擴充�
      | English | I misunderstood, my mistake, that changes, in that case, let me revise, I'll revise, revise my, set aside |
      | 日本語 | 誤解して、失礼しました、それなら、それでしたら、見直し、修正します、前の提案 |
    - 兩則訊息相隔超過 6 小時，會畫一條「隔了 1 天」的分隔線（要有原始時間才有）。
-6. 按「儲存到 GitHub」（或 ⌘S／Ctrl+S）。還沒儲存前會自動存草稿在這台電腦，關掉再開會問要不要接著用。儲存途中又改的地方不會被當成已儲存，會提示你再存一次。
+   - **關鍵和轉向差在哪**：關鍵是「這句的內容重要」，整理時優先讀。轉向是「方向從這裡改了」：這句本身不一定重要，但前後要分開理解，前面的結論可能已經不算數。
+6. 檢查工具（兩種方式都有），在捲動時固定在上方的那一條：
+   - 選要跳的種類：「待確認」（AI 建議、你還沒動的關鍵、關鍵段落、轉向，加上程式提示的可能轉向）、「關鍵」、「轉向」、「全部」。主題分配不算在內，因為 AI 標過之後每一句都會是待確認。
+   - ↑／↓（或鍵盤 K／J）跳到上一個、下一個，前後文都還在畫面上。待確認的可以直接按「確認」或「不是」，按完自動跳到下一個。
+   - 「目錄」打開右邊的清單：每個關鍵和轉向的編號、主題、來源（你標的、AI 建議、AI 建議你確認過、程式提示）和開頭幾個字，點了跳過去，待確認的也可以在這裡確認或否決。不打開就不佔位置。
+7. 按「儲存到 GitHub」（或 ⌘S／Ctrl+S）。還沒儲存前會自動存草稿在這台電腦，關掉再開會問要不要接著用。儲存途中又改的地方不會被當成已儲存，會提示你再存一次。
 
 ### 請 AI 先標一版
 
@@ -414,6 +476,19 @@ AI 之後又寫了新的 `outline.ai.json`，會顯示「有新的 AI 建議」�
 - 也存每則訊息的內容指紋。重新擷取後 `message_id` 是照位置重新編的，前面補抓到一則，後面的編號就會換人；打開標記時會用指紋核對：內容一樣才沿用，換位置的照內容找回來；內容被整理過（例如清掉 ChatGPT 的版面語法）的，用平台自己的訊息編號找回來（ChatGPT、Claude 有）。找回來的標「原文變過，請確認」，找不到的略過，並在上方說明各有幾個。不會悄悄指錯。
 - 提醒：這一版以前存的標記沒有平台的訊息編號。已經標過的對話要重新擷取前，先用這一版打開標記、按一次儲存。
 - `inbox/index.jsonl` 裡對應的那行會加上 `outline_updated_at`、`outline_mode`，清單頁用它顯示「已標記」。
+- 也跟別的主題有關的句子，列在那個主題的 `also_messages`（標記格式第 5 版），不會從主要主題搬走。
+
+## 對話清單（v0.8.0）
+
+從擴充功能視窗的「標記擷取過的對話」打開的那一頁。
+
+- **排序**：「對話時間」（依月份分組）、「擷取時間」（依日期分組，方便確認剛剛做了什麼）、「最後標記時間」（依日期）、「標籤順序」（見下面）。會記住你上次選的。
+- **預覽問題**：每段對話列出你問的前五個和最後兩個問題（對話常越聊越偏，最後問的最能看出停在哪），超過 50 字先收起來。「看全部 N 個問題」會讀原文列出全部。預覽在擷取時就寫進 `inbox/index.jsonl`（`preview_questions`）；v0.8.0 以前擷取的，按「補上預覽」讀一次原文補上。
+- **篩選和搜尋**：可以依狀態、「還沒標記」、標籤篩選；搜尋會找標題、預覽的問題和備註。
+- **狀態、標籤、備註**：每段對話的「狀態、標籤、備註」。狀態有未處理、已整理、不用整理（附理由）。標籤自己取名，在「管理標籤」新增、改名、換顏色、調順序、刪除。標籤的順序就是優先順序：排序選「標籤順序」時，有最上面那個標籤的對話先列出。改完過一下會自動存到 GitHub。
+- **回到原對話**：每段對話和標記頁上方都有「打開原對話 ↗」。反過來，在已經擷取過的對話上打開擴充功能，會出現「打開標記頁」。
+
+狀態、標籤和備註存在 `inbox/labels.json`，跟擷取紀錄分開，兩邊不會互相蓋掉。格式見上方英文版：`status` 是 `done` 或 `skip`（沒有就是未處理），`skip_reason` 是 `chat`、`duplicate`、`no_info`、`other`，`labels` 陣列的順序就是優先順序。
 
 ## 批量擷取 Gemini 對話（v0.4.0 新增）
 

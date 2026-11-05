@@ -11,6 +11,7 @@
 AGENTS.md                      這份地圖
 inbox/
   index.jsonl                  擷取紀錄：每擷取一次一行（從這裡開始找）
+  labels.json                  使用者的整理狀態：未處理／已整理／不用整理、自訂標籤、備註（有設定才會有）
   2026-10/                     依「對話開始的月份」分的資料夾
     gemini-<對話編號>/
       source/
@@ -51,8 +52,21 @@ inbox/
 | `attachments` / `attachments_saved` / `attachments_missing` | 附件數、有存原檔的、沒拿到原檔的 |
 | `warnings` | 擷取時的警告，例如 `timed_out`、`possible_gaps`、`truncated_messages` |
 | `outline_updated_at` / `outline_mode` | 使用者最後一次儲存標記的時間、標記方式（有標才會有） |
+| `preview_questions` | 使用者問過的問題的預覽：開頭五個和最後兩個，`[{ "i": 訊息位置（0 起）, "text": 最多 200 字 }]`。只是預覽，完整內容看 `conversation.jsonl`（v0.8.0 起；較早的可能沒有） |
 
 同一段對話可能有好幾行（例如先批量進 inbox，之後又單段擷取進討論資料夾）。
+
+## inbox/labels.json（使用者的整理狀態）
+
+使用者在擴充功能的對話清單裡設定的，**是使用者的判斷**：
+
+- `labels[]`：使用者自訂的標籤（`id`、`name`、`color`）。陣列的順序就是使用者的優先順序。
+- `conversations`：以資料夾（和 `index.jsonl` 的 `folder` 相同）為 key：
+  - `status`：`done`（已整理）或 `skip`（不用整理）；沒有這個欄位就是未處理。
+  - `skip_reason`：不用整理的理由，`chat`（閒聊）、`duplicate`（重複）、`no_info`（沒什麼資訊）、`other`；`skip_note` 是補充說明。
+  - `labels`：這段對話的標籤 `id`。`note`：使用者的備註。
+
+挑要整理的對話時，跳過 `status: skip` 的；使用者有標「先整理」之類的標籤時，照標籤順序。不要自己改這個檔案，除非使用者要求。
 
 ## outline.json（使用者的標記）
 
@@ -60,6 +74,7 @@ inbox/
 
 - `mode`：`multi_topic`（聊了好幾件事，看 `topics`）或 `single_topic`（一直在聊同一件事，看 `single_topic`）。兩種都可能有 `key_points`。
 - `topics[]`：`id`（A、B…）、`name`、`note`（使用者的補充說明）、`messages`（屬於這個主題的 `message_id`，照順序）。AI 回覆預設和上一句使用者發言同組，使用者也可以把某則 AI 回覆另外分到別組。
+- `topics[].also_messages`（v5 起）：主要放在別的主題、但使用者標了「也跟這個主題有關」的訊息。分組照主要主題（`messages`），整理這個主題時也要參考這些訊息，但不要把它們搬過來。
 - `untagged`：還沒分到主題的訊息。
 - `key_points[]`：使用者逐則標的關鍵，`speaker` 分出是使用者說的（`author`）還是 AI 說的（`assistant`）。
 - `key_ranges[]`：使用者整段標成關鍵的段落（`from_message_id`、`to_message_id`、`messages`）。意思是「這一整段是核心」，不是段落裡每一句都逐句判斷過。

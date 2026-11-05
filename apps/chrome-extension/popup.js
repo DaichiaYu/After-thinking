@@ -174,7 +174,14 @@ async function showPreviousCaptures(config, platform, conversationId, nowCount) 
       const diff = nowCount - r.messages;
       const line = document.createElement("div");
       line.textContent = date + (r.mode === "batch" ? "批量" : "單段") + "擷取 " + r.messages + " 則，存在 " + r.folder +
-        (diff > 0 ? "。之後多了 " + diff + " 則" : diff === 0 ? "。目前沒有新訊息" : "");
+        (diff > 0 ? "。之後多了 " + diff + " 則" : diff === 0 ? "。目前沒有新訊息" : "") +
+        (r.outline_updated_at ? "。已標記" : "") + " ";
+      // 從原對話回到標記頁
+      const go = document.createElement("button");
+      go.className = "link";
+      go.textContent = r.outline_updated_at ? "打開標記頁" : "去標記";
+      go.addEventListener("click", () => chrome.tabs.create({ url: chrome.runtime.getURL("tag.html?folder=" + encodeURIComponent(r.folder)) }));
+      line.appendChild(go);
       box.appendChild(line);
     });
     box.hidden = false;

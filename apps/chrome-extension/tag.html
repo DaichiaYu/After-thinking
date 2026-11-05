@@ -13,9 +13,11 @@
       <p class="crumb"><span class="mono">AT</span> <span id="crumb">標記對話</span></p>
       <h1 id="title">標記對話</h1>
       <p id="meta" class="muted"></p>
+      <p id="origin-line" class="muted" hidden><a id="open-original" target="_blank" rel="noopener">打開原對話 ↗</a> <span id="label-line"></span></p>
     </div>
     <div id="top-actions" class="top-actions" hidden>
       <span id="mode-label" class="mode-label"></span>
+      <a id="back-list" class="secondary btn-link" href="tag.html">回清單</a>
       <button id="change-mode" class="secondary">改整理方式</button>
       <button id="save">儲存</button>
     </div>
@@ -28,11 +30,30 @@
 
   <!-- 選對話 -->
   <section id="picker" hidden>
-    <h2>選一段要標記的對話</h2>
+    <div class="section-head">
+      <h2>擷取過的對話</h2>
+      <span id="labels-state" class="hint" role="status"></span>
+    </div>
     <p id="repo-line" class="muted"></p>
-    <label for="search" class="sr-only">搜尋標題</label>
-    <input id="search" type="search" placeholder="搜尋標題" hidden>
-    <ol id="convos" class="convos"></ol>
+    <div id="list-tools" class="list-tools" hidden>
+      <div class="row wrap-row">
+        <label for="search" class="sr-only">搜尋</label>
+        <input id="search" type="search" placeholder="搜尋標題、問過的問題、備註">
+        <label class="sort-label" for="sort">排序</label>
+        <select id="sort"></select>
+      </div>
+      <div class="row wrap-row">
+        <div id="status-filter" class="seg small-seg" role="group" aria-label="處理狀態"></div>
+        <div id="label-filter" class="row wrap-row"></div>
+      </div>
+    </div>
+    <details id="label-manager" class="card lm" hidden>
+      <summary>管理標籤</summary>
+      <p class="hint">標籤自己取名，例如「先整理」、專案名稱。排序選「標籤順序」時，排在上面的標籤先列出，所以順序就是優先順序。</p>
+      <div id="label-edit"></div>
+    </details>
+    <div id="backfill" class="banner" hidden></div>
+    <div id="convos" class="convos"></div>
     <div class="file-open">
       <p class="muted">沒有用 GitHub，或想標記下載下來的檔案：</p>
       <label class="file-btn">從電腦開啟 conversation.jsonl
@@ -88,23 +109,37 @@
     </div>
   </details>
 
-  <!-- 選整理方式 -->
+  <!-- 先看內容，再選整理方式 -->
   <section id="mode-choice" hidden>
-    <h2>這段對話比較像哪一種？</h2>
-    <p class="muted">選錯也沒關係，之後可以改，已經做的標記會留著。</p>
-    <p id="mode-stats" class="muted"></p>
-    <div class="mode-grid">
-      <button id="choose-multi" class="mode-card">
-        <span class="mode-title">聊了好幾件事</span>
-        <span class="mode-desc">中間換過話題，要把不同主題分開整理。重要的句子一樣可以標成關鍵。</span>
-        <span class="mode-go">用主題標籤分組 →</span>
-      </button>
-      <button id="choose-flow" class="mode-card">
-        <span class="mode-title">一直在聊同一件事</span>
-        <span class="mode-desc">從頭到尾是一個主題，只是中間有幾段特別重要，要標出來，並分清楚是你說的還是 AI 說的。</span>
-        <span class="mode-go">標出關鍵內容 →</span>
-      </button>
+    <div class="preview-head">
+      <h2>先看看這段對話</h2>
+      <p id="mode-stats" class="muted"></p>
+      <p id="preview-ai" class="preview-ai" hidden></p>
+      <p id="skip-banner" class="banner" hidden></p>
     </div>
+    <div class="choice-bar" role="group" aria-label="選整理方式">
+      <span class="choice-q">看完覺得這段比較像：</span>
+      <button id="choose-multi" class="choice" title="中間換過話題，要把不同主題分開整理。重要的句子一樣可以標成關鍵。">聊了好幾件事</button>
+      <button id="choose-flow" class="choice" title="從頭到尾是一個主題，只是中間有幾段特別重要，要標出來。">一直在聊同一件事</button>
+      <button id="choose-skip" class="choice quiet-choice" title="閒聊、重複、沒什麼資訊：不產生 outline.json，只在清單上記成不用整理。">這篇不用整理</button>
+      <span class="hint">選錯也沒關係，之後可以改，已經做的標記會留著。</span>
+    </div>
+    <div id="skip-form" class="card skip-form" hidden>
+      <p class="skip-q">為什麼不用整理？</p>
+      <div id="skip-reasons" class="row wrap-row"></div>
+      <div class="row wrap-row">
+        <label for="skip-note" class="sr-only">補充說明</label>
+        <input id="skip-note" type="text" placeholder="補充說明（可以不寫）">
+        <button id="skip-go">標成不用整理</button>
+        <button id="skip-cancel" class="secondary">取消</button>
+      </div>
+      <p id="skip-file-note" class="hint" hidden>從電腦開啟的對話沒有連到倉庫，記不了狀態。</p>
+    </div>
+    <div class="preview-tools">
+      <span id="preview-count" class="hint"></span>
+      <button id="preview-expand" class="secondary small">全部展開</button>
+    </div>
+    <ol id="preview" class="preview" aria-label="你問過的問題"></ol>
   </section>
 
   <!-- 標記 -->
@@ -120,8 +155,7 @@
           <button id="view-time" aria-pressed="true">照時間</button>
           <button id="view-topic" aria-pressed="false">照主題</button>
         </div>
-        <button id="range" class="secondary range-toggle" aria-pressed="false">連選：關</button>
-        <span class="hint grow">點每句旁邊的主題標籤就能直接改。要一次改很多句：點編號選取，按住 Shift 再點另一個編號，中間整串一起選，也可以「整段標成關鍵」。AI 的回覆預設跟著上一句你的發言，岔題時按「另外分類」。</span>
+        <span class="hint grow">點每句旁邊的主題標籤就能直接改，選單裡也可以加上「也跟別的主題有關」。要一次改很多句：點編號選取；按住 Shift 再點另一個編號，或按「選到這裡」，中間整串一起選。AI 的回覆預設跟著上一句你的發言，岔題時按「另外分類」。</span>
       </div>
     </div>
 
@@ -138,12 +172,16 @@
       </div>
       <div class="toolbar">
         <div id="filters" class="seg" role="group" aria-label="顯示範圍"></div>
-        <button id="range-flow" class="secondary range-toggle" aria-pressed="false">連選：關</button>
-        <span class="hint grow">每一句都可以按「標為關鍵」，會照發言的人分成你說的和 AI 說的。一整段都重要時：點第一句的編號，按住 Shift 再點最後一句，按「整段標成關鍵」。</span>
+        <span class="hint grow">每一句都可以按「標為關鍵」，會照發言的人分成你說的和 AI 說的。一整段都重要時：點第一句的編號，再按最後一句的「選到這裡」（或按住 Shift 點它），然後按「整段標成關鍵」。</span>
       </div>
     </div>
 
-    <div id="selbar" class="selbar" hidden></div>
+    <p class="key-vs-turn"><strong>★ 關鍵</strong>：這句的內容重要，整理時優先讀。<strong>轉向</strong>：方向從這裡改了，這句本身不一定重要，但前後要分開理解，前面的結論可能不算數。</p>
+
+    <div class="sticky-stack">
+      <div id="navbar" class="navbar"></div>
+      <div id="selbar" class="selbar" hidden></div>
+    </div>
 
     <div id="list" class="list" aria-label="對話"></div>
 
@@ -157,10 +195,23 @@
   </section>
 </main>
 
+<!-- 目錄：所有關鍵和轉向，需要時才打開 -->
+<aside id="drawer" class="drawer" hidden aria-label="關鍵和轉向目錄">
+  <div class="drawer-head">
+    <strong>關鍵和轉向</strong>
+    <button id="drawer-close" class="icon-btn" aria-label="收起目錄">×</button>
+  </div>
+  <div id="drawer-filters" class="seg small-seg" role="group" aria-label="目錄顯示"></div>
+  <ol id="drawer-list" class="drawer-list"></ol>
+</aside>
+
 <script src="github.js"></script>
 <script src="capture.js"></script>
 <script src="guide.js"></script>
 <script src="tag.js"></script>
 <script src="tag-ai.js"></script>
+<script src="labels.js"></script>
+<script src="tag-review.js"></script>
+<script src="list.js"></script>
 </body>
 </html>

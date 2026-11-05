@@ -42,6 +42,7 @@ When an output relies on an `ai_unreviewed` item for a material conclusion, stat
 - **Confirmed turns** (`turns[]` with origin `user` or `ai_confirmed`) each require a Reasoning-turn object (`R`), or an explicit review note explaining why the turn is not a material cognitive change. `ai_unreviewed` turns are treated the same way, with their origin stated.
 - `turn_hints` are leads only. Create an `R` object from a hint only when the spec's own test (material cognitive change, argumentative dependency) is met by source evidence.
 - Key segments (`key_ranges`) mean "this stretch is central", not that every message in it was judged individually.
+- **Also-related messages** (`topics[].also_messages`, outline version 5): messages whose main topic is elsewhere but which the author marked as also relevant to this topic. Segmentation still follows `messages`; do not move them. When building this Topic's `core_question`, relations, and turns, treat them as cross-references (they are evidence for a relationship between the two Topics), and cite them in this Topic only as referenced material, not as its spans.
 - **Review** (`review_policy: mandatory`) still applies. Present segmentation as taken from the outline, so review can concentrate on what Stage 2 added: core questions, relations, and turn explanations.
 
 ## Staleness and identity
@@ -73,6 +74,7 @@ Analysis must not read `outline.ai.json` as author judgment, and must not prefer
   - 這兩種都算作者的判斷。
   - `ai_unreviewed`：AI 建議、作者沒有動的，預設當作同意；`seen: false` 代表從沒出現在作者的畫面上。
   - `turn_hints`：程式提示，不算作者的判斷。
+  - `topics[].also_messages`（第 5 版起）：主要在別的主題、但作者標了「也跟這個主題有關」的訊息。分段照 `messages`，不搬動；整理這個主題時當作交叉參照（也是兩個主題之間有關聯的證據）。
   - 被作者否決的 AI 建議記在 `ai_suggestion.rejected`，不能當成作者沒考慮過。
 - **第一階段**：關鍵和備註只用來找證據，不能當成作者的起點立場；沒標主題不代表不在範圍內。
 - **第二階段**：主題切分照骨架走，可以補結構，但不能自己合併、拆開、搬動主題，有不同看法要提出來問。確認過的轉向都要有轉向紀錄（`R`），不成立的要說明理由；`turn_hints` 只是線索。確認流程照舊，但重點放在 AI 補上的內容。

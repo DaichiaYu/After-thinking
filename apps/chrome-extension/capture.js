@@ -1,6 +1,6 @@
 // After-thinking Capture — 共用的擷取與輸出程式（popup.js 和 batch.js 都會用到）
 
-const VERSION = "0.7.0";
+const VERSION = "0.8.0";
 
 function detectPlatform(url) {
   const host = new URL(url).hostname;
@@ -607,6 +607,20 @@ function conversationIdFromUrl(platform, url) {
   return m ? m[1].toLowerCase() : null;
 }
 
+// 清單頁的預覽：使用者問過的問題，存開頭幾個和最後幾個（對話常越聊越偏，最後問的最能看出停在哪）。
+// 每個最多存 PREVIEW_CHARS 字；要看全部時清單頁再讀原文。i 是訊息位置（0 起），和標記頁的編號一致
+const PREVIEW_HEAD = 5, PREVIEW_TAIL = 2, PREVIEW_CHARS = 200;
+function previewQuestions(items) {
+  const qs = [];
+  items.forEach((m, i) => {
+    if (m.speaker !== "author") return;
+    const text = String(m.content || "").replace(/\s+/g, " ").trim();
+    qs.push({ i, text: text.length > PREVIEW_CHARS ? text.slice(0, PREVIEW_CHARS) + "…" : (text || "（只有附件）") });
+  });
+  const pick = qs.length <= PREVIEW_HEAD + PREVIEW_TAIL ? qs : qs.slice(0, PREVIEW_HEAD).concat(qs.slice(-PREVIEW_TAIL));
+  return { preview_questions: pick, preview_version: 1 };
+}
+
 // 擷取紀錄（inbox/index.jsonl）的一行
 function buildCaptureEntry(platform, conversationId, title, url, folder, items, page, mode) {
   const warnings = [];
@@ -631,6 +645,7 @@ function buildCaptureEntry(platform, conversationId, title, url, folder, items, 
     started_at: page.conversation_created_at || null,
     updated_at: page.conversation_updated_at || null,
     warnings,
+    ...previewQuestions(items),
     captured_at: new Date().toISOString(),
     extension_version: VERSION
   };

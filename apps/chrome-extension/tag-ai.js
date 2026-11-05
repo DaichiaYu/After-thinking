@@ -289,10 +289,10 @@ function applySuggestion(how, useAlt) {
   const replaceTopics = replace || how === "replace-topics";
   if (how === "replace-topics") {
     Object.keys(S.tags).forEach((k) => touchAi("tags", k, "changed", S.tags[k] || null));
-    S.tags = {}; S.origin.tags = {}; S.origin.names = {};
+    S.tags = {}; S.origin.tags = {}; S.origin.names = {}; S.also = {};
   }
   if (replace) {
-    S.tags = {}; S.keys = {}; S.keyRanges = []; S.turnsConfirmed = {};
+    S.tags = {}; S.keys = {}; S.keyRanges = []; S.turnsConfirmed = {}; S.also = {};
     S.origin = { tags: {}, names: {}, keys: {}, ranges: {}, turns: {} };
     S.aiReasons = { keys: {}, ranges: {}, turns: {} };
   }
@@ -530,7 +530,24 @@ function renderAiPanel(open) {
       box.append(ul);
     }
   }
-  if (open) panel.open = true;
+  // 還在預覽、還沒選整理方式時不自動打開：預覽頁上方已經有一行說 AI 怎麼看
+  if (open && S.mode) panel.open = true;
+  previewAiLine();
+}
+
+// 預覽頁：倉庫裡已經有 AI 建議的話，先告訴使用者 AI 怎麼看這段對話，選整理方式時可以參考
+function previewAiLine() {
+  const p = $("preview-ai");
+  if (!p) return;
+  const plan = AI.report && AI.report.plan;
+  p.textContent = "";
+  p.hidden = !plan || !!S.mode;
+  if (p.hidden) return;
+  const view = el("button", { class: "secondary small", text: "看 AI 建議" });
+  view.addEventListener("click", () => { $("ai-panel").open = true; $("ai-panel").scrollIntoView({ block: "start", behavior: "smooth" }); });
+  p.append("AI 先看過了，它認為" + (plan.mode === "multi"
+    ? "聊了好幾件事，分成 " + plan.topics.length + " 個主題（" + plan.topics.map((t) => t.id + " " + t.name).join("、") + "）"
+    : "一直在聊同一件事") + "。可以參考，不一定要照它選。 ", view);
 }
 
 function jumpTo(i) {

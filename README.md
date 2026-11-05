@@ -1,137 +1,158 @@
-# After-thinking
+# After-thinking — Turn AI conversations into traceable thinking records
 
-> **Turn long AI-assisted discussions into structured, traceable thinking records.**
+> **Turn long conversations from ChatGPT, Claude, Gemini, and other AI tools into structured records of how the thinking actually developed: what came from you, what came from AI, what changed, and what you ultimately adopted.**
+>
+> **中文：**把 ChatGPT、Claude、Gemini 等工具上的長篇 AI 對話，整理成可追溯的思考紀錄：哪些想法是你的、哪些來自 AI、討論在哪裡轉了方向，以及你最後真正採納了什麼。
 
-After-thinking organizes a discussion without flattening it into a conventional summary. It reconstructs where the discussion started, how topics branched, which reasoning turns mattered, who introduced each important idea, what the author actually adopted, what remains uncertain, and what is still open.
+If all you need is the final answer, a normal summary is usually enough. **After-thinking is for the cases where the path matters too.**
 
-[繁體中文版](#繁體中文版)
+It reconstructs where a discussion started, how it branched, where the reasoning materially changed, who introduced important ideas, whether the author adopted them, and what remains unfinished. It only works from the material you provide; thoughts that never appeared in the source are not inferred as facts.
 
-## What it does
+> **中文：**如果只需要結論，一般摘要通常就夠了。After-thinking 是給「怎麼想到這裡」也值得留下的時候用的。它會根據對話紀錄，還原討論從哪裡開始、如何分支、在哪裡改變方向，以及重要觀點是由誰提出、你最後是否採納，還有哪些問題沒有走完。它只看得到你提供的內容，不會把對話之外的想法當成已知事實。
 
-After-thinking can reconstruct the original question and starting position; separate a long conversation into Topics and recurring branches; identify meaningful reasoning turns; distinguish author-, AI-, external-, and co-developed ideas; track author uptake; preserve uncertainty; identify supported recurring concepts; record unresolved questions and unfinished branches; derive traceable next-discussion directions when useful; preserve user corrections across reruns; and resume later from saved workflow state.
+This makes it useful for research, knowledge work, decision review, and long-running human–AI collaboration where **idea provenance（觀點來源）** and the reasoning path matter.
 
-A complete reasoning record is already a valid endpoint. It does not need to become a post, article, or other public artifact.
+## When is it useful?｜什麼時候用得上
 
-## Six-stage workflow
+- **A long AI conversation contains useful ideas, but finding them again means rereading the whole thing.**  
+  **中文：**長篇 AI 對話累積了很多有用內容，之後想找某個想法時，不想重新把整串對話讀一遍。
+- **You want to revisit why a hypothesis was abandoned or why a project narrowed into its current direction.**  
+  **中文：**回頭查當初為什麼放棄某個假設、為什麼縮小到現在這個方向。
+- **You want another AI session or collaborator to inherit not only the conclusion, but how the discussion got there.**  
+  **中文：**把一段討論交給另一個 AI 或合作者接手，連同「怎麼走到這裡」一起交出去。
+- **You later want to write or publish from the discussion without losing track of which ideas were yours and which came from AI.**  
+  **中文：**之後要寫成文章或其他內容時，仍然分得清哪些是自己的想法、哪些來自 AI。
 
-1. **Scope & Origin** — source boundary, trigger, initial question, starting position, uncertainty.
-2. **Topic Map & Reasoning Trajectory** — Topics, recurring source spans, and material reasoning turns.
-3. **Provenance & Epistemic Status** — material Claims, origin, author uptake, current status, evidence, uncertainty.
-4. **Cognitive Structure** — source-bounded recurring concepts, distinctions, and reasoning patterns.
-5. **Discussion Gaps** — unresolved questions, missing evidence, tensions, unsupported hypotheses, unfinished branches.
-6. **Next Discussion Directions** — traceable next questions derived from existing Gaps when useful.
+## What does it produce?｜會產出什麼
 
-Each file under [`specs/`](specs/) is the canonical contract for one Stage: inputs, object shape, legal values, execution exit criteria, and review policy.
+After-thinking uses six stages. Each stage produces one analysis file.
 
-The workflow stops when a Stage is sufficiently supported, not when every possible interpretation has been exhausted. Unclear provenance, co-development, low confidence, no supported recurring pattern, `gaps: []`, and no next direction can all be successful results.
+1. **Scope & Origin｜分析範圍＋討論起點**  
+   What material is included, what triggered the discussion, what the original question was, and where the author initially stood.  
+   **中文：**這段分析涵蓋哪些內容、一開始想問什麼、討論為什麼開始，以及你原本站在哪裡。
 
-## Review model
+2. **Topic Map & Reasoning Trajectory｜主題地圖＋推理軌跡**  
+   How the discussion divides into topics and where meaningful changes in direction occurred.  
+   **中文：**討論分成哪些主題，以及哪幾處真的改變了方向。
 
-Stages 1–2 require explicit user confirmation. Stages 3–5 use risk-based review. Stage 6 requires no review by default.
+3. **Provenance & Author Uptake｜觀點來源＋採納狀態**  
+   Whether an important idea came from the author, AI, external material, or co-development — and whether the author explicitly accepted it, reserved judgment, rejected it, or never responded.  
+   **中文：**每個重要觀點來自你、AI、外部資料，還是一起發展出來的；你最後是明確接受、保留、拒絕，還是沒有回應。
 
-`confirmed` always refers to the current result and requires explicit user confirmation. A substantive rerun clears old confirmation. Low confidence alone does not trigger review; review is reserved for material uncertainty that the user can plausibly resolve.
+4. **Cognitive Structure｜認知結構**  
+   Recurring concepts, distinctions, and reasoning patterns that are actually supported within this discussion. This stage is written only when there is enough evidence.  
+   **中文：**整理這段討論中反覆出現的概念、區分方式和推理模式；只有證據足夠時才寫，不會硬湊人格分析。
 
-If the user materially corrects an interpretation during review, the correction is persisted before rerun so it cannot silently disappear on a later source revision.
+5. **Discussion Gaps｜討論缺口**  
+   Unanswered questions, missing evidence, tensions, unsupported assumptions, and branches that stopped halfway.  
+   **中文：**沒回答的問題、缺的證據、彼此矛盾或尚未支撐的地方，以及走到一半的分支。
 
-## Storage and resume
+6. **Next Discussion Directions｜下一次可繼續討論方向**  
+   Traceable next questions derived from existing gaps, only when useful.  
+   **中文：**從既有缺口延伸出下一次可以接著討論的問題；沒有必要時可以不產生。
 
-The After-thinking repository stores the method. Actual discussion analysis is stored in a repository selected by the user.
+Uncertainty is a valid result. If something cannot be determined from the source, it is marked as uncertain rather than forced into a conclusion. Having no supported cognitive pattern, no gap, or no next direction can also be a successful outcome.
 
-```text
-Selected analysis repository
-└─ discussions/<discussion-id>/
-   ├─ source/
-   │  ├─ conversation.jsonl
-   │  └─ metadata.yaml
-   ├─ state.yaml
-   ├─ corrections.yaml
-   └─ analysis/
-      ├─ 01-scope-origin.md
-      ├─ 02-topic-map.md
-      ├─ 03-claims.yaml
-      ├─ 04-cognitive-structure.md
-      ├─ 05-gaps.yaml
-      └─ 06-next-directions.md
+> **中文：**判斷不出來時會直接標成不確定，這也算完成。沒有足夠證據形成認知結構、沒有缺口，甚至沒有下一步，都可以是正常結果，不需要為了把欄位填滿而硬生內容。
+
+Stages 1–2 require explicit user confirmation before continuing. Later stages ask for input only when there is a material question the user can actually resolve. Corrections made by the user are persisted so they are not silently overwritten by later reruns.
+
+> **中文：**第 1、2 階段要你確認後才往下走；後面的階段只在出現你能回答的實質疑問時才問你。你修正過的判斷會被保存，之後重跑不會悄悄蓋掉。
+
+### A small example｜小型範例
+
+One claim record can look like this:
+
+```yaml
+- id: C002
+  claim: "Provenance and author uptake should be tracked separately."
+  provenance:
+    type: AI-introduced          # This idea was first introduced by AI
+  author_uptake:
+    status: Explicitly accepted  # The author explicitly accepted it
 ```
 
-Raw source uses stable message identity plus a separate canonical `order`, so omitted material can be inserted later without renumbering IDs. `source/metadata.yaml.source_revision` is authoritative; `state.yaml` mirrors it for resume. Git history provides file revision history.
+The point is simple: **who introduced an idea and whether you accepted it are two different questions.**
 
-Analysis objects use stable IDs (`T`, `R`, `C`, `CS`, `G`, `D`) that survive ordinary reruns. Split/merge operations retire old identities rather than silently reusing them.
+> **中文：**這裡刻意把「誰先提出這個觀點」和「你後來有沒有接受」分開記錄。AI 先提出，不代表它就自動算成你的立場；反過來，你明確採納後，也不能只因為起點來自 AI 就忽略你的接受狀態。
 
-## Quick setup
+See the complete small example in [`examples/simple-discussion/`](examples/simple-discussion/).
 
-After-thinking currently provides a workflow specification, runtime contracts, templates, and a filled example workspace; executable orchestration is still under development.
+## Getting started｜開始使用
 
-1. Select the repository that will hold the analysis.
-2. Provide the conversation, notes, article, or mixed source material.
-3. Create a stable discussion ID.
-4. Initialize from [`templates/`](templates/).
-5. Run the current Stage using its file under [`specs/`](specs/).
-6. On a later session, read `state.yaml` and resume from its structured `next_action`.
+After-thinking currently provides the method specification, templates, examples, and a capture extension. **There is not yet a one-click analysis program**; the six analysis stages are carried out by the AI tool you choose according to the repository rules.
 
-See [`examples/simple-discussion/`](examples/simple-discussion/) for a complete small run.
+> **中文：**目前已經有方法規格、範本、完整範例與對話擷取擴充功能，但還沒有「按一下就自動跑完六階段」的分析程式。六個階段仍由你選用的 AI 按照倉庫規格執行。
 
-## Why use it?
+1. **Capture the conversation.** Install the browser extension described below and save the conversation as source files.  
+   **中文：**先用下面的瀏覽器擴充功能把對話存成原始檔。
 
-Long AI conversations often contain more than a final answer: an original intuition, several branches, an AI-generated counterexample, a correction, a reframed question, an abandoned hypothesis, and conclusions that only make sense because of the route taken to reach them.
+2. **Prepare an analysis repository.** A private GitHub repository is recommended for personal conversations. When a single captured discussion is uploaded through the extension, it can create a `discussions/<discussion-id>/` workspace automatically.  
+   **中文：**準備一個存放分析結果的 GitHub 倉庫，個人對話建議設為私人。用擴充功能上傳單段對話時，可以自動建立 `discussions/<討論編號>/` 工作區。
 
-A normal summary is useful when only the result matters. After-thinking is useful when the path matters too.
+3. **Let your AI read both repositories.** Ask it to start from [`AGENTS.md`](AGENTS.md) and execute the current stage. If your AI tool can read GitHub repositories directly, provide the repositories; otherwise upload the required files. If it cannot write back to GitHub, save its generated files into the workspace yourself.  
+   **中文：**讓 AI 同時讀這個方法倉庫和你的分析倉庫，從 [`AGENTS.md`](AGENTS.md) 開始執行目前階段。你的 AI 工具如果能直接讀 GitHub，就直接提供倉庫；不能的話，再把需要的檔案上傳給它。AI 不能直接寫回 GitHub 時，把它產出的檔案存回工作區即可。
 
-The structured record can later support research or design work, decision review, hypothesis comparison, personal knowledge notes, handoff to another AI session or collaborator, or — if the author chooses — extraction into posts, articles, presentations, or other personal content. Those later uses do not control the reconstruction itself.
+4. **Resume from saved state.** Progress is stored in `state.yaml`. In a later session, ask the AI to read it first and continue from the structured next action.  
+   **中文：**進度會記在 `state.yaml`。下次換新對話或新工作階段時，先讓 AI 讀它，就能從上次停下的位置接著做。
 
-## Repository guide
+For Gemini batch capture, conversations are first placed in `inbox/`; move the ones you want to analyze into `discussions/`.
 
-- [`AGENTS.md`](AGENTS.md) — executor entry point and read order.
-- [`specs/`](specs/) — canonical Stage contracts, inputs, and object schemas.
-- [`docs/runtime.md`](docs/runtime.md) — cross-Stage runtime entry point.
-- [`docs/state-semantics.md`](docs/state-semantics.md) — execution/review transitions and confirmation evidence.
-- [`docs/source-format.md`](docs/source-format.md) — source identity, order, mutation, revision authority.
-- [`docs/id-lifecycle.md`](docs/id-lifecycle.md) — stable analysis object identity across reruns.
-- [`docs/user-fixes.md`](docs/user-fixes.md) — persistent correction lifecycle.
-- [`docs/uncertainty-semantics.md`](docs/uncertainty-semantics.md) — uncertainty semantics.
-- [`docs/output-format.md`](docs/output-format.md) — common output metadata.
-- [`docs/analysis-boundary.md`](docs/analysis-boundary.md) — analysis/publication boundary.
-- [`docs/workspace-write-contract.md`](docs/workspace-write-contract.md) — destination and write order.
-- [`templates/`](templates/) — starter workspace files.
-- [`examples/simple-discussion/`](examples/simple-discussion/) — filled end-to-end example.
+> **中文：**Gemini 批量擷取的對話會先放在 `inbox/`，挑出真正要分析的內容後再移到 `discussions/`。
 
----
+## After-thinking Capture｜對話擷取擴充功能
 
-# 繁體中文版
+**After-thinking Capture** captures conversations from the web versions of ChatGPT, Claude, and Gemini and saves them in the source format expected by After-thinking.
 
-> **把長篇 AI 協作討論整理成有結構、可追溯、可以繼續使用的思考紀錄。**
+- **How it works｜怎麼用：** Open a conversation and click the extension icon. It can scroll through the full conversation and expand collapsed long messages.  
+  **中文：**打開對話後按擴充功能圖示，它會嘗試捲完整段對話並展開被摺疊的長訊息。
+- **Where it saves｜存到哪：** Upload to a GitHub repository you choose, or download files only to your computer.  
+  **中文：**可以上傳到你自己指定的 GitHub 倉庫，也可以只下載到電腦。
+- **Gemini batch capture｜Gemini 批量擷取：** Multiple conversations can be captured in a batch, including original images and attached files where supported.  
+  **中文：**可以一次擷取多段 Gemini 對話，並保存對話中的圖片與檔案原檔。
+- **Installation｜安裝：** It is currently loaded manually through Chrome Developer Mode and is not yet published in the Chrome Web Store.  
+  **中文：**目前使用 Chrome 開發人員模式手動載入，還沒上架 Chrome 線上應用程式商店。
 
-After-thinking 整理的是討論本身，而不只是把聊天縮短：它重建從哪裡開始、後來分成哪些主題、哪裡真的發生推理轉折、重要觀點是誰提出、作者有沒有採納、哪些仍不確定，以及還有哪些地方沒有走完。
+**After-thinking itself does not operate a central server that receives your conversation content.**
 
-## 可以整理出什麼？
+> **中文：**After-thinking 本身沒有一個中央伺服器在背後接收你的對話內容。你可以只下載到本機，也可以選擇把檔案寫進自己的 GitHub 倉庫。
 
-它可以重建原始問題與作者起點、拆分 Topic、整理 reasoning turns、區分作者／AI／外部來源／共同發展的觀點、追蹤作者對 AI 提議的反應、保存無法判斷與低 confidence 的內容、整理有證據支持的反覆概念與推理模式、找出討論缺口，並在確實有需要時整理下一次可繼續討論的方向。
+Detailed instructions: [`apps/chrome-extension/README.md`](apps/chrome-extension/README.md)
 
-使用者曾經修正過的判斷會保存成 runtime correction；之後重跑不能假裝沒看過。分析狀態也會保存，因此下一次可以從原本進度繼續。
+## Where does your data go?｜資料去哪裡
 
-## 六階段
+- The extension reads the conversation page itself and, for supported Gemini content, the original images or attached files. Apart from that, it connects only to GitHub when you choose repository upload.  
+  **中文：**擴充功能除了讀取對話網頁本身，以及支援的 Gemini 圖片／附件原檔之外，只有在你選擇上傳時才會連到 GitHub。
+- GitHub access can be limited to the single repository you choose.  
+  **中文：**GitHub 權限可以限制只開放你指定的那一個倉庫。
+- If you choose **download only**, the captured files stay on your computer.  
+  **中文：**選「只下載檔案」時，擷取結果只存在你的電腦。
+- During analysis, the conversation is processed by whichever AI tool you choose to use.  
+  **中文：**真正跑分析時，對話內容會交給你自己選用的 AI 工具處理。
+- This public repository contains only the method, templates, code, and de-identified examples — **not your conversations**.  
+  **中文：**這個公開倉庫只放方法、範本、程式碼與去識別化範例，不會存放你的私人對話。
 
-1. 分析範圍＋討論起點
-2. 主題地圖＋推理軌跡
-3. 觀點來源＋認知狀態
-4. 認知結構
-5. 討論缺口
-6. 下一次可繼續討論方向
+## Adding missing source or rerunning｜補資料與重跑
 
-`specs/` 裡六份文件分別是六個 Stage 的唯一正式 Stage 規格，包含輸入、輸出長相、合法值、停止條件與 review policy。
+If you later add omitted messages or rerun an analysis, existing stable IDs are preserved where possible, and user corrections remain in effect. The system is designed so that adding missing material does not require blindly renumbering everything that already exists.
 
-Stage 1–2 必須由使用者確認；Stage 3–5 採風險式確認；Stage 6 預設不需確認。舊的 confirmation 不會在實質重跑後自動沿用。
+> **中文：**之後補進漏掉的訊息或重跑分析時，既有的穩定編號會盡量保留，你做過的修正也會繼續生效；不需要因為中間多補一段內容，就把前面所有編號整批打掉重來。
 
-不確定是正式結果。來源不明、共同發展、低 confidence、沒有足夠證據形成反覆模式、沒有 gap，甚至沒有下一步，都可以正常完成。
+Implementation details and formal rules live in [`docs/`](docs/) and [`specs/`](specs/).
 
-## 儲存與續跑
+## Repository guide｜倉庫導覽
 
-After-thinking repository 保存方法本身，實際分析寫入使用者指定的 repository。Raw source 的 message ID 代表永久身分，`order` 另外代表閱讀順序，因此之後補進漏掉的前段或中段資料時，不需要重編既有 ID。
+- [`AGENTS.md`](AGENTS.md) — executor entry point and reading order｜AI 執行入口與閱讀順序
+- [`specs/`](specs/) — canonical stage specifications｜六階段正式規格
+- [`docs/`](docs/) — runtime, state, uncertainty, IDs, corrections, and other implementation rules｜執行狀態、不確定性、編號、修正等細節
+- [`templates/`](templates/) — starter workspace files｜工作區起始範本
+- [`examples/simple-discussion/`](examples/simple-discussion/) — complete small example｜完整的小型示範
+- [`apps/chrome-extension/`](apps/chrome-extension/) — After-thinking Capture extension｜對話擷取擴充功能
 
-分析物件使用 `T / R / C / CS / G / D` 穩定 ID；一般重跑保留同一物件的 ID，真正 split / merge 時才退休舊 ID。`state.yaml` 保存目前 Stage、review、ID counters、conflict 與 structured `next_action`。
+## Feedback｜回饋
 
-## 為什麼需要它？
+Questions, bugs, and suggestions are welcome through [GitHub Issues](../../issues).
 
-如果只需要結論，一般摘要通常就夠了；如果連「怎麼想到這裡」都值得留下，After-thinking 才有用。
+You can also find me on X: [@daisyyu0214](https://x.com/daisyyu0214)
 
-整理後的結果可以拿來繼續研究或設計、回顧決策、比較假設變化、建立個人知識筆記、交接給下一個 AI session 或協作者；如果作者另外有需要，也可以再從裡面提取貼文、文章、簡報或其他個人內容。但這些都是後續用途，不會反過來控制 Stage 1–6 的分析。
+> **中文：**使用上的問題、錯誤回報或建議，都歡迎直接開 GitHub Issue；也可以在 X 找我。

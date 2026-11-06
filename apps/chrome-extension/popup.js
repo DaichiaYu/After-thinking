@@ -10,7 +10,8 @@ function diagnosePage() {
     '[data-testid="user-message"]', ".font-claude-response", ".font-claude-message",
     "[data-is-streaming]", "[data-test-render-count]", "main", "[role=main]",
     "#chat-history", "infinite-scroller", ".conversation-container", "user-query", "user-query .query-text",
-    "model-response", "model-response .markdown", "model-thoughts", "message-content"
+    "model-response", "model-response .markdown", "model-thoughts", "message-content",
+    '[id^="response-"]', ".message-bubble", '[id^="response-"].items-end'
   ];
   const testids = {};
   document.querySelectorAll("[data-testid]").forEach((el) => {
@@ -55,7 +56,7 @@ function diagnosePage() {
     "[data-turn-key]", "[data-chatgpt-agent-turn-start]"
   ].map((sel) => [sel, probe(sel)]));
   const samples = Array.from(document.querySelectorAll(
-    '[data-testid="user-message"], .font-claude-response, .font-claude-message, article, [data-message-author-role], user-query, model-response'
+    '[data-testid="user-message"], .font-claude-response, .font-claude-message, article, [data-message-author-role], user-query, model-response, [id^="response-"]'
   ));
   return {
     host: location.hostname,
@@ -188,6 +189,7 @@ async function getActiveTab() {
 
 let lastScrollLog = null;
 let lastApiLog = null;
+let lastAttachmentReport = null;
 
 document.getElementById("open-tags").addEventListener("click", () => {
   chrome.tabs.create({ url: chrome.runtime.getURL("tag.html") });
@@ -202,7 +204,7 @@ document.getElementById("diagnose").addEventListener("click", async () => {
   try {
     const tab = await getActiveTab();
     const [injection] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: diagnosePage });
-    const report = { extension_version: VERSION, last_capture_api: lastApiLog, last_capture_scroll: lastScrollLog, ...injection.result };
+    const report = { extension_version: VERSION, last_capture_api: lastApiLog, last_capture_scroll: lastScrollLog, last_attachments: lastAttachmentReport, ...injection.result };
     await navigator.clipboard.writeText(JSON.stringify(report, null, 2));
     status.textContent = "已複製診斷報告，可以直接貼上。";
   } catch (e) {
@@ -215,7 +217,7 @@ async function main() {
   const tab = await getActiveTab();
   const platform = tab && tab.url ? detectPlatform(tab.url) : null;
   if (!platform) {
-    showError("這個頁面不是 ChatGPT、Claude 或 Gemini 的對話。請先打開要整理的對話，再按一次圖示。");
+    showError("這個頁面不是 ChatGPT、Claude、Gemini 或 Grok 的對話。請先打開要整理的對話，再按一次圖示。");
     return;
   }
 
@@ -272,8 +274,9 @@ async function main() {
   // Gemini：補原始時間、下載圖片和檔案
   let attachmentFiles = [];
   try {
-    if (platform === "gemini") setPhase("正在讀取原始時間和附件…");
+    setPhase(platform === "gemini" ? "正在讀取原始時間和附件…" : "正在下載附件原檔…");
     attachmentFiles = await finalizeCapture(tab.id, platform, page);
+    lastAttachmentReport = page.attachment_report || null;
   } catch (e) { /* 附件或時間失敗不影響擷取 */ }
   stopTicker();
   // 只保留勾選訊息用到的附件
@@ -291,13 +294,18 @@ async function main() {
 
   const truncated = items.filter((i) => i.truncated).length;
   document.getElementById("platform").textContent =
-    ({ chatgpt: "ChatGPT", claude: "Claude", gemini: "Gemini" }[platform]) + "｜" + page.title +
+    ({ chatgpt: "ChatGPT", claude: "Claude", gemini: "Gemini", grok: "Grok" }[platform]) + "｜" + page.title +
     (page.api && page.api.ok ? "｜已直接讀取完整資料" : "｜使用捲動讀取") +
     "｜用時 " + elapsed() + " 秒" +
-    (page.branches ? "｜這段對話有 " + page.branches + " 個分支點，只擷取目前這條路線" : "") +
+    (page.branches ? "｜這段對話有 " + page.branches + " 個分支點，" +
+      (page.branch_captured === "latest_path" ? "畫面上看不出目前路線，擷取最新的那條" : "只擷取目前這條路線") : "") +
     (page.scroll && page.scroll.gaps ? "｜注意：捲動時可能跳過部分訊息，請檢查清單" : "") +
     (page.scroll && page.scroll.timed_out ? "｜注意：讀取超過 5 分鐘，已提前停止" : "") +
     (truncated ? "｜注意：有 " + truncated + " 則長訊息沒能完整展開" : "") +
+    (page.attachment_report && page.attachment_report.total
+      ? "｜附件 " + page.attachment_report.total + " 個，存到原檔 " + page.attachment_report.saved + " 個" +
+        (page.attachment_report.saved < page.attachment_report.total ? "（沒拿到的會標成「未取得原檔」）" : "")
+      : "") +
     (platform === "gemini" && page.recorder === "not_loaded" ? "｜沒有抓到原始時間：重新整理這個 Gemini 頁面後再按一次圖示就會有" : "");
   renderMessages(items, selected);
 

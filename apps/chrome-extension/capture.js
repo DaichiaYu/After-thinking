@@ -7,6 +7,7 @@ function detectPlatform(url) {
   if (host === "chatgpt.com" || host === "chat.openai.com") return "chatgpt";
   if (host === "claude.ai") return "claude";
   if (host === "gemini.google.com") return "gemini";
+  if (host === "grok.com") return "grok";
   return null;
 }
 
@@ -109,9 +110,24 @@ async function captureViaApi(platform) {
     return { text: cleaned, changed: cleaned !== text };
   };
   // </chatgpt-markup>
+  // <grok-markup>
+  // Grok 的回答夾著 <grok:render …>…</grok:render> 這種標籤（網站上畫成引用小卡等）。
+  // 引用換成 [來源]，其他整段拿掉；``` 程式碼區塊和 `行內程式碼` 都不動。
+  const cleanGrokMarkup = (text) => {
+    if (!/<grok:[a-z_]+/i.test(text)) return { text, changed: false };
+    const cleanPart = (part) => part.split(/(`[^`\n]*`)/).map((seg, k) => k % 2 ? seg : seg
+      .replace(/<grok:([a-z_]+)\b[^>]*?\/>/gi, (all) => /citation/i.test(all) ? "[來源]" : "")
+      .replace(/<grok:([a-z_]+)\b([^>]*)>[\s\S]*?<\/grok:\1>/gi, (all, name, attrs) => /citation/i.test(attrs) ? "[來源]" : "")
+    ).join("");
+    const cleaned = text.split(/(```[\s\S]*?```)/).map((part, k) => (k % 2 ? part : cleanPart(part))).join("")
+      .replace(/[ \t]+\[來源\]/g, "[來源]").replace(/^[ \t]+$/gm, "").replace(/\n{3,}/g, "\n\n").trim();
+    return { text: cleaned, changed: cleaned !== text };
+  };
+  // </grok-markup>
   const result = (items, extra) => ({
     items, strategy: extra.strategy, cleaning: extra.cleaning || [], title: document.title, url: location.href,
-    scroll: null, api: { ...log, ok: true }, branches: extra.branches, conversation_created_at: extra.created
+    scroll: null, api: { ...log, ok: true }, branches: extra.branches, conversation_created_at: extra.created,
+    ...(extra.branchCaptured ? { branch_captured: extra.branchCaptured } : {})
   });
 
   try {
@@ -147,17 +163,19 @@ async function captureViaApi(platform) {
       };
       const items = [];
       const isImagePart = (x) => x && typeof x === "object" && /image/.test(x.content_type || "");
+      const pointerId = (x) => String((x && x.asset_pointer) || "").replace(/^[a-z-]+:\/\//i, "") || null;
       // 工具產生的圖片（例如畫圖）掛在工具訊息上，接到下一則 AI 回答
       let pendingGenerated = [];
       path.forEach((node) => {
         const msg = node.message;
         if (!msg || !msg.author || msg.author.role !== "tool" || !msg.content) return;
         const parts = Array.isArray(msg.content.parts) ? msg.content.parts : [];
-        parts.filter(isImagePart).forEach(() => { node.__generated = (node.__generated || 0) + 1; });
+        const imgs = parts.filter(isImagePart);
+        if (imgs.length) node.__generated = imgs.map(pointerId);
       });
       path.forEach((node) => {
         if (node.__generated) {
-          for (let k = 0; k < node.__generated; k++) pendingGenerated.push({ kind: "generated_image", name: null });
+          node.__generated.forEach((id) => pendingGenerated.push({ kind: "generated_image", name: null, platform_file_id: id }));
           return;
         }
         if (!visible(node)) return;
@@ -168,9 +186,11 @@ async function captureViaApi(platform) {
         let atts = [];
         const listed = (msg.metadata && Array.isArray(msg.metadata.attachments)) ? msg.metadata.attachments : [];
         if (listed.length) {
-          atts = listed.map((a) => ({ kind: /^image\//.test(a.mime_type || "") ? "image" : "file", name: a.name || null }));
+          atts = listed.map((a) => ({ kind: /^image\//.test(a.mime_type || "") ? "image" : "file", name: a.name || null,
+            platform_file_id: a.id || null }));
         } else {
-          atts = parts.filter(isImagePart).map(() => ({ kind: speaker === "author" ? "image" : "generated_image", name: null }));
+          atts = parts.filter(isImagePart).map((x) => ({ kind: speaker === "author" ? "image" : "generated_image", name: null,
+            platform_file_id: pointerId(x) }));
         }
         if (speaker === "assistant" && pendingGenerated.length) { atts = atts.concat(pendingGenerated); pendingGenerated = []; }
         if (!text && !atts.length) return;
@@ -192,7 +212,26 @@ async function captureViaApi(platform) {
       items.forEach((i) => {
         if (i.speaker === "assistant") { const c = cleanChatgptMarkup(i.text); if (c.changed) { i.text = c.text; markupCleaned++; } }
       });
-      items.forEach((i) => { i.content = withMarkers(i.text, i.attachments, i.speaker); delete i.text; });
+      items.forEach((i) => { i.content = withMarkers(i.text, i.attachments, i.speaker); });
+
+      // 附件原檔：先向網站要下載網址（要帶登入的 token），真正下載在擷取後統一處理
+      const auth = { Authorization: "Bearer " + session.accessToken };
+      const resolved = {};
+      for (const att of items.reduce((all, i) => all.concat(i.attachments), [])) {
+        const id = att.platform_file_id;
+        if (!id) { att.resolve_error = "no_file_id"; continue; }
+        if (!(id in resolved)) {
+          resolved[id] = null;
+          for (const url of ["/backend-api/files/download/" + encodeURIComponent(id) + "?conversation_id=" + m[1] + "&inline=false",
+                             "/backend-api/files/" + encodeURIComponent(id) + "/download"]) {
+            const info = await getJson(url, auth).catch(() => null);
+            if (info && info.download_url) { resolved[id] = { url: new URL(info.download_url, location.origin).href, name: info.file_name || null }; break; }
+          }
+        }
+        const r = resolved[id];
+        if (r) { att.srcs = [r.url]; if (!att.name && r.name && att.kind === "file") att.name = r.name; }
+        else att.resolve_error = "no_download_url";
+      }
 
       // 分支點：有兩個以上「看得見的」後續訊息的位置
       let branchPoints = 0;
@@ -247,11 +286,18 @@ async function captureViaApi(platform) {
         if (msg.sender !== "human" && msg.sender !== "assistant") return;
         const text = textOf(msg);
         const speaker = msg.sender === "human" ? "author" : "assistant";
-        const atts = (msg.attachments || []).map((a) => ({ kind: "file", name: a.file_name || null }))
+        // attachments：網站只留抽出來的文字（貼上的長文、文字檔），存成文字檔
+        // files_v2：圖片和 PDF 等原檔，依序試預覽、文件、縮圖的網址
+        const abs = (u) => (u ? new URL(u, location.origin).href : null);
+        const atts = (msg.attachments || []).map((a) => ({ kind: "file", name: a.file_name || null,
+            ...(typeof a.extracted_content === "string" && a.extracted_content ? { inline_text: a.extracted_content } : {}) }))
           .concat((msg.files_v2 || msg.files || []).map((f) => ({
-            kind: f.file_kind === "image" ? "image" : "file", name: f.file_name || null })));
+            kind: f.file_kind === "image" ? "image" : "file", name: f.file_name || null, platform_file_id: f.file_uuid || null,
+            srcs: [f.preview_asset && f.preview_asset.url, f.preview_url, f.document_asset && f.document_asset.url,
+              f.thumbnail_asset && f.thumbnail_asset.url, f.thumbnail_url].map(abs).filter(Boolean)
+              .filter((u, k, all) => all.indexOf(u) === k) })));
         if (!text && !atts.length) return;
-        items.push({ speaker, content: withMarkers(text, atts, speaker),
+        items.push({ speaker, text, content: withMarkers(text, atts, speaker),
           platform_message_id: msg.uuid, timestamp: iso(msg.created_at), attachments: atts });
       });
 
@@ -259,6 +305,161 @@ async function captureViaApi(platform) {
       conv.chat_messages.forEach((x) => { childCount[x.parent_message_uuid] = (childCount[x.parent_message_uuid] || 0) + 1; });
       const branchPoints = Object.values(childCount).filter((n) => n > 1).length;
       return result(items, { strategy: "claude:api", branches: branchPoints, created: iso(conv.created_at) });
+    }
+
+    if (platform === "grok") {
+      const m = location.pathname.match(/\/c\/([0-9a-f-]{36})/i);
+      if (!m) { note("conversation_id", "not_found"); return { api: log }; }
+      const base = "/rest/app-chat/conversations/" + m[1];
+      const tree = await getJson(base + "/response-node?includeThreads=true");
+      const nodes = tree && Array.isArray(tree.responseNodes) ? tree.responseNodes.filter((n) => n && n.responseId) : [];
+      if (!nodes.length) { note("response_nodes", "missing"); return { api: log }; }
+
+      // 一次最多要 50 則的內容
+      const byId = {};
+      const ids = nodes.map((n) => n.responseId);
+      for (let k = 0; k < ids.length; k += 50) {
+        const res = await fetch(base + "/load-responses", {
+          method: "POST", credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ responseIds: ids.slice(k, k + 50) })
+        });
+        note("load-responses", res.status);
+        if (!res.ok) return { api: log };
+        const data = await res.json();
+        (data && Array.isArray(data.responses) ? data.responses : []).forEach((r) => { if (r && r.responseId) byId[r.responseId] = r; });
+      }
+      // 樹狀結構：以 response-node 為準，缺的父節點用回應內容補
+      const parentOf = {};
+      nodes.forEach((n) => { parentOf[n.responseId] = n.parentResponseId || (byId[n.responseId] || {}).parentResponseId || null; });
+      const children = {};
+      ids.forEach((id) => { const p = parentOf[id]; if (p) (children[p] = children[p] || []).push(id); });
+      const timeOf = (id) => {
+        const t = (byId[id] || {}).createTime;
+        if (typeof t === "number") return t > 1e12 ? t : t * 1000;
+        const d = Date.parse(t);
+        return isNaN(d) ? 0 : d;
+      };
+      const isoOf = (id) => { const t = timeOf(id); return t ? new Date(t).toISOString() : null; };
+      // 往下走到底：有好幾個後續時取最新的那個
+      const descend = (id) => {
+        for (let guard = 0; children[id] && children[id].length && guard < 100000; guard++) {
+          id = children[id].slice().sort((a, b) => timeOf(b) - timeOf(a))[0];
+        }
+        return id;
+      };
+
+      // 決定要抓哪一條路線：
+      // 1. 畫面上正在顯示的那條（訊息元素的 id 是 response-<編號>）
+      // 2. 網址上指定的回應（?rid=）
+      // 3. 都沒有時，取最新的那條
+      let leaf = null, branchCaptured = "latest_path";
+      const onScreen = Array.from(document.querySelectorAll('[id^="response-"]'))
+        .map((el) => el.id.slice("response-".length)).filter((id) => byId[id] || parentOf[id] !== undefined);
+      if (onScreen.length) {
+        leaf = descend(onScreen[onScreen.length - 1]);
+        branchCaptured = children[onScreen[onScreen.length - 1]] ? "on_screen_path_then_latest" : "on_screen_path";
+      } else {
+        const rid = new URLSearchParams(location.search).get("rid");
+        if (rid && parentOf[rid] !== undefined) { leaf = descend(rid); branchCaptured = "url_rid_path"; }
+      }
+      if (!leaf) {
+        const roots = ids.filter((id) => !parentOf[id] || parentOf[id] === undefined || !ids.includes(parentOf[id]));
+        const leaves = ids.filter((id) => !children[id]);
+        leaf = leaves.sort((a, b) => timeOf(b) - timeOf(a))[0] || (roots.length ? descend(roots[0]) : ids[ids.length - 1]);
+      }
+      note("branch", branchCaptured);
+      const path = [];
+      for (let id = leaf, guard = 0; id && guard < 100000; guard++) {
+        path.push(id);
+        id = parentOf[id];
+        if (id && !ids.includes(id)) break;
+      }
+      path.reverse();
+
+      // 附件：使用者上傳的檔案和圖片、AI 生成的圖片。原檔放在 assets.grok.com。
+      // 欄位名稱沒有公開，所以把所有回應掃一遍，收集「檔案編號 → 檔名、類型、路徑」，以及使用者編號。
+      const ASSETS = "https://assets.grok.com/";
+      const assetUrl = (p) => /^https?:/i.test(p) ? p : ASSETS + String(p).replace(/^\/+/, "");
+      const meta = {};
+      let userId = null;
+      const scan = (v, depth) => {
+        if (depth > 8 || !v) return;
+        if (typeof v === "string") {
+          const u = v.match(/(?:^|\/)users\/([0-9a-f-]{8,})\//i);
+          if (u && !userId) userId = u[1];
+          return;
+        }
+        if (Array.isArray(v)) { v.forEach((x) => scan(x, depth + 1)); return; }
+        if (typeof v === "object") {
+          const id = v.fileMetadataId || v.fileId || null;
+          if (id) {
+            const prev = meta[id] || {};
+            meta[id] = { name: prev.name || v.fileName || v.name || null, mime: prev.mime || v.fileMimeType || v.mimeType || "",
+              uri: prev.uri || v.fileUri || v.uri || null };
+          }
+          Object.values(v).forEach((x) => scan(x, depth + 1));
+        }
+      };
+      scan(Object.values(byId), 0);
+      if (!userId) {
+        const img = document.querySelector('img[src*="assets.grok.com/users/"]');
+        const u = img && img.src.match(/\/users\/([0-9a-f-]{8,})\//i);
+        if (u) userId = u[1];
+      }
+      const fromRef = (ref, kindHint) => {
+        const key = ref && typeof ref === "object" ? (ref.fileMetadataId || ref.fileId || null) : ref;
+        const looksPath = typeof key === "string" && (/^https?:/i.test(key) || key.includes("/"));
+        const md = (!looksPath && key && meta[key]) || {};
+        const name = (ref && typeof ref === "object" && (ref.fileName || ref.name)) || md.name || null;
+        const mime = (ref && typeof ref === "object" && (ref.fileMimeType || ref.mimeType)) || md.mime || "";
+        const srcs = [];
+        if (looksPath) srcs.push(assetUrl(key));
+        if (md.uri) srcs.push(assetUrl(md.uri));
+        if (!looksPath && key && userId) srcs.push(ASSETS + "users/" + userId + "/" + key + "/content");
+        if (!looksPath && key) {
+          const img = document.querySelector('img[src*="' + String(key).replace(/"/g, "") + '"]');
+          if (img) srcs.push(img.src);
+        }
+        const kind = kindHint || (/^image\//.test(mime) ? "image" : "file");
+        return { kind, name, platform_file_id: looksPath ? null : key,
+          srcs: srcs.filter((u, k, all) => all.indexOf(u) === k) };
+      };
+      const fileAtts = (r) => {
+        const list = Array.isArray(r.fileAttachmentsMetadata) && r.fileAttachmentsMetadata.length ? r.fileAttachmentsMetadata
+          : (Array.isArray(r.fileAttachments) ? r.fileAttachments : []);
+        const files = list.map((f) => fromRef(f, null));
+        const images = (Array.isArray(r.imageAttachments) ? r.imageAttachments : []).map((f) => fromRef(f, "image"));
+        return files.concat(images);
+      };
+      const items = [];
+      let markupCleaned = 0;
+      path.forEach((id) => {
+        const r = byId[id];
+        if (!r) { note("response_" + id.slice(0, 8), "missing"); return; }
+        const sender = String(r.sender || "").toLowerCase();
+        if (sender !== "human" && sender !== "assistant") return;
+        const speaker = sender === "human" ? "author" : "assistant";
+        let text = typeof r.message === "string" ? r.message.trim() : "";
+        if (speaker === "assistant") {
+          const c = cleanGrokMarkup(text);
+          if (c.changed) { text = c.text; markupCleaned++; }
+        }
+        let atts = fileAtts(r);
+        if (speaker === "assistant") {
+          const gen = Array.isArray(r.generatedImageUrls) ? r.generatedImageUrls : [];
+          atts = atts.concat(gen.map((u) => ({ kind: "generated_image", name: null, srcs: [assetUrl(u)] })));
+        }
+        if (!text && !atts.length) return;
+        items.push({ speaker, text, content: withMarkers(text, atts, speaker),
+          platform_message_id: r.responseId, timestamp: isoOf(id), attachments: atts });
+      });
+
+      const branchPoints = Object.values(children).filter((k) => k.length > 1).length;
+      const created = ids.map(timeOf).filter(Boolean).sort((a, b) => a - b)[0];
+      return result(items, { strategy: "grok:rest-app-chat", branches: branchPoints,
+        created: created ? new Date(created).toISOString() : null, branchCaptured,
+        cleaning: markupCleaned ? ["grok_render_markup"] : [] });
     }
   } catch (e) {
     note("error", String(e && e.message || e).slice(0, 80));
@@ -349,6 +550,8 @@ async function captureConversation(platform) {
     box.remove();
     return text;
   }
+  // Grok 訊息裡的按鈕、圖示、思考過程摺疊區
+  const GROK_NOISE = "button, svg, [role='button'], .thinking-container, [class*='think']";
   const looksLikeFile = (s) => /^[^\n]{1,200}\.[a-z0-9]{1,8}$/i.test(s);
 
   // 使用者上傳的檔案和圖片：在 user-query 裡、但不在提問文字裡
@@ -394,6 +597,21 @@ async function captureConversation(platform) {
       const src = img.currentSrc || img.getAttribute("src") || "";
       const generated = !!img.closest("generated-image, .generated-image, .generated-images") || /googleusercontent\.com\/gg\//.test(src);
       atts.push({ kind: generated ? "generated_image" : "image", name: null, src: src || null });
+    });
+    return atts;
+  }
+
+  // 捲動讀取時（ChatGPT、Claude、Grok）：訊息裡看得到的圖片，之後試著下載原檔
+  function domImages(node, speaker) {
+    const atts = [];
+    if (!node || !node.querySelectorAll) return atts;
+    node.querySelectorAll("img").forEach((img) => {
+      if (img.closest("button, a[href*='favicon'], [class*='avatar']")) return;
+      const rect = img.getBoundingClientRect();
+      const w = rect.width || img.naturalWidth || Number(img.getAttribute("width")) || 0;
+      if (w && w < 64) return;
+      const alt = (img.getAttribute("alt") || "").trim();
+      atts.push({ kind: "image", name: looksLikeFile(alt) ? alt : null, src: imgSrc(img) });
     });
     return atts;
   }
@@ -453,8 +671,25 @@ async function captureConversation(platform) {
         }
       });
     }
+    if (platform === "grok") {
+      // 每則訊息外層的 id 是 response-<編號>；使用者的訊息靠右（items-end）
+      strategy = "grok:response-id";
+      outermost(Array.from(document.querySelectorAll('[id^="response-"]'))).forEach((node) => {
+        const body = node.querySelector(".message-bubble") || node;
+        const isUser = /(^|\s)items-end(\s|$)/.test(node.className || "") || !!node.querySelector(".items-end .message-bubble");
+        let raw = body.innerText;
+        if (body.querySelector(GROK_NOISE)) {
+          const copy = body.cloneNode(true);
+          copy.querySelectorAll(GROK_NOISE).forEach((el) => el.remove());
+          raw = offscreenText(copy, body.clientWidth);
+          cleaning.add("strip_grok_controls");
+        }
+        out.push({ node: body, speaker: isUser ? "author" : "assistant", raw,
+          platform_message_id: node.id.slice("response-".length) });
+      });
+    }
     return out.map((m) => {
-      const atts = m.attachments || [];
+      const atts = m.attachments || (platform === "gemini" ? [] : domImages(m.node, m.speaker));
       const text = clean(stripButtons(m.raw));
       const content = withMarkers(text, atts, m.speaker);
       return { node: m.node, speaker: m.speaker, content, text, platform_message_id: m.platform_message_id, key: m.key || null,
@@ -602,7 +837,7 @@ async function captureConversation(platform) {
 function conversationIdFromUrl(platform, url) {
   const path = new URL(url).pathname;
   const pattern = { chatgpt: /\/c\/([0-9a-f-]{36})/i, claude: /\/chat\/([0-9a-f-]{36})/i,
-    gemini: /\/(?:app|gem\/[^/]+)\/([0-9a-f]{10,})/i }[platform];
+    gemini: /\/(?:app|gem\/[^/]+)\/([0-9a-f]{10,})/i, grok: /\/c\/([0-9a-f-]{36})/i }[platform];
   const m = pattern ? path.match(pattern) : null;
   return m ? m[1].toLowerCase() : null;
 }
@@ -698,12 +933,14 @@ function buildMetadata(kept, detected, platform, page, mode) {
     "  strategy: " + q(page.strategy),
     "  cleaning: " + list(page.cleaning),
     "  branch_points_detected: " + (page.branches === undefined || page.branches === null ? "null" : page.branches),
-    "  branch_captured: current_path",
+    "  branch_captured: " + (page.branch_captured || "current_path"),
     "  conversation_created_at: " + (page.conversation_created_at ? q(page.conversation_created_at) : "null"),
     "  conversation_updated_at: " + (page.conversation_updated_at ? q(page.conversation_updated_at) : "null"),
     "  time_source: " + (page.time_source ? q(page.time_source) : (page.api && page.api.ok ? q("site_api") : "null")),
     "  api_fallback_reason: " + (page.api && !page.api.ok ? q(page.api.steps.join(", ")) : "null"),
     "  auto_scroll: " + (page.scroll ? "{down_steps: " + page.scroll.down_steps + ", gaps: " + page.scroll.gaps + ", timed_out: " + page.scroll.timed_out + "}" : "null"),
+    "  attachments: " + (page.attachment_report ? "{total: " + page.attachment_report.total + ", saved: " + page.attachment_report.saved +
+      ", missing: " + Object.values(page.attachment_report.missing).reduce((a, b) => a + b, 0) + "}" : "null"),
     "  items_still_truncated: " + page.items.filter((i) => i.truncated).length,
     "  items_detected: " + detected,
     "  items_excluded_by_user: " + (detected - kept),
@@ -964,40 +1201,79 @@ function attachmentExt(att, type, url) {
   return att.kind === "file" ? "bin" : "png";
 }
 
-// 下載附件原檔，回傳要寫進 source/ 的檔案；訊息裡的記號改成指向檔案
+function utf8Base64(text) {
+  const bytes = new TextEncoder().encode(text);
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+
+// 下載附件原檔，回傳要寫進 source/ 的檔案；訊息裡的記號改成指向檔案。
+// 每個附件可以有好幾個候選網址（srcs），照順序試，第一個拿到的就用。
+// 只有文字內容的附件（例如 Claude 的貼上長文）直接存成文字檔。
 async function downloadAttachments(tabId, items) {
-  const targets = [];
-  items.forEach((item) => (item.attachments || []).forEach((att) => { if (att.src) targets.push(att); }));
+  const all = [];
+  items.forEach((item) => (item.attachments || []).forEach((att) => all.push(att)));
   const files = [];
-  if (!targets.length) return files;
-  const urls = Array.from(new Set(targets.map((a) => a.src)));
-  let got = {};
-  try {
-    const [inj] = await chrome.scripting.executeScript({ target: { tabId }, func: fetchAttachmentsInPage, args: [urls, MAX_ATTACHMENT_BYTES] });
-    got = (inj && inj.result) || {};
-  } catch (e) { got = {}; }
-  // 頁面裡讀不到的 https 網址（通常是跨網域限制），改由擴充功能自己讀
-  for (const url of urls) {
-    const r = got[url];
-    if (/^https:/.test(url) && (!r || (r.error && r.error !== "too_large"))) got[url] = await fetchAttachmentHere(url, MAX_ATTACHMENT_BYTES);
-  }
+  const report = { total: all.length, saved: 0, missing: {} };
+  if (!all.length) return { files, report };
   const pathOf = {};
   let n = 0;
-  targets.forEach((att) => {
-    const r = got[att.src];
-    if (r && r.b64) {
-      if (!pathOf[att.src]) {
-        n++;
-        pathOf[att.src] = "attachments/" + String(n).padStart(2, "0") + "." + attachmentExt(att, r.type, att.src);
-        files.push({ path: pathOf[att.src], base64: r.b64 });
-      }
-      att.file = pathOf[att.src];
-    } else {
-      att.missing = (r && r.error) || "not_found";
+  const save = (att, key, b64, ext) => {
+    if (!pathOf[key]) {
+      n++;
+      pathOf[key] = "attachments/" + String(n).padStart(2, "0") + "." + ext;
+      files.push({ path: pathOf[key], base64: b64 });
     }
-    delete att.src;
+    att.file = pathOf[key];
+  };
+
+  const pending = [];
+  all.forEach((att) => {
+    const list = (att.srcs || []).concat(att.src ? [att.src] : []).filter(Boolean);
+    att.__tries = list.filter((u, k) => list.indexOf(u) === k);
+    if (att.__tries.length) pending.push(att);
   });
-  return files;
+  const got = {};
+  for (let round = 0; round < 5; round++) {
+    const urls = Array.from(new Set(pending.filter((a) => !a.__done && a.__tries[round]).map((a) => a.__tries[round])))
+      .filter((u) => !(u in got));
+    if (!urls.length && !pending.some((a) => !a.__done && a.__tries[round])) break;
+    if (urls.length) {
+      try {
+        const [inj] = await chrome.scripting.executeScript({ target: { tabId }, func: fetchAttachmentsInPage, args: [urls, MAX_ATTACHMENT_BYTES] });
+        Object.assign(got, (inj && inj.result) || {});
+      } catch (e) { /* 換擴充功能自己讀 */ }
+      // 頁面裡讀不到的 https 網址（通常是跨網域限制），改由擴充功能自己讀
+      for (const url of urls) {
+        const r = got[url];
+        if (/^https:/.test(url) && (!r || (r.error && r.error !== "too_large"))) got[url] = await fetchAttachmentHere(url, MAX_ATTACHMENT_BYTES);
+      }
+    }
+    pending.forEach((att) => {
+      const url = att.__tries[round];
+      if (att.__done || !url) return;
+      const r = got[url];
+      const htmlPage = /^text\/html/i.test(r && r.type || "") && !/\.html?$/i.test(att.name || "");
+      if (r && r.b64 && !htmlPage) { save(att, url, r.b64, attachmentExt(att, r.type, url)); att.__done = true; }
+      else att.__last = (r && r.error) || (r && r.b64 ? "got_html_page" : "not_found");
+    });
+  }
+
+  all.forEach((att) => {
+    if (!att.file && att.inline_text) {
+      const named = att.name && /\.(txt|md|csv|tsv|json|ya?ml|xml|html?|js|ts|py|rb|go|java|c|cpp|h|cs|sql|sh|log|tex|srt)$/i.test(att.name);
+      save(att, "inline:" + n + ":" + att.name, utf8Base64(att.inline_text), named ? attachmentExt(att, "", "") : "txt");
+      if (!named) att.content_note = "extracted_text";
+    }
+    if (att.file) report.saved++;
+    else {
+      att.missing = att.__last || att.resolve_error || "no_source";
+      report.missing[att.missing] = (report.missing[att.missing] || 0) + 1;
+    }
+    ["src", "srcs", "inline_text", "resolve_error", "__tries", "__done", "__last"].forEach((k) => delete att[k]);
+  });
+  return { files, report };
 }
 
 // 附件記號：有原檔就寫路徑（相對於 source/），拿不到就標「未取得原檔」
@@ -1018,7 +1294,7 @@ function renderItemContent(item) {
   return item.speaker === "author" ? marks + "\n\n" + item.text : item.text + "\n\n" + marks;
 }
 
-// 擷取完成後一律呼叫：Gemini 補時間、下載附件；回傳要一起上傳的附件檔
+// 擷取完成後一律呼叫：Gemini 補時間；四個平台都下載附件原檔，回傳要一起上傳的附件檔
 async function finalizeCapture(tabId, platform, page) {
   let files = [];
   if (platform === "gemini") {
@@ -1029,8 +1305,10 @@ async function finalizeCapture(tabId, platform, page) {
       page.recorder = raws ? "active" : "not_loaded";
       if (raws && raws.length) applyGeminiTimes(page, conversationId, parseGeminiRecorded(raws));
     } catch (e) { page.recorder = "error"; }
-    files = await downloadAttachments(tabId, page.items);
   }
+  const dl = await downloadAttachments(tabId, page.items);
+  files = dl.files;
+  page.attachment_report = dl.report;
   page.items.forEach((item) => {
     item.content = renderItemContent(item);
     delete item.text;

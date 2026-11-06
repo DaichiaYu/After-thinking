@@ -1,12 +1,12 @@
 # After-thinking Capture v0.8.0
 
-> **Capture ChatGPT, Claude, and Gemini conversations as After-thinking source files, then tag them yourself before any AI analysis.**
+> **Capture ChatGPT, Claude, Gemini, and Grok conversations as After-thinking source files, then tag them yourself before any AI analysis.**
 
 [繁體中文版](#繁體中文版)
 
 After-thinking Capture is the Chrome extension for [After-thinking](../../README.md). It handles the first two steps of the workflow:
 
-1. **Capture** — copy a whole ChatGPT, Claude, or Gemini conversation into After-thinking source files (`conversation.jsonl` and `metadata.yaml`), uploaded to your own private GitHub repository or downloaded to your computer.
+1. **Capture** — copy a whole ChatGPT, Claude, Gemini, or Grok conversation into After-thinking source files (`conversation.jsonl` and `metadata.yaml`), uploaded to your own private GitHub repository or downloaded to your computer.
 2. **Tag** — before handing the conversation to an AI for analysis, decide its skeleton yourself: group it into topics, mark key points, key segments, turns, and notes. The result is saved as `outline.json`, and After-thinking's Stages 1–2 follow it instead of re-segmenting the conversation. For long conversations, an AI of your choice can draft the tags first (`outline.ai.json`); you review them, and every tag keeps a record of whether it came from you or from the AI.
 
 The extension reads the current tab only when you click its icon (`manual_click` mode); it never listens in the background. Conversations go only to the GitHub repository you configure, with no other server in between.
@@ -15,6 +15,8 @@ The extension's interface is in Traditional Chinese. Button and label names belo
 
 ## What's new in v0.8.0
 
+- **Attachment originals on all four platforms**: files and images in ChatGPT, Claude, and Grok conversations are now downloaded into `source/attachments/` like Gemini's, instead of leaving only a marker. [Details](#files-and-images-v080-all-platforms)
+- **Grok support** (`grok.com`): single capture reads the full conversation from Grok's own data, including original times. Grok's citation tags are turned into `[來源]` markers. [Details](#grok-notes-v080)
 - **Preview before choosing**: the tagging page opens with every question you asked (numbered; ones longer than 50 characters are collapsed), so you can see the conversation before deciding "several topics" or "one topic". If an AI has already drafted tags, its view is shown there too.
 - **「這篇不用整理」 (no need to organize)**: a third choice for small talk, duplicates, or conversations with little in them. Pick a reason; no `outline.json` is written, and the list shows the status.
 - **Also related to another topic**: a message keeps one main topic, and can additionally be marked as related to other topics (`also_messages` in `outline.json`).
@@ -38,7 +40,8 @@ The extension's interface is in Traditional Chinese. Button and label names belo
 |---|---|
 | Single capture | Open a conversation and click the icon. It scrolls through, expands collapsed long messages, and lets you untick messages you don't want |
 | Batch capture (Gemini) | Reads every conversation in Gemini's sidebar and captures them one by one into `inbox/`, skipping ones already captured |
-| Attachments and original times (Gemini) | Downloads uploaded files and images and AI-generated images; recovers each message's original time |
+| Attachment originals | Downloads uploaded files and images and AI-generated images on all four platforms (v0.8.0; Gemini since v0.6.0) |
+| Original times (Gemini) | Recovers each message's original time |
 | Capture log | `inbox/index.jsonl` records every capture, so you know what has been captured and what has been tagged |
 | Tagging | Preview your questions first, then group into topics or mark key points, key segments, turns, and notes; saved as `outline.json` (v0.7.0; preview, also-related topics and review tools in v0.8.0) |
 | Conversation list | Sort and group captured conversations, preview their questions, track status, labels, and notes in `inbox/labels.json` (v0.8.0) |
@@ -50,10 +53,10 @@ The extension's interface is in Traditional Chinese. Button and label names belo
 
 | Item | Support |
 |---|---|
-| Platforms | ChatGPT, Claude, Gemini (batch capture, attachment files, and original times are Gemini-only for now) |
+| Platforms | ChatGPT, Claude, Gemini, Grok (`grok.com`; Grok inside X is not supported) (batch capture and recovered original times are Gemini-only for now) |
 | Extension interface | Traditional Chinese only, for now |
 | Conversation content | Any language. Text is copied as-is, never translated or rewritten |
-| Site interface language | Traditional Chinese, Simplified Chinese, English. The extension must recognize the site's "Show more" / "Show less" buttons to expand collapsed long messages, and Gemini batch capture must recognize the sidebar's "Show more". If the site is set to another language (e.g. Japanese): ChatGPT and Claude are read from the site's own data first and are unaffected; on Gemini, or whenever scroll reading is used, collapsed long messages may stay collapsed and may not be detected — check message lengths after capturing |
+| Site interface language | Traditional Chinese, Simplified Chinese, English. The extension must recognize the site's "Show more" / "Show less" buttons to expand collapsed long messages, and Gemini batch capture must recognize the sidebar's "Show more". If the site is set to another language (e.g. Japanese): ChatGPT, Claude, and Grok are read from the site's own data first and are unaffected; on Gemini, or whenever scroll reading is used, collapsed long messages may stay collapsed and may not be detected — check message lengths after capturing |
 | "Possible turn" hints on the tagging page | Traditional Chinese, Simplified Chinese, English, Japanese — for your wording and for the AI's response (word lists under "Tagging conversations") |
 | AI drafting the tags | Any AI. Writing directly into the repository needs an AI that can read and write GitHub; the download-a-file route works with any AI that accepts a file |
 
@@ -73,7 +76,7 @@ The extension's interface is in Traditional Chinese. Button and label names belo
 
 ## Usage
 
-1. Open a ChatGPT, Claude, or Gemini conversation (no need to scroll).
+1. Open a ChatGPT, Claude, Gemini, or Grok conversation (no need to scroll).
 2. Click the extension icon. It scrolls from top to bottom, expands collapsed long messages, then scrolls back. Don't click elsewhere while it reads, or the popup will close.
 3. Check the message list and untick anything you don't want.
 4. Click 「上傳到 GitHub」 (upload to GitHub), review the confirmation, then click 「確定上傳」 (confirm). The files are written in one commit to `discussions/<discussion-id>/`: `source/conversation.jsonl`, `source/metadata.yaml`, `state.yaml`, `corrections.yaml`.
@@ -247,15 +250,22 @@ Upload locations (separate from single capture's `discussions/`):
 - Single capture popup: opening a conversation that was captured before shows, at the top, when it was captured, how many messages it had, where it is stored, and how many messages have been added since.
 - Conversations saved with "download only" are not logged.
 
-## Files and images (v0.6.0: Gemini saves originals)
+## Files and images (v0.8.0: all platforms)
 
-Images and files in Gemini conversations are downloaded to `source/attachments/`. Their original position in the message gets a marker pointing to the file, and they are also listed in the `attachments` field of `conversation.jsonl`:
+Images and files in conversations are downloaded to `source/attachments/`. Their original position in the message gets a marker pointing to the file, and they are also listed in the `attachments` field of `conversation.jsonl`:
 
 - Files you uploaded: `[附件：報告.pdf → attachments/01.pdf]`, `[圖片：attachments/02.png]`, placed at the start of your message.
 - Images the AI generated: `[AI 生成的圖片：attachments/03.png]`, placed at the end of that answer.
 - Originals that couldn't be fetched are written as `[附件：報告.pdf（未取得原檔）]` (original not fetched); the capture log's `attachments_missing` counts them, and the batch page mentions them when finished. You can put the files into that `attachments/` folder yourself later.
 - Files over 20 MB are not downloaded.
-- ChatGPT and Claude still keep markers only (`[附件：filename]`), without downloading originals.
+- How each platform is fetched, using the page you are signed in to:
+  - **Gemini**: the files and images shown on the page.
+  - **ChatGPT**: asks ChatGPT for each file's download link (uploads and generated images), then downloads it. Files made by code execution (`sandbox:/mnt/data/…` links) are not included yet.
+  - **Claude**: images and PDFs from Claude's file previews. Claude keeps only the extracted text of pasted text and of some documents (e.g. Word); that text is saved instead — under the original name for text formats (`notes.md`), otherwise as `.txt`, and the `attachments` entry gets `"content_note": "extracted_text"`.
+  - **Grok**: uploads and generated images from `assets.grok.com`.
+  - Scroll reading (when a site's data can't be read): images visible in the messages are downloaded; file cards are not.
+- `metadata.yaml` records `capture.attachments: {total, saved, missing}`; "Copy diagnostic report" in the popup includes the reasons files were missed (no file contents).
+- Downloading needs permission for `files.oaiusercontent.com` (ChatGPT) and `assets.grok.com` (Grok). Chrome may ask you to approve this when updating.
 
 ## Original times (v0.6.0, Gemini)
 
@@ -293,6 +303,15 @@ ChatGPT replies can contain its own layout markup (`<box>`, `<row>`, `<text>`, `
 - Only these tag names are touched; any other `<…>`, code blocks, and inline code are left as they are. `metadata.yaml` lists `chatgpt_ui_markup` under `capture.cleaning` when this happened.
 - Conversations captured before this version still contain the markup; re-capture them to clean it (see the tip under "What gets saved" first).
 
+## Grok notes (v0.8.0)
+
+- Only `grok.com` is supported. Grok inside X (`x.com/i/grok`) uses a different page and is not captured.
+- Grok is read from the site's own data (`/rest/app-chat/…`), the same way the page loads it, so long conversations don't need scrolling and every message keeps its original time. If that fails, the extension falls back to scroll reading, which keeps no times.
+- Branches: when you regenerate or edit a message, Grok keeps several versions. The extension captures the path whose messages are on screen; if it can't tell from the page, it takes the newest path and says so in the popup. `metadata.yaml` records which: `capture.branch_captured` is `on_screen_path`, `on_screen_path_then_latest` (continued past what was on screen by taking the newest reply at each fork), `url_rid_path`, or `latest_path`.
+- Only answer text is captured; thinking and search steps are left out. Grok's `<grok:render …>` tags are removed, citations become `[來源]` (source) markers, and `metadata.yaml` lists `grok_render_markup` under `capture.cleaning`. Code blocks are left as they are.
+- Uploaded files, images, and generated images are downloaded (see "Files and images"). Grok doesn't publish its file fields, so the extension looks for them broadly; if files show as missing, send the diagnostic report.
+- Batch capture is Gemini-only for now.
+
 ## Known limitations
 
 - Capture rules may break when the sites change and will need updating.
@@ -309,13 +328,15 @@ ChatGPT replies can contain its own layout markup (`<box>`, `<row>`, `<text>`, `
 
 After-thinking Capture 是 [After-thinking](../../README.md) 的 Chrome 擴充功能，負責整理流程最前面的兩步：
 
-1. **擷取**：把 ChatGPT、Claude 或 Gemini 網頁上的對話完整抓下來，存成 After-thinking 的原文檔（`conversation.jsonl` 和 `metadata.yaml`），上傳到你自己的私人 GitHub 倉庫，或下載到電腦。
+1. **擷取**：把 ChatGPT、Claude、Gemini 或 Grok 網頁上的對話完整抓下來，存成 After-thinking 的原文檔（`conversation.jsonl` 和 `metadata.yaml`），上傳到你自己的私人 GitHub 倉庫，或下載到電腦。
 2. **標記**：在交給 AI 分析之前，自己先決定這段對話的骨架：分主題，標出關鍵、關鍵段落、轉向和備註。結果存成 `outline.json`，After-thinking 的第一、二階段會照它分析，不再自己重新切分。對話太長時，可以先請你喜歡的 AI 標一版（`outline.ai.json`），你再檢查；每個標記都會記下是你標的還是 AI 標的。
 
 只有你按下擴充功能圖示時才會讀取目前這個分頁（「按圖示模式」，manual_click），不會在背景監聽。對話只會送到你自己設定的 GitHub 倉庫，不經過其他伺服器。
 
 ## v0.8.0 新功能
 
+- **四個平台都存附件原檔**：ChatGPT、Claude、Grok 對話裡的檔案和圖片，現在也和 Gemini 一樣下載到 `source/attachments/`，不再只留記號。（見「檔案和圖片」）
+- **支援 Grok**（`grok.com`）：單段擷取直接讀 Grok 網站本身的對話資料，連原始時間一起保存。Grok 的引用標籤會換成 `[來源]` 記號。（見「Grok 說明」）
 - **先預覽再選**：標記頁一打開先列出你問過的所有問題（有編號，超過 50 字先收起來），看過再決定是「聊了好幾件事」還是「一直在聊同一件事」。AI 已經先標過的話，也會在這裡說它怎麼看。
 - **這篇不用整理**：第三個選項，給閒聊、重複、沒什麼資訊的對話。選個理由就好，不產生 `outline.json`，清單上會顯示狀態。
 - **也跟別的主題有關**：一句只有一個主要主題，但可以另外標「也跟 B 有關」（`outline.json` 的 `also_messages`）。
@@ -339,7 +360,8 @@ After-thinking Capture 是 [After-thinking](../../README.md) 的 Chrome 擴充�
 |---|---|
 | 單段擷取 | 打開一段對話，按圖示。自動捲完、展開被摺疊的長訊息，可以取消勾選不要的訊息 |
 | 批量擷取（Gemini） | 讀 Gemini 側邊欄的所有對話，一段段抓進 `inbox/`，抓過的自動跳過 |
-| 附件和原始時間（Gemini） | 下載上傳的檔案、圖片和 AI 生成的圖；補上每一則的原始時間 |
+| 附件原檔 | 四個平台都下載上傳的檔案、圖片和 AI 生成的圖（v0.8.0；Gemini 從 v0.6.0 開始） |
+| 原始時間（Gemini） | 補上每一則的原始時間 |
 | 擷取紀錄 | `inbox/index.jsonl` 記下每次擷取，知道哪些抓過、哪些已標記 |
 | 標記對話 | 先預覽你問過的問題，再分主題或標關鍵、關鍵段落、轉向、備註，存成 `outline.json`（v0.7.0；預覽、也相關的主題、檢查工具是 v0.8.0） |
 | 對話清單 | 排序、分組、預覽問題，記處理狀態、自訂標籤和備註（`inbox/labels.json`）（v0.8.0） |
@@ -351,10 +373,10 @@ After-thinking Capture 是 [After-thinking](../../README.md) 的 Chrome 擴充�
 
 | 項目 | 支援 |
 |---|---|
-| 平台 | ChatGPT、Claude、Gemini（批量擷取、附件原檔、原始時間目前只有 Gemini） |
+| 平台 | ChatGPT、Claude、Gemini、Grok（`grok.com`；X 裡面的 Grok 不支援）（批量擷取、補原始時間目前只有 Gemini） |
 | 擴充功能的介面 | 繁體中文（目前只有這個） |
 | 對話內容 | 任何語言都可以，原文照抄，不翻譯也不改寫 |
-| 網站本身的介面語言 | 繁體中文、簡體中文、英文。擴充功能要認得網站上「顯示更多」「顯示較少」之類的按鈕，才能自動展開摺疊的長訊息，Gemini 批量擷取也要認得側邊欄的「顯示更多」。網站設成其他語言（例如日文）時：ChatGPT、Claude 優先直接讀網站資料，不受影響；但 Gemini，以及改用捲動讀取的時候，摺疊的長訊息可能沒展開、也不一定偵測得到，擷取後請檢查訊息長度 |
+| 網站本身的介面語言 | 繁體中文、簡體中文、英文。擴充功能要認得網站上「顯示更多」「顯示較少」之類的按鈕，才能自動展開摺疊的長訊息，Gemini 批量擷取也要認得側邊欄的「顯示更多」。網站設成其他語言（例如日文）時：ChatGPT、Claude、Grok 優先直接讀網站資料，不受影響；但 Gemini，以及改用捲動讀取的時候，摺疊的長訊息可能沒展開、也不一定偵測得到，擷取後請檢查訊息長度 |
 | 標記頁的「可能轉向」提示 | 繁體中文、簡體中文、英文、日文，看你的用詞和 AI 的回應（提示詞見下方「標記對話」） |
 | 請 AI 先標一版 | 任何 AI 都可以。直接寫進倉庫需要能讀寫 GitHub 的 AI；下載檔案的做法，只要 AI 能讀附檔就行 |
 
@@ -374,7 +396,7 @@ After-thinking Capture 是 [After-thinking](../../README.md) 的 Chrome 擴充�
 
 ## 使用
 
-1. 打開一段 ChatGPT、Claude 或 Gemini 的對話（不用自己捲動）。
+1. 打開一段 ChatGPT、Claude、Gemini 或 Grok 的對話（不用自己捲動）。
 2. 按擴充功能圖示。擴充功能會自動從頭捲到尾、展開被摺疊的長訊息，再捲回原位。讀取時請不要點擊其他地方，否則視窗會關閉。
 3. 在清單裡檢查訊息，取消勾選不要的。
 4. 按「上傳到 GitHub」，確認視窗裡的內容後按「確定上傳」。檔案會以一個提交（commit）寫入 `discussions/<討論編號>/`，包含 `source/conversation.jsonl`、`source/metadata.yaml`、`state.yaml`、`corrections.yaml`。
@@ -514,15 +536,22 @@ AI 之後又寫了新的 `outline.ai.json`，會顯示「有新的 AI 建議」�
 - 單段擷取視窗：打開抓過的對話時，最上面會提示什麼時候抓的、當時幾則、存在哪裡，以及之後多了幾則。
 - 只用「只下載檔案」存到電腦的，不會記進紀錄。
 
-## 檔案和圖片（v0.6.0：Gemini 會存原檔）
+## 檔案和圖片（v0.8.0：四個平台）
 
-Gemini 對話裡的圖片和檔案會下載原檔，存在 `source/attachments/`，訊息裡原本的位置留下指向檔案的記號，另外記在 `conversation.jsonl` 的 `attachments` 欄位：
+對話裡的圖片和檔案會下載原檔，存在 `source/attachments/`，訊息裡原本的位置留下指向檔案的記號，另外記在 `conversation.jsonl` 的 `attachments` 欄位：
 
 - 你上傳的：`[附件：報告.pdf → attachments/01.pdf]`、`[圖片：attachments/02.png]`，放在你那則訊息的開頭。
 - AI 產生的圖：`[AI 生成的圖片：attachments/03.png]`，放在那則回答的結尾。
 - 拿不到原檔的寫成 `[附件：報告.pdf（未取得原檔）]`，擷取紀錄的 `attachments_missing` 會記數量，批量頁完成時也會提示。之後可以自己把檔案放進那個 `attachments/` 資料夾。
 - 單一檔案超過 20 MB 不下載。
-- ChatGPT、Claude 目前仍然只留記號（`[附件：檔名]`），還沒下載原檔。
+- 各平台怎麼拿（都是用你已登入的頁面）：
+  - **Gemini**：頁面上顯示的檔案和圖片。
+  - **ChatGPT**：向 ChatGPT 要每個檔案的下載連結（上傳的檔案和生成的圖），再下載。程式執行產生的檔案（`sandbox:/mnt/data/…` 連結）目前還不抓。
+  - **Claude**：圖片和 PDF 從 Claude 的檔案預覽下載。貼上的長文和部分文件（例如 Word），Claude 只留抽出來的文字，就存這份文字：文字格式用原檔名（`notes.md`），其他存成 `.txt`，`attachments` 裡記 `"content_note": "extracted_text"`。
+  - **Grok**：上傳的檔案和生成的圖從 `assets.grok.com` 下載。
+  - 改用捲動讀取時（讀不到網站資料）：訊息裡看得到的圖片會下載，檔案卡片不會。
+- `metadata.yaml` 記 `capture.attachments: {total, saved, missing}`；視窗裡「複製診斷報告」會附上沒拿到的原因（不含檔案內容）。
+- 下載需要 `files.oaiusercontent.com`（ChatGPT）和 `assets.grok.com`（Grok）的權限，更新時 Chrome 可能會請你同意。
 
 ## 原始時間（v0.6.0，Gemini）
 
@@ -559,6 +588,15 @@ ChatGPT 的回覆裡會夾著它自己的版面語法（`<box>`、`<row>`、`<te
 - `<AsyncImage query="…"/>` → `[網路圖片：…]`；`<Chart/>` → `[圖表：標題]`。
 - 只處理這些標籤名稱，其他 `<…>`、程式碼區塊、行內程式碼都不動。有處理時，`metadata.yaml` 的 `capture.cleaning` 會記 `chatgpt_ui_markup`。
 - 這一版以前擷取的對話還留著這些語法，重新擷取就會清掉（重新擷取前先看「存成什麼」的提醒）。
+
+## Grok 說明（v0.8.0）
+
+- 只支援 `grok.com`。X 裡面的 Grok（`x.com/i/grok`）是不同的頁面，目前抓不到。
+- Grok 直接讀網站本身的對話資料（`/rest/app-chat/…`，和頁面自己載入對話的方式一樣），長對話不用捲動，每一則都有原始時間。讀不到時會改用捲動讀取，那樣就沒有時間。
+- 分支：重新生成或編輯訊息後，Grok 會留好幾個版本。擴充功能抓畫面上正在顯示的那條；從畫面判斷不出來時，抓最新的那條，視窗上會說明。`metadata.yaml` 的 `capture.branch_captured` 記下是哪一種：`on_screen_path`（畫面上的路線）、`on_screen_path_then_latest`（畫面以下的部分，在每個分岔取最新的回覆）、`url_rid_path`（網址指定的回覆）、`latest_path`（最新的路線）。
+- 只抓回答本文，思考過程和搜尋步驟不抓。Grok 的 `<grok:render …>` 標籤會拿掉，引用換成 `[來源]`，`metadata.yaml` 的 `capture.cleaning` 會記 `grok_render_markup`。程式碼區塊不動。
+- 上傳的檔案、圖片和生成的圖片會下載原檔（見「檔案和圖片」）。Grok 沒有公開檔案欄位，擴充功能會廣泛地找；如果顯示沒拿到，請把診斷報告傳過來。
+- 批量擷取目前只有 Gemini。
 
 ## 已知限制
 

@@ -390,7 +390,7 @@ async function startConversation(outline) {
   const nGaps = msgs.filter((_, i) => gapLabel(i)).length;
   const nTurns = msgs.filter((_, i) => hintReasons(i).length).length;
   $("meta").textContent = [
-    ({ chatgpt: "ChatGPT", claude: "Claude", gemini: "Gemini" }[ctx.platform] || ctx.platform || ""),
+    ({ chatgpt: "ChatGPT", claude: "Claude", gemini: "Gemini", grok: "Grok" }[ctx.platform] || ctx.platform || ""),
     msgs.length + " 則（你 " + nUser + " 則、AI " + (msgs.length - nUser) + " 則）",
     nGaps ? "隔過 " + nGaps + " 次" : "",
     nTurns ? "程式找到 " + nTurns + " 處可能轉向" : "",

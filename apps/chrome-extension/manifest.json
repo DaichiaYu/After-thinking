@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "After-thinking Capture",
   "version": "0.8.0",
-  "description": "把 ChatGPT、Claude 或 Gemini 的對話擷取成 After-thinking 的原文檔，並上傳到你自己的私人 GitHub 倉庫。",
+  "description": "把 ChatGPT、Claude、Gemini 或 Grok 的對話擷取成 After-thinking 的原文檔，並上傳到你自己的私人 GitHub 倉庫。",
   "permissions": [
     "activeTab",
     "scripting",
@@ -17,7 +17,9 @@
     "https://api.github.com/*",
     "https://gemini.google.com/*",
     "https://*.googleusercontent.com/*",
-    "https://*.usercontent.google.com/*"
+    "https://*.usercontent.google.com/*",
+    "https://*.oaiusercontent.com/*",
+    "https://assets.grok.com/*"
   ],
   "options_page": "options.html"
 }

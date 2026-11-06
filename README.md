@@ -1,6 +1,6 @@
 # After-thinking: Turn AI conversations into traceable thinking records
 
-> Turn long conversations from ChatGPT, Claude, Gemini, and other AI tools into traceable records of how the thinking developed: which ideas came from you, which came from AI, what changed, and what you ultimately adopted.
+> Turn long conversations from ChatGPT, Claude, Gemini, Grok, and other AI tools into traceable records of how the thinking developed: which ideas came from you, which came from AI, what changed, and what you ultimately adopted.
 
 If all you need is the conclusion, a normal summary is usually enough. After-thinking is for the cases where **how you got there** is worth keeping too.
 
@@ -92,12 +92,13 @@ When a single captured conversation is uploaded through the extension, it can au
 
 ## Capture extension: After-thinking Capture
 
-After-thinking Capture extracts conversations from the web versions of ChatGPT, Claude, and Gemini and saves them in the source format expected by After-thinking.
+After-thinking Capture extracts conversations from the web versions of ChatGPT, Claude, Gemini, and Grok and saves them in the source format expected by After-thinking.
 
 - **How it works**: Open a conversation and click the extension icon. It can scroll through the conversation and expand collapsed long messages.
 - **Manual tagging (v0.7.0)**: After capture, open the tagging page to group topics, mark key messages or segments, identify important turns, and add notes before AI analysis. Tags are saved in `outline.json`; the tagging page itself never calls an AI. For long conversations, you can optionally ask an AI of your choice to draft the tags first (`outline.ai.json`) and review them on the same page: untouched suggestions count as agreed but stay marked as AI-generated. Stages 1–2 then follow your tags instead of re-segmenting the conversation ([`docs/user-outline.md`](docs/user-outline.md)).
 - **Where it saves**: Upload to a GitHub repository you choose, or download the files only to your computer.
-- **Gemini**: Multiple conversations can be captured in a batch, including original images and attached files where supported.
+- **Attachments**: Uploaded files, images, and AI-generated images are saved as originals on all four platforms where the site provides them.
+- **Gemini**: Multiple conversations can be captured in a batch.
 - **Installation**: It is currently loaded manually through Chrome Developer Mode and is not yet published in the Chrome Web Store.
 
 After-thinking itself does **not** operate a central server that receives your conversation content.
@@ -106,7 +107,7 @@ Detailed instructions: [`apps/chrome-extension/README.md`](apps/chrome-extension
 
 ## Where does your data go?
 
-- The extension reads the conversation page itself and, for supported Gemini content, the original images or attached files. Apart from that, it connects only to GitHub when you choose repository upload.
+- The extension reads the conversation page itself and the original images and attached files in the conversation. Apart from that, it connects only to GitHub when you choose repository upload.
 - GitHub access can be limited to the single repository you choose.
 - If you choose **download only**, the captured files stay on your computer.
 - During analysis, the conversation is processed by whichever AI tool you choose to use.
@@ -130,7 +131,7 @@ You can also find me on X: [@daisyyu0214](https://x.com/daisyyu0214).
 
 ## After-thinking：把 AI 對話整理成可追溯的思考紀錄
 
-> 把 ChatGPT、Claude、Gemini 上的長篇 AI 對話，整理成可追溯的思考紀錄：哪些想法是你的、哪些來自 AI、討論在哪裡轉了方向，以及你最後真正採納了什麼。
+> 把 ChatGPT、Claude、Gemini、Grok 上的長篇 AI 對話，整理成可追溯的思考紀錄：哪些想法是你的、哪些來自 AI、討論在哪裡轉了方向，以及你最後真正採納了什麼。
 
 如果只需要結論，一般摘要通常就夠了。After-thinking 是給「怎麼想到這裡」也值得留下的時候用的。
 
@@ -220,12 +221,13 @@ You can also find me on X: [@daisyyu0214](https://x.com/daisyyu0214).
 
 ## 擷取擴充功能：After-thinking Capture
 
-從 ChatGPT、Claude、Gemini 網頁版擷取對話，存成 After-thinking 需要的原始檔。
+從 ChatGPT、Claude、Gemini、Grok 網頁版擷取對話，存成 After-thinking 需要的原始檔。
 
 - **用法**：打開對話，按擴充功能圖示。會自動捲完整段對話、展開被摺疊的長訊息。
 - **手動標記（v0.7.0）**：擷取後可以開啟標記頁面，自行分主題、標出關鍵訊息或段落、重要轉折，並加上備註。標記會存成 `outline.json`，標記頁本身不會呼叫 AI。對話太長時，也可以先請你喜歡的 AI 標一版（`outline.ai.json`），再到同一頁檢查：沒改的建議當作同意，但會保留「這是 AI 標的」紀錄。之後第一、二階段會照你的標記分析，不再自己重新切分（見 [`docs/user-outline.md`](docs/user-outline.md)）。
 - **存到哪**：上傳到你自己的 GitHub 倉庫，或只下載到電腦。
-- **Gemini**：可以一次批量擷取多段對話，也會保存支援的圖片和檔案原檔。
+- **附件**：四個平台都會保存對話裡上傳的檔案、圖片和 AI 生成圖的原檔（網站有提供的話）。
+- **Gemini**：可以一次批量擷取多段對話。
 - **安裝**：目前用 Chrome 的開發人員模式手動載入，還沒上架 Chrome 線上應用程式商店。
 
 After-thinking 本身沒有中央伺服器在背後接收你的對話內容。你可以只下載到本機，也可以選擇把檔案寫進自己的 GitHub 倉庫。
@@ -234,7 +236,7 @@ After-thinking 本身沒有中央伺服器在背後接收你的對話內容。�
 
 ## 資料去哪裡
 
-- 擴充功能除了讀取對話網頁本身，以及支援的 Gemini 圖片／附件原檔之外，只有在你選擇上傳時才會連到 GitHub。
+- 擴充功能除了讀取對話網頁本身，以及對話裡的圖片／附件原檔之外，只有在你選擇上傳時才會連到 GitHub。
 - GitHub 權限可以限制只開放你指定的那一個倉庫。
 - 選「只下載檔案」時，擷取結果只存在你的電腦。
 - 跑分析時，對話內容會交給你選用的 AI 工具處理。

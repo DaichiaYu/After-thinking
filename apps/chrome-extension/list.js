@@ -23,7 +23,7 @@ const L = {
   qExp: {}         // folder + ":" + i → 這個問題展開了
 };
 
-const PLATFORM_NAME = { chatgpt: "ChatGPT", claude: "Claude", gemini: "Gemini" };
+const PLATFORM_NAME = { chatgpt: "ChatGPT", claude: "Claude", gemini: "Gemini", grok: "Grok" };
 const padN = (i, total) => String(i + 1).padStart(Math.max(3, String(total || 0).length), "0");
 const WEEK = "日一二三四五六";
 

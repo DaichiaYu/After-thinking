@@ -112,6 +112,8 @@ AI 依使用者的要求先標的一版，格式是 `after-thinking/outline-sugg
 
 ChatGPT 回覆裡的版面語法在擷取時已經轉成一般文字（`metadata.yaml` 的 `capture.cleaning` 有 `chatgpt_ui_markup`），留下這些記號：`[來源]`（引用來源，原本的網址沒有保留）、`[引用記憶]`（ChatGPT 用了它對使用者的記憶）、`[引用附件第 a–b 行]`、`[網路圖片：搜尋詞]`、`[圖表：標題]`；`（文字）` 原本是標籤。較早擷取的對話可能還留著 `<box>`、`<Cite/>` 這類原始語法。
 
+Grok 回覆裡的 `<grok:render …>` 標籤在擷取時也已拿掉（`capture.cleaning` 有 `grok_render_markup`），引用換成 `[來源]`，原本的網址沒有保留。Grok 有分支時，`capture.branch_captured` 記下抓的是哪一條路線（`on_screen_path`、`on_screen_path_then_latest`、`url_rid_path`、`latest_path`）。
+
 ## 怎麼找東西
 
 - 依時間：看 `inbox/<年-月>/`，或用 `index.jsonl` 的 `started_at`。

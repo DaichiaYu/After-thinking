@@ -85,32 +85,32 @@ Use After-thinking Capture or another export method to save the conversation as 
 In either case:
 
 1. Prepare a GitHub repository for the analysis results. A private repository is recommended for personal conversations.
-2. Let your AI read this method repository and your analysis repository. Ask it to start from [`AGENTS.md`](AGENTS.md) and execute the current stage.
-3. Progress is stored in `state.yaml`. In a later session, ask the AI to read it first and continue from the saved next action.
+2. *(Option B, optional)* Tag the captured conversation in the extension before any AI analysis: preview your questions, group them into topics, and mark key points and turns. An AI can draft the tags first for you to review. The result is saved as `outline.json`, and Stages 1–2 build on it instead of re-segmenting the conversation from scratch.
+3. Let your AI read this method repository and your analysis repository. Ask it to start from [`AGENTS.md`](AGENTS.md) and execute the current stage. Platforms that can read GitHub repositories directly (such as Claude, ChatGPT, and Grok) have worked well in testing; with one that cannot (such as Gemini), you need to upload the files yourself.
+4. Progress is stored in `state.yaml`. In a later session, ask the AI to read it first and continue from the saved next action.
 
-When a single captured conversation is uploaded through the extension, it can automatically create a `discussions/<discussion-id>/` workspace. Gemini batch captures are first placed in `inbox/`; move the conversations you want to analyze into `discussions/`.
+When a single captured conversation is uploaded through the extension, it automatically creates a `discussions/<discussion-id>/` workspace. Gemini batch captures are first placed in `inbox/`; move the conversations you want to analyze into `discussions/`.
 
 ## Capture extension: After-thinking Capture
 
 After-thinking Capture extracts conversations from the web versions of ChatGPT, Claude, Gemini, and Grok and saves them in the source format expected by After-thinking.
 
-- **How it works**: Open a conversation and click the extension icon. It can scroll through the conversation and expand collapsed long messages.
-- **Tagging and AI-assisted review (v0.8.0)**: Preview all your questions before choosing multiple topics, one topic, or “no need to organize.” Mark key messages or ranges, reasoning turns, cross-topic relevance, and notes. The tagging page itself does not call an AI; optionally import an AI draft (`outline.ai.json`), review it, then save `outline.json`. Stages 1–2 build on the saved outline ([`docs/user-outline.md`](docs/user-outline.md)).
-- **Conversation list (v0.8.0)**: Search and preview captured discussions; sort by conversation, capture, or last-tagged time; record to-do/done/skip status, custom labels, and notes in `inbox/labels.json`.
-- **Grok (v0.8.0)**: Capture conversations at `grok.com`, including available original times and the selected conversation path. Grok inside X is not supported.
-- **Where it saves**: Upload to a GitHub repository you choose, or download the files only to your computer.
-- **Attachments (v0.8.0)**: All four platforms attempt to save uploaded files, images, and AI-generated images to `source/attachments/`. Files that cannot be recovered are explicitly marked; recovery is not guaranteed.
-- **Gemini**: Multiple conversations can be captured in a batch.
-- **Installation**: It is currently loaded manually through Chrome Developer Mode and is not yet published in the Chrome Web Store.
-
-After-thinking itself does **not** operate a central server that receives your conversation content.
+- **Platforms**: ChatGPT, Claude, Gemini, and Grok (`grok.com`; Grok inside X is not supported). Original message times are kept when the site provides them.
+- **Capture**: Open a conversation and click the extension icon. It reads the whole conversation and expands collapsed long messages. On Gemini, many conversations can be captured in one batch.
+- **Attachments**: Uploaded files, images, and AI-generated images are saved as original files in `source/attachments/` on all four platforms. Files that cannot be recovered are explicitly marked, so recovery is not guaranteed.
+- **Tagging**: Preview all your questions, then choose several topics, one topic, or “no need to organize.” Mark key messages or segments, reasoning turns, messages related to more than one topic, and notes. The tagging page itself never calls an AI. Optionally, an AI drafts the tags first (`outline.ai.json`) and you review them; each tag records whether it came from you or from the AI. The result is saved as `outline.json`, and Stages 1–2 build on it ([`docs/user-outline.md`](docs/user-outline.md)).
+- **Conversation list**: Search and preview captured conversations, sort them by conversation, capture, or last-tagged time, and track to-do/done/skip status, your own labels, and notes (`inbox/labels.json`).
+- **Where it saves**: A GitHub repository you choose, or only your computer.
+- **Installation**: Download this repository and load the `apps/chrome-extension` folder in Chrome Developer Mode. It is not yet published in the Chrome Web Store.
 
 Detailed instructions: [`apps/chrome-extension/README.md`](apps/chrome-extension/README.md)
 
 ## Where does your data go?
 
+- After-thinking does not run a server that receives your conversations.
 - The extension reads the conversation page itself and the original images and attached files in the conversation. Apart from that, it connects only to GitHub when you choose repository upload.
-- GitHub access can be limited to the single repository you choose.
+- On Gemini, which does not show message times, a small recorder runs on Gemini pages after first use and notes the times from data the page already loads. It sends nothing anywhere; the data stays in that tab.
+- GitHub access can be limited to the single repository you choose. Tags, labels, and notes are saved to that same repository.
 - If you choose **download only**, the captured files stay on your computer.
 - During analysis, the conversation is processed by whichever AI tool you choose to use.
 - This public repository contains only the method, templates, code, and de-identified examples — not your conversations.
@@ -216,32 +216,32 @@ You can also find me on X: [@daisyyu0214](https://x.com/daisyyu0214).
 不論用哪一種方式：
 
 1. 準備一個放分析結果的 GitHub 倉庫，個人對話建議設為私人。
-2. 讓 AI 讀這個方法倉庫和你的分析倉庫，請它從 [`AGENTS.md`](AGENTS.md) 開始執行目前階段。
-3. 進度記在工作區的 `state.yaml`。下次換新對話或新工作階段時，先讓 AI 讀它，就能從上次停下的位置接著做。
+2. （方法 B，可省略）交給 AI 分析之前，先在擴充功能裡標記擷取下來的對話：預覽自己問過的問題，分主題，標出關鍵和轉向。也可以先讓 AI 標一版，再由你審查。結果存成 `outline.json`，第一、二階段會照它來，不會從頭重新切分。
+3. 讓 AI 讀這個方法倉庫和你的分析倉庫，請它從 [`AGENTS.md`](AGENTS.md) 開始執行目前階段。能直接讀 GitHub 倉庫的平台（例如 Claude、ChatGPT、Grok）實測效果都不錯；不能直接讀的（例如 Gemini），需要自己把檔案上傳給它。
+4. 進度記在工作區的 `state.yaml`。下次換新對話或新工作階段時，先讓 AI 讀它，就能從上次停下的位置接著做。
 
-用擴充功能擷取單段對話並上傳時，可以自動建立 `discussions/<討論編號>/` 工作區。批量擷取的 Gemini 對話會先放在 `inbox/`，挑出要分析的再移到 `discussions/`。
+用擴充功能擷取單段對話並上傳時，會自動建立 `discussions/<討論編號>/` 工作區。批量擷取的 Gemini 對話會先放在 `inbox/`，挑出要分析的再移到 `discussions/`。
 
 ## 擷取擴充功能：After-thinking Capture
 
 從 ChatGPT、Claude、Gemini、Grok 網頁版擷取對話，存成 After-thinking 需要的原始檔。
 
-- **用法**：打開對話，按擴充功能圖示。會自動捲完整段對話、展開被摺疊的長訊息。
-- **標記與 AI 建議審查（v0.8.0）**：先預覽自己問過的問題，再選「分成多個主題」、「一直在聊同一件事」或「這篇不用整理」。可以標出關鍵訊息／段落、推理轉向、也跟其他主題相關的訊息與備註。標記頁本身不會呼叫 AI；也可以先請外部 AI 提供 `outline.ai.json` 草稿，逐項審查後存成 `outline.json`。第一、二階段會依保存的標記骨架分析（見 [`docs/user-outline.md`](docs/user-outline.md)）。
-- **對話清單（v0.8.0）**：搜尋、預覽擷取過的對話，依對話／擷取／最近標記時間排序，記錄未處理、已整理、不用整理、自訂標籤和備註，保存在 `inbox/labels.json`。
-- **Grok（v0.8.0）**：擷取 `grok.com` 對話、可取得的原始時間與目前選擇的對話路線；不支援 X 站內的 Grok。
-- **存到哪**：上傳到你自己的 GitHub 倉庫，或只下載到電腦。
-- **附件（v0.8.0）**：四個平台都會嘗試把上傳的檔案、圖片和 AI 生成圖保存在 `source/attachments/`；讀不到的原檔會留下明確標記，不能保證每份附件都能取得。
-- **Gemini**：可以一次批量擷取多段對話。
-- **安裝**：目前用 Chrome 的開發人員模式手動載入，還沒上架 Chrome 線上應用程式商店。
-
-After-thinking 本身沒有中央伺服器在背後接收你的對話內容。你可以只下載到本機，也可以選擇把檔案寫進自己的 GitHub 倉庫。
+- **平台**：ChatGPT、Claude、Gemini、Grok（`grok.com`；X 站內的 Grok 不支援）。網站有提供訊息原始時間的，會一起保存。
+- **擷取**：打開對話，按擴充功能圖示。會讀完整段對話、展開被摺疊的長訊息。Gemini 可以一次批量擷取多段對話。
+- **附件**：四個平台都會把上傳的檔案、圖片和 AI 生成圖存成原檔，放在 `source/attachments/`；拿不到的原檔會留下明確標記，不能保證每份都取得。
+- **標記**：先預覽自己問過的問題，再選「聊了好幾件事」、「一直在聊同一件事」或「這篇不用整理」。可以標出關鍵訊息／段落、轉向、同時跟其他主題相關的訊息，以及備註。標記頁本身不會呼叫 AI；也可以先請 AI 標一版（`outline.ai.json`）再由你審查，每個標記都會記下是你標的還是 AI 建議的。結果存成 `outline.json`，第一、二階段依它分析（見 [`docs/user-outline.md`](docs/user-outline.md)）。
+- **對話清單**：搜尋、預覽擷取過的對話，依對話／擷取／最近標記時間排序，記錄未處理、已整理、不用整理、自訂標籤和備註（`inbox/labels.json`）。
+- **存到哪**：你自己指定的 GitHub 倉庫，或只存在電腦。
+- **安裝**：下載這個倉庫，在 Chrome 的開發人員模式載入 `apps/chrome-extension` 資料夾。還沒上架 Chrome 線上應用程式商店。
 
 詳細步驟見 [`apps/chrome-extension/README.md`](apps/chrome-extension/README.md)。
 
 ## 資料去哪裡
 
+- After-thinking 沒有自己的伺服器接收你的對話。
 - 擴充功能除了讀取對話網頁本身，以及對話裡的圖片／附件原檔之外，只有在你選擇上傳時才會連到 GitHub。
-- GitHub 權限可以限制只開放你指定的那一個倉庫。
+- Gemini 畫面上沒有訊息時間，所以第一次使用後，Gemini 頁面上會有一個小記錄器，從頁面本來就會載入的資料裡記下時間。它不會往外送任何東西，資料只留在那個分頁裡。
+- GitHub 權限可以限制只開放你指定的那一個倉庫。標記、標籤和備註也存在同一個倉庫。
 - 選「只下載檔案」時，擷取結果只存在你的電腦。
 - 跑分析時，對話內容會交給你選用的 AI 工具處理。
 - 這個公開倉庫只放方法、範本、程式碼與去識別化範例，不存你的私人對話。

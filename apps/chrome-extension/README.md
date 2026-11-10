@@ -9,7 +9,7 @@ After-thinking Capture is the Chrome extension for [After-thinking](../../README
 1. **Capture** — copy a whole ChatGPT, Claude, Gemini, or Grok conversation into After-thinking source files (`conversation.jsonl` and `metadata.yaml`), uploaded to your own private GitHub repository or downloaded to your computer.
 2. **Tag** — before handing the conversation to an AI for analysis, decide its skeleton yourself: group it into topics, mark key points, key segments, turns, and notes. The result is saved as `outline.json`, and After-thinking's Stages 1–2 follow it instead of re-segmenting the conversation. For long conversations, an AI of your choice can draft the tags first (`outline.ai.json`); you review them, and every tag keeps a record of whether it came from you or from the AI.
 
-The extension reads the current tab only when you click its icon (`manual_click` mode); it never listens in the background. Conversations go only to the GitHub repository you configure, with no other server in between.
+The extension reads the current tab only when you click its icon (`manual_click` mode). The one exception is Gemini, which shows no message times: after first use, a small recorder runs on Gemini pages and notes times from data the page already loads, keeping it inside that tab (see "Original times"). Conversations go only to the GitHub repository you configure, with no other server in between.
 
 The extension's interface is in Traditional Chinese. Button and label names below are quoted in Chinese with an English gloss.
 
@@ -51,7 +51,7 @@ v0.8.0 brings **both parallel developments into one extension**: (1) preview-fir
 | Single capture | Open a conversation and click the icon. It scrolls through, expands collapsed long messages, and lets you untick messages you don't want |
 | Batch capture (Gemini) | Reads every conversation in Gemini's sidebar and captures them one by one into `inbox/`, skipping ones already captured |
 | Attachment originals | Downloads uploaded files and images and AI-generated images on all four platforms (v0.8.0; Gemini since v0.6.0) |
-| Original times (Gemini) | Recovers each message's original time |
+| Original times | Keeps each message's original time: ChatGPT, Claude, and Grok from the site's own data; Gemini recovered from the data its page loads (v0.6.0) |
 | Capture log | `inbox/index.jsonl` records every capture, so you know what has been captured and what has been tagged |
 | Tagging | Preview your questions first, then group into topics or mark key points, key segments, turns, and notes; saved as `outline.json` (v0.7.0; preview, also-related topics and review tools in v0.8.0) |
 | Conversation list | Sort and group captured conversations, preview their questions, track status, labels, and notes in `inbox/labels.json` (v0.8.0) |
@@ -63,7 +63,7 @@ v0.8.0 brings **both parallel developments into one extension**: (1) preview-fir
 
 | Item | Support |
 |---|---|
-| Platforms | ChatGPT, Claude, Gemini, Grok (`grok.com`; Grok inside X is not supported) (batch capture and recovered original times are Gemini-only for now) |
+| Platforms | ChatGPT, Claude, Gemini, Grok (`grok.com`; Grok inside X is not supported) (batch capture is Gemini-only for now) |
 | Extension interface | Traditional Chinese only, for now |
 | Conversation content | Any language. Text is copied as-is, never translated or rewritten |
 | Site interface language | Traditional Chinese, Simplified Chinese, English. The extension must recognize the site's "Show more" / "Show less" buttons to expand collapsed long messages, and Gemini batch capture must recognize the sidebar's "Show more". If the site is set to another language (e.g. Japanese): ChatGPT, Claude, and Grok are read from the site's own data first and are unaffected; on Gemini, or whenever scroll reading is used, collapsed long messages may stay collapsed and may not be detected — check message lengths after capturing |
@@ -72,10 +72,10 @@ v0.8.0 brings **both parallel developments into one extension**: (1) preview-fir
 
 ## Install (developer mode)
 
-1. Unzip to get the `after-thinking-capture` folder.
+1. Download this repository (on GitHub: 「Code」 → 「Download ZIP」) and unzip it. If someone gave you an `after-thinking-capture` zip instead, unzip that.
 2. Go to `chrome://extensions`.
 3. Turn on "Developer mode" (top right).
-4. Click "Load unpacked" and choose the `after-thinking-capture` folder.
+4. Click "Load unpacked" and choose the `apps/chrome-extension` folder (or the `after-thinking-capture` folder from the zip you were given).
 5. Optionally pin After-thinking Capture from the puzzle-piece icon in the toolbar.
 
 ## GitHub setup (first time)
@@ -327,7 +327,7 @@ ChatGPT replies can contain its own layout markup (`<box>`, `<row>`, `<text>`, `
 - Capture rules may break when the sites change and will need updating.
 - What's captured is the text shown on screen; Markdown formatting (bold, tables, etc.) becomes plain text.
 - Only the path currently shown is captured; other branches created by editing or regenerating are not.
-- ChatGPT and Claude times come from the site's data; when scroll reading is used, `timestamp` is null. For Gemini, see "Original times".
+- ChatGPT, Claude, and Grok times come from the site's data; when scroll reading is used, `timestamp` is null. For Gemini, see "Original times".
 - `metadata.yaml` has a new `capture` field; After-thinking's `docs/source-format.md` still needs to document it.
 - Re-capturing renumbers `message_id` by position, which `docs/source-format.md` does not allow for curated sources. Tags survive it through content fingerprints (see "What gets saved"), but analysis files that cite message IDs are not remapped.
 - Turn hints are exact word matches: they miss turns phrased differently and can match unrelated words (「不對稱」 contains 「不對」), which is why they only count once confirmed.
@@ -341,13 +341,13 @@ After-thinking Capture 是 [After-thinking](../../README.md) 的 Chrome 擴充�
 1. **擷取**：把 ChatGPT、Claude、Gemini 或 Grok 網頁上的對話完整抓下來，存成 After-thinking 的原文檔（`conversation.jsonl` 和 `metadata.yaml`），上傳到你自己的私人 GitHub 倉庫，或下載到電腦。
 2. **標記**：在交給 AI 分析之前，自己先決定這段對話的骨架：分主題，標出關鍵、關鍵段落、轉向和備註。結果存成 `outline.json`，After-thinking 的第一、二階段會照它分析，不再自己重新切分。對話太長時，可以先請你喜歡的 AI 標一版（`outline.ai.json`），你再檢查；每個標記都會記下是你標的還是 AI 標的。
 
-只有你按下擴充功能圖示時才會讀取目前這個分頁（「按圖示模式」，manual_click），不會在背景監聽。對話只會送到你自己設定的 GitHub 倉庫，不經過其他伺服器。
+只有你按下擴充功能圖示時才會讀取目前這個分頁（「按圖示模式」，manual_click）。唯一的例外是 Gemini：它畫面上沒有訊息時間，所以第一次使用後，Gemini 頁面上會有一個小記錄器，從頁面本來就會載入的資料裡記下時間，資料只留在那個分頁裡（見「原始時間」）。對話只會送到你自己設定的 GitHub 倉庫，不經過其他伺服器。
 
 ## v0.8.0：兩套功能完整整合
 
 v0.8.0 將**兩套平行開發成果合在同一個擴充功能**：（1）先預覽提問、AI 草稿審查、對話清單、處理狀態和標籤；（2）Grok 擷取與附件原檔保存。它們可以一起使用，不需要二選一。擴充功能不會自行執行 AT 六階段分析。
 
-**建議流程：** 擷取 → 從清單或直接打開標記頁 → 預覽提問 → 選「分成多個主題」、「一直在聊同一件事」或「這篇不用整理」 → 視需要匯入 AI 的 `outline.ai.json` → 審查並存為 `outline.json` → 再讓選用的 AI 按六階段規格分析。選擇不用整理，會把原因記在 `inbox/labels.json`，不建立標記檔。
+**建議流程：** 擷取 → 從清單或直接打開標記頁 → 預覽提問 → 選「聊了好幾件事」、「一直在聊同一件事」或「這篇不用整理」 → 視需要匯入 AI 的 `outline.ai.json` → 審查並存為 `outline.json` → 再讓選用的 AI 按六階段規格分析。選擇不用整理，會把原因記在 `inbox/labels.json`，不建立標記檔。
 
 **檔案分工：** `source/conversation.jsonl` 保存原文；`source/attachments/` 保存取回的附件；`outline.ai.json` 是待審草稿；`outline.json` 是保存的標記；`inbox/index.jsonl` 是擷取紀錄和提問預覽；`inbox/labels.json` 是處理狀態、標籤與備註，和正式分析分開。
 
@@ -381,7 +381,7 @@ v0.8.0 將**兩套平行開發成果合在同一個擴充功能**：（1）先�
 | 單段擷取 | 打開一段對話，按圖示。自動捲完、展開被摺疊的長訊息，可以取消勾選不要的訊息 |
 | 批量擷取（Gemini） | 讀 Gemini 側邊欄的所有對話，一段段抓進 `inbox/`，抓過的自動跳過 |
 | 附件原檔 | 四個平台都下載上傳的檔案、圖片和 AI 生成的圖（v0.8.0；Gemini 從 v0.6.0 開始） |
-| 原始時間（Gemini） | 補上每一則的原始時間 |
+| 原始時間 | 保存每一則的原始時間：ChatGPT、Claude、Grok 從網站本身的資料讀；Gemini 從頁面載入的資料裡補回來（v0.6.0） |
 | 擷取紀錄 | `inbox/index.jsonl` 記下每次擷取，知道哪些抓過、哪些已標記 |
 | 標記對話 | 先預覽你問過的問題，再分主題或標關鍵、關鍵段落、轉向、備註，存成 `outline.json`（v0.7.0；預覽、也相關的主題、檢查工具是 v0.8.0） |
 | 對話清單 | 排序、分組、預覽問題，記處理狀態、自訂標籤和備註（`inbox/labels.json`）（v0.8.0） |
@@ -393,7 +393,7 @@ v0.8.0 將**兩套平行開發成果合在同一個擴充功能**：（1）先�
 
 | 項目 | 支援 |
 |---|---|
-| 平台 | ChatGPT、Claude、Gemini、Grok（`grok.com`；X 裡面的 Grok 不支援）（批量擷取、補原始時間目前只有 Gemini） |
+| 平台 | ChatGPT、Claude、Gemini、Grok（`grok.com`；X 裡面的 Grok 不支援）（批量擷取目前只有 Gemini） |
 | 擴充功能的介面 | 繁體中文（目前只有這個） |
 | 對話內容 | 任何語言都可以，原文照抄，不翻譯也不改寫 |
 | 網站本身的介面語言 | 繁體中文、簡體中文、英文。擴充功能要認得網站上「顯示更多」「顯示較少」之類的按鈕，才能自動展開摺疊的長訊息，Gemini 批量擷取也要認得側邊欄的「顯示更多」。網站設成其他語言（例如日文）時：ChatGPT、Claude、Grok 優先直接讀網站資料，不受影響；但 Gemini，以及改用捲動讀取的時候，摺疊的長訊息可能沒展開、也不一定偵測得到，擷取後請檢查訊息長度 |
@@ -402,10 +402,10 @@ v0.8.0 將**兩套平行開發成果合在同一個擴充功能**：（1）先�
 
 ## 安裝（開發人員模式）
 
-1. 解壓縮，得到 `after-thinking-capture` 資料夾。
+1. 下載這個倉庫（GitHub 頁面上按「Code」→「Download ZIP」）並解壓縮。如果別人給你的是 `after-thinking-capture` 壓縮檔，就解壓縮那個。
 2. Chrome 網址列輸入 `chrome://extensions`。
 3. 打開右上角的「開發人員模式」。
-4. 按「載入未封裝項目」，選擇 `after-thinking-capture` 資料夾。
+4. 按「載入未封裝項目」，選擇 `apps/chrome-extension` 資料夾（或別人給你的壓縮檔裡的 `after-thinking-capture` 資料夾）。
 5. 建議按工具列的拼圖圖示，把 After-thinking Capture 釘選出來。
 
 ## 設定 GitHub（第一次使用）
@@ -623,7 +623,7 @@ ChatGPT 的回覆裡會夾著它自己的版面語法（`<box>`、`<row>`、`<te
 - 網站改版時，擷取規則可能失效，需要更新。
 - 抓到的是畫面上顯示的文字，Markdown 格式（例如粗體、表格）會變成純文字。
 - 只抓畫面上目前這條路線，編輯或重新生成造成的其他分支不會被擷取。
-- ChatGPT、Claude 從網站資料讀時間；改用捲動讀取時 `timestamp` 是 null。Gemini 見「原始時間」。
+- ChatGPT、Claude、Grok 從網站資料讀時間；改用捲動讀取時 `timestamp` 是 null。Gemini 見「原始時間」。
 - `metadata.yaml` 多了 `capture`（擷取資訊）欄位，After-thinking 的 `docs/source-format.md` 之後需要補上這個欄位的說明。
 - 重新擷取時 `message_id` 會照位置重新編號，這不符合 `docs/source-format.md` 對整理過原文的規定。標記能靠內容指紋對回去（見「存成什麼」），但已經寫好、引用了訊息編號的分析檔不會自動跟著改。
 - 轉向提示是精確比對字詞：換個說法就抓不到，也可能誤抓含有這些字的詞（「不對稱」裡有「不對」），所以要你確認才算數。

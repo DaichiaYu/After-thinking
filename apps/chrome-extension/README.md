@@ -13,6 +13,16 @@ The extension reads the current tab only when you click its icon (`manual_click`
 
 The extension's interface is in Traditional Chinese. Button and label names below are quoted in Chinese with an English gloss.
 
+## What's new in v0.8.1 — shorter AI-draft prompts
+
+The **AI draft** action still creates `outline.ai.json` for your review. v0.8.1 moves its detailed rules and JSON format out of the copied GitHub prompt and into one canonical guide, [`outline-ai-guide.md`](outline-ai-guide.md).
+
+- **AI with GitHub access**: 「複製指令」 copies only the repository, branch, discussion folder, source location, message count, source fingerprint, and a pointer to `guides/outline-ai.md` in **your destination/analysis repository**. The extension checks for that guide and writes or updates its managed version when needed. It will not replace a user-managed copy whose marker was removed. Wait for the guide-write confirmation (or check any error) before giving the prompt to your AI.
+- **Any AI that accepts a file**: 「下載給 AI 的檔案」 produces a single Markdown request with the same rules embedded and the entire numbered conversation. The separate suggested prompt stays short; import the returned `outline.ai.json` or paste its JSON.
+- **Unchanged**: `outline.ai.json` remains an AI suggestion, not the user's final `outline.json`. Format checks, fingerprint checks, user review, origin tracking and six-stage analysis boundaries still apply.
+
+The extension's bundled guide is the source of truth for drafting rules; avoid maintaining another copy of the full schema in README files.
+
 ## v0.8.0: the two workstreams together
 
 v0.8.0 brings **both parallel developments into one extension**: (1) preview-first tagging, AI-draft review, conversation list, statuses and labels; and (2) Grok capture and attachment-original recovery. These features are complementary, not alternative builds. The extension does not itself run After-thinking's six-stage analysis.
@@ -179,27 +189,7 @@ After applying, AI suggestions are shown with dashed borders and a 「建議 ·�
 
 When the AI writes a new `outline.ai.json` later, the panel shows 「有新的 AI 建議」 (new AI suggestion) and lists how it differs from the version you reviewed. Old versions stay in the repository's Git history. How analysis uses each origin is defined in After-thinking's [`docs/user-outline.md`](../../docs/user-outline.md).
 
-`outline.ai.json` format:
-
-```json
-{
-  "format": "after-thinking/outline-suggestion",
-  "format_version": 1,
-  "generated_at": "2026-11-05T07:00:00Z",
-  "generated_by": "model name",
-  "source_fingerprint": "copied from the instructions",
-  "message_count": 24,
-  "mode": "multi_topic",
-  "topics": [{ "id": "A", "name": "…", "note": "…", "spans": [{ "from": "msg-000001", "to": "msg-000012" }] }],
-  "single_topic": null,
-  "turns": [{ "message_id": "msg-000011", "reason": "…" }],
-  "key_points": [{ "message_id": "msg-000017", "reason": "…" }],
-  "key_ranges": [{ "from": "msg-000013", "to": "msg-000018", "reason": "…" }],
-  "uncertain": [{ "message_id": "msg-000013", "question": "…" }],
-  "alternatives": [{ "label": "…", "topics": [] }]
-}
-```
-
+For the complete `outline.ai.json` format and drafting rules, see the canonical [`outline-ai-guide.md`](outline-ai-guide.md). The extension uses it both to populate `guides/outline-ai.md` in your analysis repository and to build the downloadable request file. Do not copy the JSON example from older READMEs as a separate specification.
 Every message of yours must fall inside some topic's `spans`; an AI reply belongs with your previous message unless a span puts it elsewhere. Turns are placed on your message. Display numbers (`"013"`) are accepted as well as message IDs.
 
 ### What gets saved
@@ -343,6 +333,16 @@ After-thinking Capture 是 [After-thinking](../../README.md) 的 Chrome 擴充�
 2. **標記**：在交給 AI 分析之前，自己先決定這段對話的骨架：分主題，標出關鍵、關鍵段落、轉向和備註。結果存成 `outline.json`，After-thinking 的第一、二階段會照它分析，不再自己重新切分。對話太長時，可以先請你喜歡的 AI 標一版（`outline.ai.json`），你再檢查；每個標記都會記下是你標的還是 AI 標的。
 
 只有你按下擴充功能圖示時才會讀取目前這個分頁（「按圖示模式」，manual_click），不會在背景監聽。對話只會送到你自己設定的 GitHub 倉庫，不經過其他伺服器。
+
+## v0.8.1 新功能：簡化 AI 草稿指令
+
+這次更新保留原本的 `outline.ai.json` 草稿與人工審查流程，主要把**給 AI 的冗長規則移到獨立指引**，複製出來的提示詞只留下當次對話需要的資訊。兩種做法共用的原始規則在 [`outline-ai-guide.md`](outline-ai-guide.md)。
+
+- **AI 可以讀寫 GitHub**：按「複製指令」會取得倉庫、分支、對話資料夾、原文路徑、訊息數、原文指紋，以及「照 `guides/outline-ai.md` 做」的短指令。這份指引位於**你的資料／分析倉庫**，擴充功能會檢查是否需要建立或更新；自行刪掉管理標記的指引不會被覆蓋。請確認頁面顯示指引寫入成功（或確認沒有錯誤），再把指令交給 AI。
+- **AI 只能讀附檔**：按「下載給 AI 的檔案」，得到一份包含完整規則和逐則編號對話的 Markdown，再配一行短提示詞交給 AI。拿回 `outline.ai.json` 後可匯入或貼上 JSON。
+- **沒改變的部分**：AI 草稿不會直接取代你的 `outline.json`；格式與原文指紋檢查、標記審閱、來源紀錄，以及 AT 六階段分析的分工都照舊。
+
+完整版格式只維護在擴充功能的指引檔，避免 README 再複製一套、未來兩邊更新不同步。
 
 ## v0.8.0：兩套功能完整整合
 
@@ -510,7 +510,7 @@ v0.8.0 將**兩套平行開發成果合在同一個擴充功能**：（1）先�
 
 AI 之後又寫了新的 `outline.ai.json`，會顯示「有新的 AI 建議」，並列出和你處理過的那版差在哪。舊版本留在倉庫的 Git 歷史裡。分析時怎麼看待這幾種來源，寫在 After-thinking 的 [`docs/user-outline.md`](../../docs/user-outline.md)。
 
-`outline.ai.json` 的格式見上方英文版。你的每一則訊息都要落在某個主題的 `spans` 裡；AI 回覆預設跟著你的前一則，除非 spans 把它放到別的主題。轉向標在你的訊息上。除了 message_id，也接受顯示編號（`"013"`）。
+`outline.ai.json` 的完整欄位和範例統一以 [擴充功能內的 `outline-ai-guide.md`](outline-ai-guide.md) 為準，請不要沿用舊 README 複製出的 JSON 樣板。你的每一則訊息都要落在某個主題的 `spans` 裡；AI 回覆預設跟著前一則提問，除非 spans 另有歸類。轉向標在使用者的訊息上。除了 `message_id`，也接受顯示編號（`"013"`）。
 
 ### 存成什麼
 

@@ -96,6 +96,7 @@ After-thinking Capture extracts conversations from the web versions of ChatGPT, 
 
 - **How it works**: Open a conversation and click the extension icon. It can scroll through the conversation and expand collapsed long messages.
 - **Tagging and AI-assisted review (v0.8.0)**: Preview all your questions before choosing multiple topics, one topic, or “no need to organize.” Mark key messages or ranges, reasoning turns, cross-topic relevance, and notes. The tagging page itself does not call an AI; optionally import an AI draft (`outline.ai.json`), review it, then save `outline.json`. Stages 1–2 build on the saved outline ([`docs/user-outline.md`](docs/user-outline.md)).
+- **Short AI-draft prompts (v0.8.1)**: When an AI has GitHub access, the copied prompt only points it to this conversation and a full rule file, `guides/outline-ai.md`, created in **your analysis repository** by the extension. If you download the request instead, the same rules and the numbered conversation are included in one Markdown file. The canonical source for both is [`apps/chrome-extension/outline-ai-guide.md`](apps/chrome-extension/outline-ai-guide.md); this changes how the prompt is delivered, not the `outline.ai.json` format or the review process.
 - **Conversation list (v0.8.0)**: Search and preview captured discussions; sort by conversation, capture, or last-tagged time; record to-do/done/skip status, custom labels, and notes in `inbox/labels.json`.
 - **Grok (v0.8.0)**: Capture conversations at `grok.com`, including available original times and the selected conversation path. Grok inside X is not supported.
 - **Where it saves**: Upload to a GitHub repository you choose, or download the files only to your computer.
@@ -227,6 +228,7 @@ You can also find me on X: [@daisyyu0214](https://x.com/daisyyu0214).
 
 - **用法**：打開對話，按擴充功能圖示。會自動捲完整段對話、展開被摺疊的長訊息。
 - **標記與 AI 建議審查（v0.8.0）**：先預覽自己問過的問題，再選「分成多個主題」、「一直在聊同一件事」或「這篇不用整理」。可以標出關鍵訊息／段落、推理轉向、也跟其他主題相關的訊息與備註。標記頁本身不會呼叫 AI；也可以先請外部 AI 提供 `outline.ai.json` 草稿，逐項審查後存成 `outline.json`。第一、二階段會依保存的標記骨架分析（見 [`docs/user-outline.md`](docs/user-outline.md)）。
+- **精簡 AI 草稿指令（v0.8.1）**：AI 能讀寫 GitHub 時，複製的指令只提供這段對話的位置和必要辨識資料，完整規則由擴充功能寫入**你的分析資料倉庫** `guides/outline-ai.md`，供 AI 讀取；若用下載檔案方式，規則和編號後的完整對話會放在同一份 Markdown。兩種方式共用的原始規則在 [`apps/chrome-extension/outline-ai-guide.md`](apps/chrome-extension/outline-ai-guide.md)。這次改的是指令傳遞方式，沒有改變 `outline.ai.json` 格式或審查流程。
 - **對話清單（v0.8.0）**：搜尋、預覽擷取過的對話，依對話／擷取／最近標記時間排序，記錄未處理、已整理、不用整理、自訂標籤和備註，保存在 `inbox/labels.json`。
 - **Grok（v0.8.0）**：擷取 `grok.com` 對話、可取得的原始時間與目前選擇的對話路線；不支援 X 站內的 Grok。
 - **存到哪**：上傳到你自己的 GitHub 倉庫，或只下載到電腦。

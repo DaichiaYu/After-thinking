@@ -59,6 +59,8 @@ Fingerprint: the string `speaker + "\n" + content`, measured in UTF-16 code unit
 
 Produced by an AI on the author's request, either written directly into the workspace by an AI with repository access or returned as a file and imported. The extension validates it (format, unknown message IDs, coverage of author messages, source fingerprint) before showing it as suggestions. Its format is defined by the extension (`apps/chrome-extension/README.md`). Git history keeps earlier versions; `outline.json.ai_suggestion` records which version the author reviewed (`content_fingerprint`) and a compact snapshot of it.
 
+Since Capture v0.8.1, the short prompt given to an AI with GitHub access points to `guides/outline-ai.md` in the user's **analysis repository**, which the extension manages. The corresponding source for these drafting rules in this method repository is [`apps/chrome-extension/outline-ai-guide.md`](../apps/chrome-extension/outline-ai-guide.md). For the download-first route, the extension embeds the same rules and the numbered conversation into the request Markdown. This is only a change to prompt packaging, not to the Stage inputs or the status of an AI suggestion.
+
 Analysis must not read `outline.ai.json` as author judgment, and must not prefer it over `outline.json`.
 
 ---
@@ -79,4 +81,5 @@ Analysis must not read `outline.ai.json` as author judgment, and must not prefer
 - **第一階段**：關鍵和備註只用來找證據，不能當成作者的起點立場；沒標主題不代表不在範圍內。
 - **第二階段**：主題切分照骨架走，可以補結構，但不能自己合併、拆開、搬動主題，有不同看法要提出來問。確認過的轉向都要有轉向紀錄（`R`），不成立的要說明理由；`turn_hints` 只是線索。確認流程照舊，但重點放在 AI 補上的內容。
 - **原文變過時**：先比對內容指紋，用指紋或平台訊息編號對回去，對不上的要問，不能只照編號或位置用。
+- **v0.8.1 的精簡指令**：能讀寫 GitHub 的 AI 先讀使用者資料倉庫的 `guides/outline-ai.md`（由擴充功能管理），下載檔方式則在 Markdown 內附上同一份規則與完整對話。原始規則見 [`apps/chrome-extension/outline-ai-guide.md`](../apps/chrome-extension/outline-ai-guide.md)。這只改變提示詞如何交付，不改六階段的正式輸入規則。
 - **`outline.ai.json`** 是 AI 的建議，只給作者審閱用，分析時不讀，也不能優先於 `outline.json`。

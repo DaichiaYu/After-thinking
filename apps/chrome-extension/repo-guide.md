@@ -42,6 +42,10 @@ Grok／四平台附件原檔、問題預覽、使用者標記、AI 建議審查�
 
 先透過 `inbox/index.jsonl` 找對話資料夾，再查 `inbox/labels.json`（若有）瞭解使用者是否選擇不用整理。有 `outline.json` 時，它才是分析階段採用的使用者標記骨架；`outline.ai.json` 僅供標記頁審查，不能直接視為使用者判斷。附件原檔位於 `source/attachments/`，標記為 `missing` 的原檔在擷取時未能取得。
 
+## v0.8.1：精簡 AI 草稿指令
+
+使用者從標記頁按「複製指令」時，指令只包含此次對話的 GitHub 倉庫／分支／資料夾、原文路徑、訊息數與 `source_fingerprint`。如果 AI 能讀寫這個倉庫，應先讀這裡的 `guides/outline-ai.md`（由擴充功能建立的完整規則與 JSON 格式），再讀對話原文；**只寫回該段對話的 `outline.ai.json`**，不可改動 `outline.json` 或 `source/`。使用者若走下載檔案方式，完整規則會直接包在下載的 Markdown 裡。AI 草稿仍需經使用者在標記頁審查，不能直接視為分析輸入。
+
 ## inbox/index.jsonl（擷取紀錄）
 
 每行一個 JSON：

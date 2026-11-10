@@ -80,7 +80,7 @@
       <div class="ai-ways">
         <section id="ai-way-b" class="ai-way">
           <h3>讓 AI 直接寫進倉庫</h3>
-          <p class="hint">適合能讀寫 GitHub 的 AI，例如 Claude Code、Codex、有接 GitHub 的 Claude。它只會寫一個 <code>outline.ai.json</code>，不會動你的標記和原文。</p>
+          <p class="hint">適合能讀寫 GitHub 的 AI，例如 Claude Code、Codex、有接 GitHub 的 Claude。「複製指令」只給對話位置與原文指紋；完整規則會檢查並寫入你資料倉庫的 <code>guides/outline-ai.md</code>。確認寫入狀態後再貼給 AI，讓它只產生 <code>outline.ai.json</code>，不要改你的標記和原文。</p>
           <div class="row wrap-row">
             <button id="ai-copy-b">複製指令</button>
             <button id="ai-reload" class="secondary">AI 寫好了，重新讀取</button>
@@ -89,7 +89,7 @@
         <section class="ai-way">
           <h3>下載檔案給任何 AI</h3>
           <ol class="hint steps">
-            <li>下載檔案（說明和編號好的完整對話）。</li>
+            <li>下載檔案（包含完整標記規則和編號好的對話，無須另外找指引）。</li>
             <li>把檔案和下面這句話一起丟給 AI。</li>
             <li>把 AI 給的 <code>outline.ai.json</code> 匯入。</li>
           </ol>

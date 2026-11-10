@@ -13,6 +13,16 @@ The extension reads the current tab only when you click its icon (`manual_click`
 
 The extension's interface is in Traditional Chinese. Button and label names below are quoted in Chinese with an English gloss.
 
+## v0.8.0: the two workstreams together
+
+v0.8.0 brings **both parallel developments into one extension**: (1) preview-first tagging, AI-draft review, conversation list, statuses and labels; and (2) Grok capture and attachment-original recovery. These features are complementary, not alternative builds. The extension does not itself run After-thinking's six-stage analysis.
+
+**Recommended workflow:** Capture → open the conversation list or tagging page → preview the questions → choose multiple topics, one topic, or skip → optionally import AI suggestions in `outline.ai.json` → review and save `outline.json` → let your chosen AI analyze the saved conversation using the six-stage method. Skipping stores a reason in `inbox/labels.json` without creating an outline.
+
+**File roles:** `source/conversation.jsonl` is captured source; `source/attachments/` holds successfully recovered originals; `outline.ai.json` is a draft for review only; `outline.json` is the saved tagging structure; `inbox/index.jsonl` tracks captures and previews; `inbox/labels.json` tracks status, labels and notes independently of analysis.
+
+**Limits:** Only Gemini supports batch capture; X-embedded Grok is unsupported; attachments can be missing due to inaccessible site data or the per-file 20 MB limit. These features still require in-browser testing with real site data.
+
 ## What's new in v0.8.0
 
 - **Attachment originals on all four platforms**: files and images in ChatGPT, Claude, and Grok conversations are now downloaded into `source/attachments/` like Gemini's, instead of leaving only a marker. [Details](#files-and-images-v080-all-platforms)
@@ -332,6 +342,16 @@ After-thinking Capture 是 [After-thinking](../../README.md) 的 Chrome 擴充�
 2. **標記**：在交給 AI 分析之前，自己先決定這段對話的骨架：分主題，標出關鍵、關鍵段落、轉向和備註。結果存成 `outline.json`，After-thinking 的第一、二階段會照它分析，不再自己重新切分。對話太長時，可以先請你喜歡的 AI 標一版（`outline.ai.json`），你再檢查；每個標記都會記下是你標的還是 AI 標的。
 
 只有你按下擴充功能圖示時才會讀取目前這個分頁（「按圖示模式」，manual_click），不會在背景監聽。對話只會送到你自己設定的 GitHub 倉庫，不經過其他伺服器。
+
+## v0.8.0：兩套功能完整整合
+
+v0.8.0 將**兩套平行開發成果合在同一個擴充功能**：（1）先預覽提問、AI 草稿審查、對話清單、處理狀態和標籤；（2）Grok 擷取與附件原檔保存。它們可以一起使用，不需要二選一。擴充功能不會自行執行 AT 六階段分析。
+
+**建議流程：** 擷取 → 從清單或直接打開標記頁 → 預覽提問 → 選「分成多個主題」、「一直在聊同一件事」或「這篇不用整理」 → 視需要匯入 AI 的 `outline.ai.json` → 審查並存為 `outline.json` → 再讓選用的 AI 按六階段規格分析。選擇不用整理，會把原因記在 `inbox/labels.json`，不建立標記檔。
+
+**檔案分工：** `source/conversation.jsonl` 保存原文；`source/attachments/` 保存取回的附件；`outline.ai.json` 是待審草稿；`outline.json` 是保存的標記；`inbox/index.jsonl` 是擷取紀錄和提問預覽；`inbox/labels.json` 是處理狀態、標籤與備註，和正式分析分開。
+
+**限制：** 目前只有 Gemini 支援批量擷取，X 站內的 Grok 不支援。部分附件會因網站資料不可讀或單檔 20 MB 限制而無法保存；仍需要在 Chrome 以實際對話測試功能。
 
 ## v0.8.0 新功能
 

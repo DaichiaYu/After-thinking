@@ -1,4 +1,4 @@
-# After-thinking Capture v0.8.0
+# After-thinking Capture v0.8.1
 
 > **Capture ChatGPT, Claude, Gemini, and Grok conversations as After-thinking source files, then tag them yourself before any AI analysis.**
 
@@ -164,7 +164,7 @@ Without GitHub, use 「從電腦開啟 conversation.jsonl」 (open conversation.
 
 For long conversations you don't want to read from the top, ask an AI of your choice to tag a first draft, then review it here. The AI's suggestion is saved as `outline.ai.json` and never written into `outline.json` directly. The 「請 AI 先標一版」 (let an AI draft first) panel at the top of the tagging page offers two ways:
 
-- **Let the AI write into the repository** (for AIs that can read and write GitHub, such as Claude Code, Codex, or Claude with GitHub connected): click 「複製指令」 (copy instructions) and paste them to the AI. The instructions name the repository, branch, folder and format, and allow it to write only `<folder>/outline.ai.json`. When it's done, click 「AI 寫好了，重新讀取」 (the AI is done, reload). The page also reads the latest `outline.ai.json` every time it opens.
+- **Let the AI write into the repository** (for AIs that can read and write GitHub, such as Claude Code, Codex, or Claude with GitHub connected): click 「複製指令」 (copy instructions) and paste them to the AI. The copied prompt is only a few lines — repository, branch, folder, source path, message count and source fingerprint — and tells the AI to follow `guides/outline-ai.md` in your repository, which holds the full rules and format and allows it to write only `<folder>/outline.ai.json`. The extension writes that guide into your repository (and keeps it updated) the first time you copy the instructions. If you delete its first-line marker to write your own, it is never overwritten. When it's done, click 「AI 寫好了，重新讀取」 (the AI is done, reload). The page also reads the latest `outline.ai.json` every time it opens.
 - **Download a file for any AI**: click 「下載給 AI 的檔案」 (download file for AI) to get a Markdown file with the instructions and the full numbered conversation, and give it to any AI together with the suggested one-line prompt. Then import the `outline.ai.json` it returns with 「匯入 AI 給的檔案」 (import file), or paste its reply. You can also select `outline.ai.json` together with `conversation.jsonl` on the list page.
 
 Before showing anything, the page checks the suggestion: format, message IDs that don't exist, your messages the AI left out of every topic, and whether the AI saw the same version of the conversation (source fingerprint). Problems are listed, with 「複製給 AI 的修正指令」 (copy fix instructions) to send back to the same AI. If the source doesn't match, the suggestion can only be applied with an explicit warning.
@@ -291,6 +291,7 @@ On the first upload, an `AGENTS.md` (folder map, file formats, how to find thing
 
 - The file is updated together with the extension when the guide changes.
 - To write your own, delete the marker on the first line of `AGENTS.md` and it will never be overwritten. An existing `CLAUDE.md` is never touched.
+- `guides/outline-ai.md` holds the full rules for an AI drafting tags (see "Let an AI draft the tags first"), so the prompt you paste can stay short. It follows the same marker rule.
 
 Conversations in `inbox/` are not yet After-thinking discussion workspaces (no `state.yaml`). After sorting, move the ones you want to analyze into `discussions/`.
 
@@ -494,7 +495,7 @@ v0.8.0 將**兩套平行開發成果合在同一個擴充功能**：（1）先�
 
 對話太長、不想從頭看時，可以請你喜歡的 AI 先標一版，再到這裡檢查。AI 的建議存成 `outline.ai.json`，不會直接寫進 `outline.json`。標記頁上方的「請 AI 先標一版」有兩種做法：
 
-- **讓 AI 直接寫進倉庫**（能讀寫 GitHub 的 AI，例如 Claude Code、Codex、有接 GitHub 的 Claude）：按「複製指令」貼給 AI。指令裡寫好倉庫、分支、資料夾和格式，而且只准它寫 `<資料夾>/outline.ai.json`。它寫好後按「AI 寫好了，重新讀取」。之後每次打開標記頁，也都會讀最新的 `outline.ai.json`。
+- **讓 AI 直接寫進倉庫**（能讀寫 GitHub 的 AI，例如 Claude Code、Codex、有接 GitHub 的 Claude）：按「複製指令」貼給 AI。複製的提示詞只有幾行：倉庫、分支、資料夾、原文位置、訊息數和原文指紋，再請 AI「照倉庫裡的 `guides/outline-ai.md` 做」。完整的規則和格式都在那份指引裡，也規定 AI 只能寫 `<資料夾>/outline.ai.json`。第一次按「複製指令」時，擴充功能會自動把這份指引寫進你的倉庫，之後也會跟著更新；刪掉它第一行的標記、改成自己的版本，就不會再被覆蓋。它寫好後按「AI 寫好了，重新讀取」。之後每次打開標記頁，也都會讀最新的 `outline.ai.json`。
 - **下載檔案給任何 AI**：按「下載給 AI 的檔案」，得到一個包含說明和編號好完整對話的 Markdown 檔，連同建議的那句提示詞一起丟給 AI。再用「匯入 AI 給的檔案」匯入它給的 `outline.ai.json`，或貼上它的回覆。也可以在清單頁和 `conversation.jsonl` 一起選。
 
 顯示之前會先檢查：格式、原文裡沒有的編號、你有哪些訊息 AI 沒分到主題、AI 看的是不是同一版原文（原文指紋）。有問題會列出來，並提供「複製給 AI 的修正指令」，貼回同一個 AI。原文對不上時，只能在明確警告下套用。
@@ -587,6 +588,7 @@ Gemini 畫面上不顯示時間。擴充功能會在 Gemini 頁面載入時「�
 
 - 擴充功能更新指引內容時會一起更新這個檔案。
 - 想自己改寫的話，刪掉 `AGENTS.md` 第一行的標記，之後就不會被覆蓋。已經存在的 `CLAUDE.md` 不會被動到。
+- `guides/outline-ai.md` 是請 AI 先標一版時的完整規則（見「請 AI 先標一版」），所以你貼給 AI 的提示詞可以很短。一樣是刪掉第一行標記就不會被覆蓋。
 
 inbox 裡的對話還不是 After-thinking 的討論工作區（沒有 `state.yaml`），分類後挑出要分析的，再移到 `discussions/`。
 

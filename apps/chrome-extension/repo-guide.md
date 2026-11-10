@@ -9,6 +9,8 @@
 
 ```
 AGENTS.md                      這份地圖
+guides/
+  outline-ai.md                請 AI 先標一版時，outline.ai.json 的寫法（擴充功能自動產生）
 inbox/
   index.jsonl                  擷取紀錄：每擷取一次一行（從這裡開始找）
   labels.json                  使用者的整理狀態：未處理／已整理／不用整理、自訂標籤、備註（有設定才會有）
@@ -96,7 +98,7 @@ Grok／四平台附件原檔、問題預覽、使用者標記、AI 建議審查�
 
 AI 依使用者的要求先標的一版，格式是 `after-thinking/outline-suggestion`。**這只是給使用者審閱的建議，不是使用者的判斷**：分析時不要讀它當依據，也不能優先於 `outline.json`。使用者在擴充功能裡接受、修改或刪掉之後，結果才寫進 `outline.json`。
 
-如果使用者請你（AI）寫這個檔案：只寫 `<資料夾>/outline.ai.json`，不要動 `outline.json` 和 `source/`；照擴充功能給的指令和格式寫，`source_fingerprint` 照抄指令裡的值。分析時怎麼用 `outline.json`，見 After-thinking 倉庫的 `docs/user-outline.md`。
+如果使用者請你（AI）寫這個檔案：照 `guides/outline-ai.md` 做，只寫 `<資料夾>/outline.ai.json`，不要動 `outline.json` 和 `source/`；`source_fingerprint` 照抄使用者給的值。分析時怎麼用 `outline.json`，見 After-thinking 倉庫的 `docs/user-outline.md`。
 - `source.fingerprint`、`source.message_fingerprints`：做標記時原文的內容指紋（`[message_id, 指紋]`，有平台訊息編號時是 `[message_id, 指紋, platform_message_id]`，照順序）。內容對不上、但 `platform_message_id` 對得上的，是同一則訊息被重新整理過（例如清掉 ChatGPT 的版面語法），請使用者確認。重新擷取時 `message_id` 會照位置重編，同一個編號可能換成別的內容。讀標記前先比對：`source.fingerprint` 和目前原文算出來的不同時，代表原文變過，標記要用指紋對回去，對不上的先跟使用者確認，不要直接照編號用。
   - 指紋算法：字串 `說話者 + "\n" + 內容`，以 **UTF-16 編碼單位**（JavaScript 字串的 `length` 和 `charCodeAt`）計算。對每個單位做 FNV-1a 32 位元雜湊（起始值 `0x811c9dc5`，先 XOR 再乘 `0x01000193`，取 32 位元），寫成「單位數的 36 進位-8 位小寫十六進位」，例如 `40-56c897f4`。
   - 注意：不是 Python 的 `len()`。emoji 等字在 UTF-16 是 2 個單位，用字元數算會對不上。Python 要先 `s.encode("utf-16-le")`，每 2 bytes 當一個單位。

@@ -19,83 +19,40 @@ const AI = {
 
 // ── 給 AI 的說明 ──
 
-function aiFormatExample() {
-  return JSON.stringify({
-    format: AI_FORMAT,
-    format_version: AI_FORMAT_VERSION,
-    generated_at: "2026-11-05T07:00:00Z",
-    generated_by: "（你的模型名稱）",
-    source_fingerprint: sourceFingerprint(),
-    message_count: msgs.length,
-    mode: "multi_topic",
-    topics: [
-      { id: "A", name: "主題名稱", note: "一句話說明這個主題在談什麼", spans: [{ from: msgs[0].id, to: msgs[Math.min(3, msgs.length - 1)].id }] },
-      { id: "B", name: "……", note: "……", spans: [{ from: "msg-……", to: "msg-……" }, { from: "msg-……", to: "msg-……" }] }
-    ],
-    single_topic: null,
-    turns: [{ message_id: "msg-……", reason: "從什麼轉到什麼，根據是哪句話" }],
-    key_points: [{ message_id: "msg-……", reason: "為什麼重要" }],
-    key_ranges: [{ from: "msg-……", to: "msg-……", reason: "為什麼這一整段是核心" }],
-    uncertain: [{ message_id: "msg-……", question: "拿不定主意的地方，想問使用者什麼" }],
-    alternatives: [{ label: "另一種分法的名稱", topics: ["（和上面 topics 同樣的格式）"] }]
-  }, null, 2);
-}
+// 給 AI 的完整規則和格式在 outline-ai-guide.md（倉庫裡的 guides/outline-ai.md 和下載檔共用同一份）
 
-function aiRules() {
-  const nUser = msgs.filter((m) => m.speaker !== "assistant").length;
-  return [
-    "要做的事：",
-    "1. 把整份對話從頭讀到尾，不要只讀開頭。共 " + msgs.length + " 則，其中我的訊息 " + nUser + " 則（speaker 是 author 的是我，assistant 是 AI）。",
-    "2. 判斷這段對話是「聊了好幾件事」（mode: multi_topic）還是「一直在聊同一件事」（mode: single_topic）。",
-    "3. multi_topic：把對話分成主題。每個主題用 spans 標出涵蓋的訊息（from、to 都填 message_id，包含頭尾）；同一個主題中間被別的話題打斷又回來，就寫好幾段 spans。",
-    "   - 我的每一則訊息都必須落在某個主題的 spans 裡，一則都不能漏。",
-    "   - AI 的回覆預設和它前面那則我的訊息同一個主題；某則 AI 回覆其實在講別的主題時，讓它落在那個主題的 spans 裡。",
-    "   single_topic：topics 留空陣列，single_topic 填 { \"name\": \"…\", \"note\": \"…\" }。",
-    "4. turns：我改變想法、方向、範圍或做法的地方。message_id 填我的那一則（不是 AI 的回覆）；reason 寫從什麼轉到什麼、根據哪句話。",
-    "5. key_points（單則）和 key_ranges（一整段都是核心）：少而準，不要每則都標。AI 說的內容也可以標，填 AI 那則的 message_id。",
-    "6. 拿不定主意的地方寫進 uncertain；兩種切法都合理時，另一種放進 alternatives。",
-    "7. 主題名稱、說明、理由用這段對話的語言寫，簡短。理由要能在原文裡找到根據，不要推測我沒說出口的動機。",
-    "8. source_fingerprint 照抄：" + sourceFingerprint() + "　message_count 照抄：" + msgs.length,
-    "9. 只用下面這些欄位，不要加別的。不確定的欄位可以給空陣列。"
-  ].join("\n");
-}
-
-// 做法 B：給能讀寫 GitHub 的 AI
+// 做法 B：給能讀寫 GitHub 的 AI。完整規則放在倉庫的 guides/outline-ai.md，這裡只寫這段對話的資料
 function instructionsForRepo() {
+  const nUser = msgs.filter((m) => m.speaker !== "assistant").length;
   return [
     "請幫我先標記一段 AI 對話，結果寫成一個 JSON 檔案放進 GitHub 倉庫。",
     "",
     "倉庫：" + config.repo + "（分支 " + branch + "）",
     "資料夾：" + ctx.folder,
     "原文：" + ctx.folder + "source/conversation.jsonl（一行一則訊息，照 order 排序）",
-    "",
-    aiRules(),
-    "",
-    "寫入規則：",
-    "- 只能新增或覆寫 " + ctx.folder + AI_FILE + " 這一個檔案，直接提交到 " + branch + " 分支。",
-    "- 其他檔案一律不要動，特別是 " + ctx.folder + "outline.json（那是我自己的判斷）和 source/ 底下的原文。",
-    "- 寫完告訴我一聲，我會在擴充功能裡打開來看。",
-    "",
-    "格式（outline.ai.json）：",
-    aiFormatExample()
+    "要做的事：照倉庫裡的 " + OUTLINE_AI_GUIDE_PATH + " 做。這段共 " + msgs.length + " 則（我的 " + nUser + " 則），source_fingerprint 照抄：" + sourceFingerprint()
   ].join("\n");
 }
 
-// 做法 A：下載給任何 AI 的檔案（說明＋編號好的完整對話）
-function requestFileContent() {
+// 複製指令前，確認倉庫裡的指引是最新的；沒有或太舊就先寫進去（AI 要讀得到）
+async function ensureOutlineAiGuide() {
+  const files = await repoGuideFiles(config, branch);
+  if (!files.some((f) => f.path === OUTLINE_AI_GUIDE_PATH)) return false;
+  await commitFiles(config, branch, files, "After-thinking: add " + OUTLINE_AI_GUIDE_PATH);
+  return true;
+}
+
+// 做法 A：下載給任何 AI 的檔案（說明＋編號好的完整對話）。說明和倉庫裡的指引是同一份，只拿掉跟倉庫有關的段落
+async function requestFileContent() {
+  const nUser = msgs.filter((m) => m.speaker !== "assistant").length;
   const lines = [
-    "# 請幫我標記這段對話",
-    "",
     "這個檔案前半是說明，後半是完整的對話原文。看完後請只輸出一個 outline.ai.json：",
     "放在一個 ```json 程式碼區塊裡，或直接給我一個名為 outline.ai.json 的檔案。",
     "",
-    aiRules(),
+    "這段對話共 " + msgs.length + " 則，其中我的訊息 " + nUser + " 則（speaker 是 author 的是我，assistant 是 AI）。",
+    "source_fingerprint 照抄：" + sourceFingerprint() + "　message_count 照抄：" + msgs.length,
     "",
-    "## 格式（outline.ai.json）",
-    "",
-    "```json",
-    aiFormatExample(),
-    "```",
+    await outlineAiGuideText(false),
     "",
     "## 對話原文",
     "",
@@ -575,10 +532,18 @@ function slug() {
 
 // ── 事件 ──
 
-$("ai-copy-b").addEventListener("click", () => copyText(instructionsForRepo(), "已複製。貼給能讀寫 GitHub 的 AI，它寫好後按「重新讀取 AI 建議」。"));
+$("ai-copy-b").addEventListener("click", async () => {
+  // 先複製（剪貼簿要在按下的當下寫），再確認倉庫裡有完整指引
+  await copyText(instructionsForRepo(), "已複製。貼給能讀寫 GitHub 的 AI，它寫好後按「AI 寫好了，重新讀取」。");
+  try {
+    if (await ensureOutlineAiGuide()) showStatus("已複製指令，並把完整說明寫進倉庫的 " + OUTLINE_AI_GUIDE_PATH + "。貼給 AI 就可以了。");
+  } catch (e) {
+    showStatus("已複製指令，但倉庫裡的 " + OUTLINE_AI_GUIDE_PATH + " 寫不進去：" + e.message + "。AI 可能讀不到完整說明，可以改用下載檔案的做法。", true, true);
+  }
+});
 $("ai-reload").addEventListener("click", () => loadAiFromRepo(false));
-$("ai-download").addEventListener("click", () => {
-  downloadText("at-outline-request-" + slug() + ".md", requestFileContent());
+$("ai-download").addEventListener("click", async () => {
+  downloadText("at-outline-request-" + slug() + ".md", await requestFileContent());
   showStatus("已下載。把檔案和下面那句話一起丟給 AI，再把它給的 outline.ai.json 匯入。");
 });
 $("ai-copy-a").addEventListener("click", () => copyText(SUGGESTED_PROMPT, "已複製建議的提示詞"));

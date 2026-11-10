@@ -28,7 +28,7 @@ async function captureViaApi(platform) {
     if (!res.ok) return null;
     return res.json();
   };
-  // 附件和圖片不下載，只在內容裡留下記號，並另外記在 attachments 欄位
+  // 此階段先保留附件線索；finalizeCapture 後續嘗試下載原檔，取不到會記錄失敗原因
   const marker = (a) => a.kind === "generated_image" ? "[AI 生成的圖片]"
     : a.kind === "image" ? "[圖片" + (a.name ? "：" + a.name : "") + "]"
     : "[附件：" + (a.name || "未知檔名") + "]";
@@ -529,7 +529,7 @@ async function captureConversation(platform) {
     return text;
   }
 
-  // 附件和圖片不下載，只在內容裡留下記號，並另外記在 attachments 欄位
+  // 此階段先保留附件線索；finalizeCapture 後續嘗試下載原檔，取不到會記錄失敗原因
   const marker = (a) => a.kind === "generated_image" ? "[AI 生成的圖片]"
     : a.kind === "image" ? "[圖片" + (a.name ? "：" + a.name : "") + "]"
     : "[附件：" + (a.name || "未知檔名") + "]";

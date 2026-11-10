@@ -34,6 +34,12 @@ inbox/
 - `inbox/` 是還沒整理的原始擷取；`{{ROOT}}` 是挑出來正式分析的。同一段對話可能兩邊都有。
 - 舊版擷取的對話直接放在 `inbox/gemini-<編號>/`，沒有月份資料夾；以 `index.jsonl` 的 `folder` 欄位為準。
 
+## v0.8.0 功能整合與檔案分工
+
+Grok／四平台附件原檔、問題預覽、使用者標記、AI 建議審查、對話清單與標籤都已整合進同一版本。此倉庫存放擷取結果及分析前標記，不表示已完成 AT 六階段分析。
+
+先透過 `inbox/index.jsonl` 找對話資料夾，再查 `inbox/labels.json`（若有）瞭解使用者是否選擇不用整理。有 `outline.json` 時，它才是分析階段採用的使用者標記骨架；`outline.ai.json` 僅供標記頁審查，不能直接視為使用者判斷。附件原檔位於 `source/attachments/`，標記為 `missing` 的原檔在擷取時未能取得。
+
 ## inbox/index.jsonl（擷取紀錄）
 
 每行一個 JSON：

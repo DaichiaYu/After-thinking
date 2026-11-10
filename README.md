@@ -95,9 +95,11 @@ When a single captured conversation is uploaded through the extension, it can au
 After-thinking Capture extracts conversations from the web versions of ChatGPT, Claude, Gemini, and Grok and saves them in the source format expected by After-thinking.
 
 - **How it works**: Open a conversation and click the extension icon. It can scroll through the conversation and expand collapsed long messages.
-- **Manual tagging (v0.7.0)**: After capture, open the tagging page to group topics, mark key messages or segments, identify important turns, and add notes before AI analysis. Tags are saved in `outline.json`; the tagging page itself never calls an AI. For long conversations, you can optionally ask an AI of your choice to draft the tags first (`outline.ai.json`) and review them on the same page: untouched suggestions count as agreed but stay marked as AI-generated. Stages 1–2 then follow your tags instead of re-segmenting the conversation ([`docs/user-outline.md`](docs/user-outline.md)).
+- **Tagging and AI-assisted review (v0.8.0)**: Preview all your questions before choosing multiple topics, one topic, or “no need to organize.” Mark key messages or ranges, reasoning turns, cross-topic relevance, and notes. The tagging page itself does not call an AI; optionally import an AI draft (`outline.ai.json`), review it, then save `outline.json`. Stages 1–2 build on the saved outline ([`docs/user-outline.md`](docs/user-outline.md)).
+- **Conversation list (v0.8.0)**: Search and preview captured discussions; sort by conversation, capture, or last-tagged time; record to-do/done/skip status, custom labels, and notes in `inbox/labels.json`.
+- **Grok (v0.8.0)**: Capture conversations at `grok.com`, including available original times and the selected conversation path. Grok inside X is not supported.
 - **Where it saves**: Upload to a GitHub repository you choose, or download the files only to your computer.
-- **Attachments**: Uploaded files, images, and AI-generated images are saved as originals on all four platforms where the site provides them.
+- **Attachments (v0.8.0)**: All four platforms attempt to save uploaded files, images, and AI-generated images to `source/attachments/`. Files that cannot be recovered are explicitly marked; recovery is not guaranteed.
 - **Gemini**: Multiple conversations can be captured in a batch.
 - **Installation**: It is currently loaded manually through Chrome Developer Mode and is not yet published in the Chrome Web Store.
 
@@ -224,9 +226,11 @@ You can also find me on X: [@daisyyu0214](https://x.com/daisyyu0214).
 從 ChatGPT、Claude、Gemini、Grok 網頁版擷取對話，存成 After-thinking 需要的原始檔。
 
 - **用法**：打開對話，按擴充功能圖示。會自動捲完整段對話、展開被摺疊的長訊息。
-- **手動標記（v0.7.0）**：擷取後可以開啟標記頁面，自行分主題、標出關鍵訊息或段落、重要轉折，並加上備註。標記會存成 `outline.json`，標記頁本身不會呼叫 AI。對話太長時，也可以先請你喜歡的 AI 標一版（`outline.ai.json`），再到同一頁檢查：沒改的建議當作同意，但會保留「這是 AI 標的」紀錄。之後第一、二階段會照你的標記分析，不再自己重新切分（見 [`docs/user-outline.md`](docs/user-outline.md)）。
+- **標記與 AI 建議審查（v0.8.0）**：先預覽自己問過的問題，再選「分成多個主題」、「一直在聊同一件事」或「這篇不用整理」。可以標出關鍵訊息／段落、推理轉向、也跟其他主題相關的訊息與備註。標記頁本身不會呼叫 AI；也可以先請外部 AI 提供 `outline.ai.json` 草稿，逐項審查後存成 `outline.json`。第一、二階段會依保存的標記骨架分析（見 [`docs/user-outline.md`](docs/user-outline.md)）。
+- **對話清單（v0.8.0）**：搜尋、預覽擷取過的對話，依對話／擷取／最近標記時間排序，記錄未處理、已整理、不用整理、自訂標籤和備註，保存在 `inbox/labels.json`。
+- **Grok（v0.8.0）**：擷取 `grok.com` 對話、可取得的原始時間與目前選擇的對話路線；不支援 X 站內的 Grok。
 - **存到哪**：上傳到你自己的 GitHub 倉庫，或只下載到電腦。
-- **附件**：四個平台都會保存對話裡上傳的檔案、圖片和 AI 生成圖的原檔（網站有提供的話）。
+- **附件（v0.8.0）**：四個平台都會嘗試把上傳的檔案、圖片和 AI 生成圖保存在 `source/attachments/`；讀不到的原檔會留下明確標記，不能保證每份附件都能取得。
 - **Gemini**：可以一次批量擷取多段對話。
 - **安裝**：目前用 Chrome 的開發人員模式手動載入，還沒上架 Chrome 線上應用程式商店。
 

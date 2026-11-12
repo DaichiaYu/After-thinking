@@ -92,6 +92,7 @@ Capture v0.9.0 adds a three-column desktop tagging workspace. Topic assignment c
 `section_key_points[]` (v6) records the author's judgment that **a Markdown section within an assistant message** is important, without declaring the entire reply a key point. Each entry contains:
 
 - `message_id` — assistant message in `source/conversation.jsonl`
+- `message_fingerprint` — fingerprint of the complete original assistant message, needed to safely disambiguate identical repeated sections
 - `heading`, `level` — title and ATX Markdown heading depth (`#` through `######`)
 - `heading_start`, `section_end` — UTF-16 offsets into the captured `content`, for display and locating the section
 - `section_fingerprint` — FNV-1a fingerprint of `section` + newline + the original substring from this heading to the next heading (or message end), computed in UTF-16 code units
@@ -99,7 +100,7 @@ Capture v0.9.0 adds a three-column desktop tagging workspace. Topic assignment c
 
 This is a content-location cue, not source evidence by itself. Stage 1 and Stage 2 should read and cite the underlying message (and relevant section text). A section marker never silently promotes all other sections in the reply to key content. A message can independently appear in `key_points[]`, `key_ranges[]` and `section_key_points[]`.
 
-The extension parses native Markdown ATX headings outside fenced code blocks; it does not ask an AI to infer headings. If the source changes, a saved section mark is restored only when its message and section fingerprint resolve safely. Unmatched entries are preserved in `unmatched_section_key_points[]` for review, not silently attached to a different heading. Versions 1–5 remain readable.
+The extension parses native Markdown ATX headings outside fenced code blocks; it does not ask an AI to infer headings. If the source changes, a saved section mark is restored only when its message and section fingerprint resolve safely. Identical sections require an unchanged whole-message fingerprint to use their old offsets; otherwise matching is considered ambiguous. Unmatched entries are preserved in `unmatched_section_key_points[]` for review, not silently attached to a different heading. Versions 1–5 remain readable.
 
 ### 桌面標記工作台與 AI 小節重點（第 6 版）
 

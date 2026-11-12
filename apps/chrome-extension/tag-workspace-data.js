@@ -68,7 +68,11 @@ const ATSections = (() => {
     const stableContext=stableNeighbours.length>0 || (msgs.length===1&&old?.length===1);
     if(sameLength && sameIndex && stableContext && sectionUnique)return {i:j,reason:null};
     if(sectionMatches.some(x=>x.pos===j))return {i:-1,reason:"小節內容仍存在，但無法確認原訊息身分"};
-    return {i:-1,reason:"候選訊息的小節已變動或原訊息身分不明"};
+    if(sameLength && sameIndex && stableContext){
+      const headingStillExists=parse(msgs[j].content).some(s=>s.title===entry.heading&&s.level===entry.level);
+      return {i:-1,reason:headingStillExists?"原訊息前後文吻合，但小節內文已變動":"原訊息前後文吻合，但小節標題或內容已變動"};
+    }
+    return {i:-1,reason:"原訊息身分不明，或候選小節內容已變動"};
   }
   function sectionIdentity(e) {
     return String(e.message_id)+"|"+String(e.section_fingerprint)+"|"+String(e.heading_start)+"|"+String(e.heading);

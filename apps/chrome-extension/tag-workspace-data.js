@@ -54,7 +54,8 @@ const ATSections = (() => {
       if(i<0||msgs[i].speaker!=="assistant"){
         S.unmatchedSections.push({...entry,reason:"原訊息找不到"});continue;
       }
-      const s=parse(msgs[i].content).find(x=>x.fingerprint===entry.section_fingerprint&&x.title===entry.heading&&x.level===entry.level);
+      const candidates=parse(msgs[i].content).filter(x=>x.fingerprint===entry.section_fingerprint&&x.title===entry.heading&&x.level===entry.level);
+      const s=candidates.find(x=>x.start===entry.heading_start)||(candidates.length===1?candidates[0]:null);
       if(!s){S.unmatchedSections.push({...entry,reason:"小節原文已變動"});continue;}
       (S.sectionKeys[msgs[i].id]||=[]).push({heading:s.title,level:s.level,start:s.start,end:s.end,fingerprint:s.fingerprint});
     }

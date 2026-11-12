@@ -433,7 +433,8 @@ async function startConversation(outline) {
   showMain();
   // 請 AI 先標一版：長對話、還沒標過的，預設打開
   renderAiPanel();
-  if (!savedAt && msgs.length >= 30 && S.mode) $("ai-panel").open = true;
+  // Keep optional external-AI drafting collapsed by default, even for long chats.
+  // Users who want an AI-first workflow can expand it explicitly.
   if (ctx.kind === "repo") loadAiFromRepo(true);
 }
 

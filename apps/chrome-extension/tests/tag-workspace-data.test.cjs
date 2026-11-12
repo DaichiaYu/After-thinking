@@ -1,0 +1,78 @@
+"use strict";
+const test = require("node:test");
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
+const vm = require("node:vm");
+
+const source = fs.readFileSync(path.join(__dirname, "..", "tag-workspace-data.js"), "utf8");
+const sample = [
+  "Introduction", "## 第一節", "重要內容", "~~~md",
+  "## 程式碼不是標題", "~~~", "### 子節", "更多內容", "## 第二節", "結論"
+].join("\n");
+function fingerprint(m) {
+  const s = m.speaker + "\n" + m.content;
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return s.length.toString(36) + "-" + (h >>> 0).toString(16).padStart(8, "0");
+}
+function fixture() {
+  const S = {}, UI = {}, msgs = [{id:"m1",speaker:"assistant",content:sample}];
+  const context = {
+    S, UI, msgs, fingerprint,
+    defaultState: () => {},
+    applyOutline: () => null,
+    buildOutline: () => ({outline_version:5}),
+    outputText: () => "base summary",
+    reviewItems: () => [],
+    itemLabel: () => "",
+    sourceLabel: () => "",
+    rowsToShow: () => [],
+    goTo: () => {},
+    itemsOf: () => [],
+    KIND_ORDER:{range:0,key:1,turn:2,hint:3},
+    changed: () => {},
+    makeResolver: () => ({resolve: id => msgs.findIndex(m => m.id === id)}),
+    showStatus: () => {},
+    pad: () => "001",
+    posOf: it => it.i * 10 + (it.kind === "section" ? 1.5 : 0),
+    isKeyish: () => false,
+  };
+  vm.createContext(context);
+  vm.runInContext(source + "\nglobalThis.api = {parts:ATSections,boot:()=>defaultState(),save:()=>buildOutline(),load:d=>applyOutline(d)};", context);
+  context.api.boot();
+  return context;
+}
+test("native Markdown headings ignore fenced code", () => {
+  const env = fixture(), headings = env.api.parts.parse(sample);
+  assert.deepEqual(Array.from(headings, x => x.title), ["第一節","子節","第二節"]);
+});
+test("section-only marks round-trip in outline version 6", () => {
+  const env = fixture(), section = env.api.parts.parse(sample)[1];
+  env.api.parts.toggle(0,section);
+  const saved = env.api.save();
+  assert.equal(saved.outline_version,6);
+  assert.equal(saved.section_key_points.length,1);
+  assert.equal(saved.section_key_points[0].heading,"子節");
+  env.api.boot();
+  env.api.load(saved);
+  assert.equal(env.api.parts.marked(0,env.api.parts.parse(sample)[1]),true);
+});
+test("stale section content is retained for review, not silently assigned", () => {
+  const env = fixture(), section = env.api.parts.parse(sample)[1];
+  env.api.parts.toggle(0,section);
+  const saved = env.api.save();
+  env.msgs[0].content = sample.replace("更多內容","已修改內容");
+  env.api.boot();
+  env.api.load(saved);
+  assert.equal(env.S.unmatchedSections.length,1);
+  assert.equal(Object.keys(env.S.sectionKeys).length,0);
+});
+test("legacy outlines lacking section arrays remain readable", () => {
+  const env=fixture();
+  assert.doesNotThrow(()=>env.api.load({outline_version:5}));
+  assert.equal(env.S.unmatchedSections.length,0);
+});

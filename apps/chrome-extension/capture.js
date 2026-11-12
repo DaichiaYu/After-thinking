@@ -1,6 +1,6 @@
 // After-thinking Capture — 共用的擷取與輸出程式（popup.js 和 batch.js 都會用到）
 
-const VERSION = "0.8.1";
+const VERSION = "0.9.0";
 
 function detectPlatform(url) {
   const host = new URL(url).hostname;
@@ -43,10 +43,10 @@ async function captureViaApi(platform) {
   // 存成文字就是雜訊。轉成一般文字：容器標籤拿掉、連結變 [標題](網址)、引用留簡短記號、圖表留標題。
   // 只認得下面列的標籤名稱，其他 <...> 原樣保留；``` 程式碼區塊和 `行內程式碼` 都不動。
   const cleanChatgptMarkup = (text) => {
-    const NAMES = "box|row|col|column|stack|grid|grid-item|list|list-item|text|caption|title|badge|card|icon|favicon|divider|spacer|Cite|MemoryCite|FileCite|Entity|Link|AsyncImage|Image|Chart";
+    const NAMES = "box|row|col|column|stack|grid|grid-item|list|list-item|text|caption|title|badge|card|icon|favicon|divider|spacer|Cite|MemoryCite|FileCite|Entity|Link|AsyncImage|Image|Chart|checkbox|button|input|select|radio|radio-group|slider|date-picker|textarea|segmented-control|pressable|label|bold|italic|escape";
     const KNOWN = new RegExp("^(" + NAMES + ")$");
-    const CONTAINERS = /^(box|row|col|column|stack|grid|grid-item|list|list-item|text|caption|title|badge|card)$/;
-    if (!new RegExp("</?(" + NAMES + ")[\\s/>]").test(text)) return { text, changed: false };
+    const CONTAINERS = /^(box|row|col|column|stack|grid|grid-item|list|list-item|text|caption|title|badge|card|checkbox|button|pressable|label|bold|italic|escape|radio|radio-group)$/;
+    if (!new RegExp("</?(" + NAMES + ")[\\s/>]").test(text) && !text.includes("{@body") && !text.includes("{#each")) return { text, changed: false };
     const str = (raw, name) => { const m = raw.match(new RegExp("\\b" + name + "=\"([^\"]*)\"")); return m ? m[1] : ""; };
     const num = (raw, name) => { const m = raw.match(new RegExp("\\b" + name + "=\\{\\s*(\\d+)\\s*\\}")); return m ? m[1] : ""; };
     const jsonStr = (raw, key) => { const m = raw.match(new RegExp("\"" + key + "\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"")); return m ? m[1] : ""; };
@@ -70,18 +70,22 @@ async function captureViaApi(platform) {
     const render = (t) => {
       const n = t.name, raw = t.raw;
       if (t.closing) return n === "badge" ? "）" : "";
+      if (n === "checkbox") return t.selfClosing ? "- [互動選項]\n" : "- [ ] ";
+      if (n === "button" && t.selfClosing) return "[互動按鈕]";
       if (CONTAINERS.test(n)) {
         if (t.selfClosing) return "";
         return n === "badge" ? "（" : n === "list-item" ? "- " : "";
       }
-      if (n === "Link") { const u = str(raw, "url"), ti = str(raw, "title"); return u && ti ? "[" + ti + "](" + u + ")" : (u || ti); }
-      if (n === "Cite") return "[來源]";
+      if (n === "Link") { const u = str(raw, "url"), ti = str(raw, "title"); return u && ti ? "[" + ti + "](" + u + ")" : (u || ti || "[動態連結，網址未保留]"); }
+      if (n === "Cite") { const ref = str(raw, "ref") || str(raw, "refs") || (raw.match(/\brefs?=\{([^}]+)\}/) || [])[1] || ""; return ref ? "[來源：" + ref + "]" : "[來源（原始引用標記）]"; }
       if (n === "MemoryCite") return "[引用記憶]";
       if (n === "FileCite") { const a = num(raw, "line_range_start"), b = num(raw, "line_range_end"); return a && b ? "[引用附件第 " + a + "–" + b + " 行]" : "[引用附件]"; }
       if (n === "Entity") return str(raw, "value");
       if (n === "AsyncImage" || n === "Image") { const q = str(raw, "query") || str(raw, "alt"); return q ? "[網路圖片：" + q + "]" : "[網路圖片]"; }
       if (n === "Chart") { const ti = jsonStr(raw, "title") || jsonStr(raw, "description"); return ti ? "[圖表：" + ti + "]" : "[圖表]"; }
-      if (n === "divider") return "\n---\n";
+      
+       if (n === "input" || n === "select" || n === "slider" || n === "date-picker" || n === "textarea") return "[互動輸入欄位]";
+       if (n === "divider") return "\n---\n";
       return "";   // icon、favicon、spacer
     };
     const cleanPart = (part) => {
@@ -105,7 +109,26 @@ async function captureViaApi(platform) {
       }
       return out;
     };
-    const cleaned = text.split(/(```[\s\S]*?```)/).map((part, k) => (k % 2 ? part : cleanPart(part))).join("")
+    // 只轉換顯示層的動態模板，不執行任何 JavaScript；無法還原的值留下明確說明。
+    const prepareInteractive = (raw) => {
+      let out = raw;
+      const arrays = new Map();
+      out = out.replace(/^\s*\{@body\s+const\s+(\w+)\s*=\s*(\[[^\n;]*\])\s*\}\s*$/gm, (whole, name, array) => {
+        try { const v = JSON.parse(array); if (Array.isArray(v) && v.every(x => typeof x === "string")) arrays.set(name, v); } catch (e) {}
+        return "";
+      });
+      out = out.replace(/^\s*\{@body[^\n]*\}\s*$/gm, "");
+      out = out.replace(/\{#each\s+(\w+)\s+as\s+(\w+)(?:,\s*\w+)?\}([\s\S]*?)\{\/each\}/g, (whole, name, value, body) => {
+        const vals = arrays.get(name);
+        if (!vals) return "[互動式清單：原始選項未能還原]";
+        return vals.map(x => "- [ ] " + x).join("\n");
+      });
+      out = out.replace(/\{#(?:if|each)[^\n]*\}/g, "").replace(/\{\/(?:if|each)\}/g, "");
+      out = out.replace(/\{(?:selected|value|checked)\.[^}]*\}/g, "[互動值未保存]");
+      return out;
+    };
+    const prepared = prepareInteractive(text);
+    const cleaned = prepared.split(/(```[\s\S]*?```)/).map((part, k) => (k % 2 ? part : cleanPart(part))).join("")
       .replace(/^[ \t]+$/gm, "").replace(/\n{3,}/g, "\n\n").trim();
     return { text: cleaned, changed: cleaned !== text };
   };
@@ -202,7 +225,8 @@ async function captureViaApi(platform) {
           prev.attachments = prev.attachments.concat(atts);
           return;
         }
-        items.push({ speaker, text, platform_message_id: msg.id, timestamp: iso(msg.create_time), attachments: atts });
+        items.push({ speaker, text, platform_message_id: msg.id, timestamp: iso(msg.create_time), attachments: atts,
+          ...(speaker === "assistant" && typeof msg.metadata?.model_slug === "string" ? { model: msg.metadata.model_slug } : {}) });
       });
       if (pendingGenerated.length) {
         const last = items.filter((i) => i.speaker === "assistant").pop();
@@ -905,6 +929,7 @@ function buildJsonl(items) {
     content: item.content,
     timestamp: item.timestamp || null,
     platform_message_id: item.platform_message_id,
+    ...(item.model ? { model: item.model } : {}),
     ...(Array.isArray(item.attachments) && item.attachments.length ? { attachments: item.attachments } : {})
   })).join("\n") + "\n";
 }

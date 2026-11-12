@@ -7,6 +7,13 @@
 <link rel="stylesheet" href="tag.css">
 </head>
 <body>
+<nav class="global-nav" aria-label="主要導覽">
+  <a class="brand" href="tag.html" aria-label="After-thinking 對話庫"><span class="brand-mark">AT</span> After-thinking</a>
+  <a class="global-link active" href="tag.html">對話庫</a>
+  <a class="global-link" href="batch.html">批量擷取</a>
+  <span class="global-spacer"></span>
+  <a class="global-link" href="options.html">GitHub 設定</a>
+</nav>
 <header class="top">
   <div class="wrap top-row">
     <div class="title-block">
@@ -27,6 +34,7 @@
 <main class="wrap">
   <p id="error" class="error" hidden></p>
   <p id="status" class="status" role="status" hidden></p>
+  <div id="unmatched-banner" class="unmatched-banner" role="status" hidden></div>
 
   <!-- 選對話 -->
   <section id="picker" hidden>
@@ -56,10 +64,10 @@
     <div id="convos" class="convos"></div>
     <div class="file-open">
       <p class="muted">沒有用 GitHub，或想標記下載下來的檔案：</p>
-      <label class="file-btn">從電腦開啟 conversation.jsonl
-        <input id="file" type="file" accept=".jsonl,.json" multiple>
+      <label class="file-btn">從電腦開啟 AT ZIP 或 conversation.jsonl
+        <input id="file" type="file" accept=".zip,.jsonl,.json" multiple>
       </label>
-      <p class="hint">要接著標之前存的結果，可以同時選 <code>conversation.jsonl</code> 和 <code>outline.json</code>；有 AI 給的 <code>outline.ai.json</code> 也可以一起選。</p>
+      <p class="hint">ZIP 可直接開啟且自帶附件，不用 GitHub。舊版檔案要接著標，可以同時選 <code>conversation.jsonl</code> 和 <code>outline.json</code>；有 AI 給的 <code>outline.ai.json</code> 也可以一起選。</p>
     </div>
   </section>
 
@@ -73,13 +81,13 @@
 
   <!-- 請 AI 先標一版 -->
   <details id="ai-panel" class="card ai-panel" hidden>
-    <summary><span class="ai-title">請 AI 先標一版</span> <span id="ai-status" class="muted"></span></summary>
+    <summary><span class="ai-title">讓其他 AI 協助預先標記</span> <span id="ai-status" class="muted"></span></summary>
     <div class="ai-body">
-      <p class="hint">對話太長、不想從頭看時，可以請你喜歡的 AI 先標一版，再到這裡看它怎麼標。AI 的建議會用虛線顯示，你可以接受、修改或刪掉；<strong>沒動的會當作你同意</strong>，但會記下這是 AI 標的、你沒有反駁。</p>
+      <p class="hint">這裡是選用功能：請其他 AI 先產生標記建議，再匯回這個工作台讓你審查。你也可以完全跳過，直接自己標記。AI 的建議會用虛線顯示，你可以接受、修改或刪掉；<strong>沒動的會當作你同意</strong>，但會記下這是 AI 標的、你沒有反駁。</p>
       <div id="ai-current" class="ai-current"></div>
       <div class="ai-ways">
         <section id="ai-way-b" class="ai-way">
-          <h3>讓 AI 直接寫進倉庫</h3>
+          <h3>方式 A｜讓 AI 將建議寫到 GitHub</h3>
           <p class="hint">適合能讀寫 GitHub 的 AI，例如 Claude Code、Codex、有接 GitHub 的 Claude。「複製指令」只給對話位置與原文指紋；完整規則會檢查並寫入你資料倉庫的 <code>guides/outline-ai.md</code>。確認寫入狀態後再貼給 AI，讓它只產生 <code>outline.ai.json</code>，不要改你的標記和原文。</p>
           <div class="row wrap-row">
             <button id="ai-copy-b">複製指令</button>
@@ -87,13 +95,14 @@
           </div>
         </section>
         <section class="ai-way">
-          <h3>下載檔案給任何 AI</h3>
+          <h3>方式 B｜下載對話與規則，請其他 AI 產生建議</h3>
           <ol class="hint steps">
-            <li>下載檔案（包含完整標記規則和編號好的對話，無須另外找指引）。</li>
+            <li>下載給 AI 的請求檔，內含對話及標記規則（這不是標記結果檔）。</li>
             <li>把檔案和下面這句話一起丟給 AI。</li>
-            <li>把 AI 給的 <code>outline.ai.json</code> 匯入。</li>
+            <li>取得 AI 回傳的 <code>outline.ai.json</code> 後，在此匯入並審查；不必連 GitHub。</li>
           </ol>
-          <div class="row wrap-row"><button id="ai-download">下載給 AI 的檔案</button></div>
+          <p class="hint">若你只想自己標記，不需要下載這份請求檔。從標記頁入口載入 <code>conversation.jsonl</code>，完成後按「下載 outline.json」即可。</p>
+          <div class="row wrap-row"><button id="ai-download">下載 AI 預先標記請求檔</button></div>
           <div class="prompt-box"><span id="ai-prompt-a"></span><button id="ai-copy-a" class="secondary small">複製這句話</button></div>
           <div class="row wrap-row">
             <label class="file-btn">匯入 AI 給的檔案<input id="ai-file" type="file" accept=".json,.txt,.md"></label>
@@ -142,56 +151,63 @@
     <ol id="preview" class="preview" aria-label="你問過的問題"></ol>
   </section>
 
-  <!-- 標記 -->
+  <!-- 桌面標記工作台：連續閱讀 + 主題側欄 + 情境檢查器 -->
   <section id="workspace" hidden>
-    <div id="multi-panel" hidden>
-      <div class="section-head">
-        <h2>主題</h2>
-        <span id="left" class="pill"></span>
+    <div class="workspace-titlebar">
+      <div class="view-switch seg" role="group" aria-label="檢視方式">
+        <button id="view-time" aria-pressed="true">照時間</button>
+        <button id="view-topic" aria-pressed="false">照主題</button>
       </div>
-      <div id="topics" class="topic-grid"></div>
-      <div class="toolbar">
-        <div class="seg" role="group" aria-label="檢視方式">
-          <button id="view-time" aria-pressed="true">照時間</button>
-          <button id="view-topic" aria-pressed="false">照主題</button>
-        </div>
-        <span class="hint grow">點每句旁邊的主題標籤就能直接改，選單裡也可以加上「也跟別的主題有關」。要一次改很多句：點編號選取；按住 Shift 再點另一個編號，或按「選到這裡」，中間整串一起選。AI 的回覆預設跟著上一句你的發言，岔題時按「另外分類」。</span>
-      </div>
+      <span class="hint">在訊息下方直接標記；選取訊息可以查看右側詳細資訊</span>
+      <button id="toggle-left" type="button" class="secondary small" aria-expanded="true">主題面板</button>
+      <button id="toggle-right" type="button" class="secondary small" aria-expanded="true">檢查器</button>
     </div>
-
-    <div id="flow-panel" hidden>
-      <div class="card flow-card">
-        <div class="section-head">
-          <h2>這段對話的主題</h2>
-          <span id="key-count" class="muted"></span>
-        </div>
-        <div class="row wrap-row">
-          <input id="flow-name" type="text" aria-label="主題名稱" class="strong">
-          <input id="flow-note" type="text" aria-label="主題補充說明" placeholder="補充說明，例如：在評估要不要養貓" class="grow2">
-        </div>
-      </div>
-      <div class="toolbar">
-        <div id="filters" class="seg" role="group" aria-label="顯示範圍"></div>
-        <span class="hint grow">每一句都可以按「標為關鍵」，會照發言的人分成你說的和 AI 說的。一整段都重要時：點第一句的編號，再按最後一句的「選到這裡」（或按住 Shift 點它），然後按「整段標成關鍵」。</span>
-      </div>
-    </div>
-
-    <p class="key-vs-turn"><strong>★ 關鍵</strong>：這句的內容重要，整理時優先讀。<strong>轉向</strong>：方向從這裡改了，這句本身不一定重要，但前後要分開理解，前面的結論可能不算數。</p>
-
     <div class="sticky-stack">
-      <div id="navbar" class="navbar"></div>
+      <div id="navbar" class="navbar" aria-label="快速導航"></div>
       <div id="selbar" class="selbar" hidden></div>
     </div>
-
-    <div id="list" class="list" aria-label="對話"></div>
-
-    <section class="card out">
-      <div class="section-head">
-        <h2>交給下一步的資料</h2>
-        <button id="copy-output" class="secondary small">複製</button>
+    <div class="workspace-columns" id="workspace-columns">
+      <aside id="topic-sidebar" class="topic-sidebar" aria-label="主題結構">
+        <div id="multi-panel" hidden>
+          <div class="section-head">
+            <h2>主題結構</h2>
+            <span id="left" class="pill"></span>
+          </div>
+          <div id="topics" class="topic-grid"></div>
+        </div>
+        <div id="flow-panel" hidden>
+          <div class="section-head">
+            <h2>這段對話的主題</h2>
+            <span id="key-count" class="muted"></span>
+          </div>
+          <div class="flow-fields">
+            <input id="flow-name" type="text" aria-label="主題名稱" class="strong">
+            <input id="flow-note" type="text" aria-label="主題補充說明" placeholder="主題補充說明">
+          </div>
+          <div id="filters" class="seg flow-filters" role="group" aria-label="顯示範圍"></div>
+        </div>
+        <details class="sidebar-guide">
+          <summary>標記說明</summary>
+          <p><strong>關鍵</strong>：重要內容，分析時優先讀。</p>
+          <p><strong>轉向</strong>：討論方向改變，前後脈絡需要分開理解。</p>
+          <p>點訊息編號，搭配 Shift 可批量選取。</p>
+        </details>
+      </aside>
+      <div class="reader-column">
+        <div id="list" class="list" aria-label="對話"></div>
       </div>
-      <pre id="output"></pre>
-    </section>
+      <aside id="inspector" class="inspector" aria-label="標記檢查器">
+        <div class="inspector-header"><h2>標記檢查器</h2><span class="hint">詳細資訊</span></div>
+        <div id="inspector-body"></div>
+      </aside>
+    </div>
+    <details class="out">
+      <summary>交給下一步的資料 <span class="hint">展開檢查標記摘要</span></summary>
+      <div class="out-body">
+        <div class="section-head"><h2>標記摘要</h2><button id="copy-output" class="secondary small">複製</button></div>
+        <pre id="output"></pre>
+      </div>
+    </details>
   </section>
 </main>
 
@@ -208,10 +224,13 @@
 <script src="github.js"></script>
 <script src="capture.js"></script>
 <script src="guide.js"></script>
+<script src="offline-bundle.js"></script>
 <script src="tag.js"></script>
 <script src="tag-ai.js"></script>
 <script src="labels.js"></script>
 <script src="tag-review.js"></script>
 <script src="list.js"></script>
+<script src="tag-workspace-data.js"></script>
+<script src="tag-workspace.js"></script>
 </body>
 </html>

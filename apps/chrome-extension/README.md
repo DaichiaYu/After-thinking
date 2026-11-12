@@ -1,4 +1,4 @@
-# After-thinking Capture v0.8.1
+# After-thinking Capture v0.9.0 (candidate)
 
 > **Capture ChatGPT, Claude, Gemini, and Grok conversations as After-thinking source files, then tag them yourself before any AI analysis.**
 
@@ -12,6 +12,24 @@ After-thinking Capture is the Chrome extension for [After-thinking](../../README
 The extension reads the current tab only when you click its icon (`manual_click` mode); it never listens in the background. Conversations go only to the GitHub repository you configure, with no other server in between.
 
 The extension's interface is in Traditional Chinese. Button and label names below are quoted in Chinese with an English gloss.
+
+## Portable offline ZIP workflow (v0.9.0 candidate)
+
+**Download only now creates one ZIP, not a series of separate files.** The ZIP has one discussion folder containing:
+
+- `README-請先看.md` — Traditional Chinese setup and file guide
+- `source/conversation.jsonl` — canonical, UTF-8 JSONL source; escaped newlines are expected and are not corrupted text
+- `source/metadata.yaml` and `source/attachments/` — capture facts and recovered originals
+- `對話閱讀版.md` — human-readable complete conversation
+- `對話快速導覽.md` — all author prompts, plus native Markdown headings from AI responses (no AI interpretation)
+
+On the tagging page choose **「從電腦開啟 AT ZIP 或 conversation.jsonl」**. A ZIP exported by AT opens directly, without GitHub and without extraction. After tagging, **「下載已標記 ZIP」** keeps the original source/attachments and adds `outline.json` to the same folder. Open that new ZIP next time to resume. Legacy `conversation.jsonl` plus an optional `outline.json` are still accepted together.
+
+The ZIP writer uses an uncompressed ZIP32 archive for broad compatibility and binary integrity; the importer validates the CRC of each entry and accepts one conversation per ZIP. Chrome download preferences can change the outer ZIP filename but no longer scatter the component files. No file is uploaded to an AT server.
+
+**Capture fidelity:** In ChatGPT API captures the extension now saves the model slug when exposed by the site, converts supported interactive list templates to text without running scripts, and retains DIL citation reference identifiers instead of replacing every reference with a generic `[來源]`. These are source-reference IDs, **not** guaranteed resolvable external URLs; if the site does not expose a concrete URL, the extension cannot reconstruct it. Rich interactive UI states and citation mapping may require further platform-specific capture work. GitHub capture structure stays unchanged.
+
+**Verification:** Source syntax checked; standalone ZIP pack/read/UTF-8/binary/CRC checks and synthetic ChatGPT capture cleanup tested. Actual Chrome popup, file picker, offline re-save, and GitHub regression testing remain required before merging this candidate.
 
 ## What's new in v0.8.1 — shorter AI-draft prompts
 
@@ -123,7 +141,7 @@ Three ways to open it (each opens a new tab):
 - At the bottom of the extension popup, click 「標記擷取過的對話」 (tag captured conversations) and pick one from the list (tagged ones are marked; you can search titles).
 - After a batch capture finishes, click 「開始標記對話」 (start tagging).
 
-Without GitHub, use 「從電腦開啟 conversation.jsonl」 (open conversation.jsonl from your computer) on the list page; select `outline.json` (and an AI's `outline.ai.json`, if you have one) at the same time to continue earlier tagging.
+Without GitHub, open the AT ZIP directly from the list page and save a new ZIP with `outline.json` inside. For legacy loose downloads, select `conversation.jsonl` together with `outline.json` (and optionally `outline.ai.json`) to resume.
 
 ### How to tag
 
@@ -333,6 +351,44 @@ After-thinking Capture 是 [After-thinking](../../README.md) 的 Chrome 擴充�
 2. **標記**：在交給 AI 分析之前，自己先決定這段對話的骨架：分主題，標出關鍵、關鍵段落、轉向和備註。結果存成 `outline.json`，After-thinking 的第一、二階段會照它分析，不再自己重新切分。對話太長時，可以先請你喜歡的 AI 標一版（`outline.ai.json`），你再檢查；每個標記都會記下是你標的還是 AI 標的。
 
 只有你按下擴充功能圖示時才會讀取目前這個分頁（「按圖示模式」，manual_click），不會在背景監聽。對話只會送到你自己設定的 GitHub 倉庫，不經過其他伺服器。
+
+## 桌面工作台：三欄獨立捲動
+
+在桌面 Chrome 的標記工作台中，頂部導覽、對話標題、快速導航會留在視窗上方。左側「主題結構」、中央「對話閱讀」、右側「標記檢查器」分別擁有自己的垂直捲動位置；在中央閱讀幾十則訊息，不會把兩側工具捲走。
+
+滑鼠游標位於哪一欄，就捲動哪一欄。上下箭頭及 J/K 快捷鍵仍定位中央對話內容。主題列表很長時，只捲左側；右側 AI 建議和備註很長時，只捲右側。兩側仍可收合，收合前後不會失去原本的標記資料。
+
+此視窗固定布局只在桌面「正在標記」時使用；選擇對話、預覽問題、重新選擇整理方式，仍使用正常頁面捲動。桌面視窗太窄時也會回到既有捲動模式。
+
+## 本機標記與舊對話小標題
+
+**標記不需要 GitHub。** 在標記頁（沒有指定資料夾時）選「從電腦開啟 conversation.jsonl」，可搭配舊 `outline.json` 和 AI 草稿 `outline.ai.json` 一起載入。完成後按「下載 outline.json」即可；下次選擇原文與標記檔繼續。GitHub 連線只是方便雲端讀取、儲存及同步。
+
+「讓其他 AI 協助預先標記」是一條**選用**路徑。其「下載 AI 預先標記請求檔」輸出包含原文及規則的 Markdown，目的是讓其他 AI 產生 `outline.ai.json`；這份請求檔本身不是標記結果，也不是進入工作台的必要條件。AI 回傳建議後可從本機匯入審查。
+
+新版會優先辨識原始 Markdown `#` 標題；對舊版從畫面純文字擷取的 AI 回覆，若出現至少兩個結構明確的「一、…／二、…」或數字編號式小標題，會嘗試建立章節概覽。這是保守的純文字解析，不會改寫 `source/conversation.jsonl`，無法辨識的舊回覆仍可展開全文。過去未保存的原生 Markdown 層級不能保證完全重建。
+
+## v0.9.0 離線 ZIP 下載與標記（開發候選版）
+
+「只下載」改成一次下載單一 ZIP，解決 Chrome 下載資料夾不固定、檔案散落且難以辨認的情況。ZIP 內有 `README-請先看.md`、`source/conversation.jsonl`、`source/metadata.yaml`、附件、`對話閱讀版.md` 和 `對話快速導覽.md`。JSONL 是給程式看的原始資料，像 `\n` 這類跳脫字元不是壞掉的中文；請用閱讀版瀏覽。
+
+不設定 GitHub 也能標記：在「標記對話」選 ZIP 直接開啟，不用解壓；儲存時按「下載已標記 ZIP」，標記結果會放到同一資料包的 `outline.json`，下次開新 ZIP 就能接著標。舊的 `conversation.jsonl` 與 `outline.json` 多選匯入仍支援。
+
+擷取品質同步改進：ChatGPT 有提供時保存模型 slug；保留引用的原始識別資訊；程式能辨認的互動選項轉為可讀文字，不執行內嵌腳本。引用識別碼不能直接當網址，若平台沒提供對應網址仍須另行查證。
+
+目前測過 JavaScript 語法、ZIP 中文與二進位檔打包/解開及 CRC 驗證、模擬 ChatGPT 內容清理；Chrome 端到端操作與 GitHub 回歸測試尚未完成，故暫不合併主分支。
+
+## v0.9.0 桌面標記工作台（開發候選版）
+
+標記頁改成桌面優先的閱讀工作台：上方是全域導覽，左側顯示主題結構，中間連續閱讀訊息，右側是標記檢查器。兩側可收起；原本的待確認／關鍵／轉向／全部、上下跳轉、J/K 快捷鍵、AI 草稿審閱、批次選取及 GitHub 儲存都保留。
+
+- **直接標記：** 每則訊息下方可以設定一個主要主題，並複選多個相關主題。相關主題寫入 `topics[].also_messages`，不會把原文當成多份討論。
+- **AI 回覆章節：** 優先顯示原生 Markdown 小標題，可分別展開、標重點或切到全文。只標某個小節不會把整則 AI 回覆都設成關鍵。
+- **小節標記儲存：** `outline.json` 第 6 版新增 `section_key_points[]`，使用訊息 ID、整則訊息指紋、小節內容指紋與原文位置定位；第 1–5 版仍可讀。
+- **原文變動時：** 系統只在訊息身分與小節內容有充分依據時自動還原；不確定的項目留在 `unmatched_section_key_points[]`，並顯示持續可見的提醒及右側「待核對的小節重點」。可以查看候選、人工確認重新標記或捨棄舊標記。重新載入時也會再次嘗試安全比對，不會默默把舊標記套到不相關的小節。
+- **適用範圍：** 目前仍是桌面 Chrome 插件。未來另外串接 GitHub 的手機可用 display 網頁版不包含在這次更新。
+
+**測試狀態：** 已加入程式檢查與資料層回歸測試；仍需實際 Chrome 操作與測試用 GitHub 倉庫驗證後才能正式合併至主要分支。
 
 ## v0.8.1 新功能：簡化 AI 草稿指令
 
@@ -629,3 +685,14 @@ ChatGPT 的回覆裡會夾著它自己的版面語法（`<box>`、`<row>`、`<te
 - `metadata.yaml` 多了 `capture`（擷取資訊）欄位，After-thinking 的 `docs/source-format.md` 之後需要補上這個欄位的說明。
 - 重新擷取時 `message_id` 會照位置重新編號，這不符合 `docs/source-format.md` 對整理過原文的規定。標記能靠內容指紋對回去（見「存成什麼」），但已經寫好、引用了訊息編號的分析檔不會自動跟著改。
 - 轉向提示是精確比對字詞：換個說法就抓不到，也可能誤抓含有這些字的詞（「不對稱」裡有「不對」），所以要你確認才算數。
+
+## Desktop tagging workspace — v0.9.0 (implementation branch)
+
+The tagging page has a desktop-first editor layout: global navigation on top, a compact topic sidebar, continuous reading in the center, and a contextual inspector on the right. The topic and inspector panes can be collapsed; the existing pending/key/turn/all navigation, arrow buttons, J/K shortcuts, original conversation list, AI-draft review, batch selection, offline drafts and GitHub save remain available.
+
+- **Tag directly under a message** with the primary topic and multiple also-related topics (stored as `topics[].also_messages`). For AI replies, the user can override the inherited topic without changing the preceding question.
+- **Mark individual AI sections** by native Markdown `#` headings, expand one section at a time, or switch to the full original response. A section key does not mark the whole reply. The key filter and review outline include section-level marks.
+- `outline.json` version 6 adds `section_key_points[]` and `unmatched_section_key_points[]`. The latter preserves marks that could not be matched safely after re-capture. Earlier outline versions continue to load.
+- The plugin interface is still intended for Chrome on desktop. A separate mobile-capable GitHub-backed display/editor web app is **not** included in this branch.
+
+The original capture and attachment logic is otherwise unchanged. **Validation boundary:** source/syntax/contracts are checked in this implementation branch, but hands-on browser regression testing with captured conversations and a disposable GitHub analysis repository is still required before production merging.

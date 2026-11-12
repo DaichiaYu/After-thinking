@@ -195,7 +195,7 @@ function fixInstructions(rep) {
 
 // 使用者目前有沒有自己的標記
 function hasUserMarks() {
-  return Object.keys(S.tags).length || Object.keys(S.keys).length || S.keyRanges.length || Object.keys(S.turnsConfirmed).length;
+  return Object.keys(S.tags).length || Object.keys(S.keys).length || S.keyRanges.length || Object.keys(S.turnsConfirmed).length || Object.values(S.sectionKeys || {}).some((items) => items.length);
 }
 
 // 這一版 AI 建議的精簡紀錄：之後 AI 重標時，用來標出跟這版哪裡不同

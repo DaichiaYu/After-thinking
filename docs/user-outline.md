@@ -108,3 +108,9 @@ The extension parses native Markdown ATX headings outside fenced code blocks; it
 - `section_key_points[]` 是使用者只選中 AI 回覆某個原生 Markdown 小節的重點，不等於整則訊息都是關鍵。
 - 小節定位含訊息 ID、標題、層級、原文位置與內容指紋；重新擷取導致小節內容變動時，不會直接套到看起來相似但內容不同的標題。
 - 對不回去的標記保留在 `unmatched_section_key_points[]`，供人工核對。既有 `outline.json` 第 1–5 版仍可讀。
+
+### Legacy plain-text heading view and offline workflow
+
+The tagging editor works without GitHub: open local `conversation.jsonl` (optionally alongside `outline.json` and `outline.ai.json`) and download the resulting `outline.json`. The external-AI Markdown download is a **request to draft `outline.ai.json`**, not a prerequisite for local tagging.
+
+Native Markdown headings remain preferred. Some older conversation captures preserve only rendered plain text; the desktop editor can recognize conservative numbered heading sequences (such as `一、…` / `二、…`) for section display and selection. This parsing does not reconstruct lost Markdown semantics or rewrite `source/`. If no safe headings are found, the editor permits full-text expansion rather than hiding the message behind a truncated preview.

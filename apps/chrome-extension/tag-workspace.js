@@ -102,6 +102,20 @@ const ATWorkspace = (() => {
           UI.workspaceFull.delete(mid);rerender();scrollToMessage(i);
         },"section-mode"));
       }
+    } else if(ai&&text&&m.content.length>AI_PREVIEW){
+      // Legacy captures may contain plain paragraphs without identifiable
+      // headings. Never strand these behind the 200-character preview.
+      if(UI.workspaceFull.has(mid)){
+        text.textContent=m.content;
+        text.after(elBtn("收起全文",()=>{
+          UI.workspaceFull.delete(mid);rerender();scrollToMessage(i);
+        },"section-mode"));
+      }else{
+        text.textContent=m.content.slice(0,AI_PREVIEW)+"…";
+        text.after(elBtn("展開全文（共 "+m.content.length+" 字）",()=>{
+          UI.workspaceFull.add(mid);rerender();scrollToMessage(i);
+        },"section-mode"));
+      }
     }
     const legacyNote=body.querySelector(".note");
     if(legacyNote)legacyNote.remove();

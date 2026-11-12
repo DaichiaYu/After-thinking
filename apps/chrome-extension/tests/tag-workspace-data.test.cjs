@@ -78,7 +78,7 @@ test("legacy outlines lacking section arrays remain readable", () => {
 });
 test("identical repeated headings restore to the original section offset", () => {
   const env=fixture();
-  env.msgs[0].content="## Same\nBody\n## Same\nBody";
+  env.msgs[0].content="## Same\nBody\n## Same\nBody\n";
   const list=env.api.parts.parse(env.msgs[0].content);
   env.api.parts.toggle(0,list[1]);
   const saved=env.api.save();
@@ -89,10 +89,10 @@ test("identical repeated headings restore to the original section offset", () =>
 });
 test("ambiguous relocated duplicate sections remain unmatched", () => {
   const env=fixture();
-  env.msgs[0].content="## Same\nBody\n## Same\nBody";
+  env.msgs[0].content="## Same\nBody\n## Same\nBody\n";
   env.api.parts.toggle(0,env.api.parts.parse(env.msgs[0].content)[1]);
   const saved=env.api.save();
-  env.msgs[0].content="Introduction\n## Same\nBody\n## Same\nBody";
+  env.msgs[0].content="Introduction\n## Same\nBody\n## Same\nBody\n";
   env.api.boot();env.api.load(saved);
   assert.equal(env.S.unmatchedSections.length,1);
 });

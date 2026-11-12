@@ -73,10 +73,12 @@ function diagnosePage() {
   };
 }
 
-function download(path, text) {
+function download(path, contents) {
   return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(new Blob([text], { type: "application/octet-stream" }));
-    chrome.downloads.download({ url, filename: path, conflictAction: "uniquify", saveAs: false }, (id) => {
+    // 保留 ZIP MIME；要求 Chrome 顯示儲存對話框，避免其他擴充功能忽略 filename 時默默存成 blob UUID。
+    const blob = contents instanceof Blob ? contents : new Blob([contents], { type: "application/octet-stream" });
+    const url = URL.createObjectURL(blob);
+    chrome.downloads.download({ url, filename: path, conflictAction: "uniquify", saveAs: true }, (id) => {
       if (chrome.runtime.lastError || id === undefined) {
         URL.revokeObjectURL(url);
         reject(new Error(chrome.runtime.lastError ? chrome.runtime.lastError.message : "unknown"));
@@ -459,7 +461,11 @@ async function main() {
       }
       const blob = ATBundle.pack(entries);
       const saved = await download("after-thinking-" + id + ".zip", blob);
-      status.textContent = "已下載一份 ZIP（" + kept.length + " 則），可直接在標記頁開啟，無需 GitHub。" + (saved ? " 路徑：" + saved : "");
+      const extOk = /\.zip$/i.test(saved.replace(/[\\/]+$/, ""));
+      status.textContent = (extOk
+        ? "已下載 ZIP（" + kept.length + " 則），可直接在標記頁開啟，不需 GitHub。"
+        : "ZIP 內容已下載，但實際檔名未保留 .zip 副檔名。請在下載位置把檔名補上 .zip，再從標記頁開啟；若其他擴充功能接管下載命名，也請檢查其設定。") +
+        (saved ? " 路徑：" + saved : "");
     } catch (e) { status.textContent = "下載失敗：" + e.message; }
     event.target.disabled = false;
   });

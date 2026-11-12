@@ -13,6 +13,24 @@ The extension reads the current tab only when you click its icon (`manual_click`
 
 The extension's interface is in Traditional Chinese. Button and label names below are quoted in Chinese with an English gloss.
 
+## Portable offline ZIP workflow (v0.9.0 candidate)
+
+**Download only now creates one ZIP, not a series of separate files.** The ZIP has one discussion folder containing:
+
+- `README-請先看.md` — Traditional Chinese setup and file guide
+- `source/conversation.jsonl` — canonical, UTF-8 JSONL source; escaped newlines are expected and are not corrupted text
+- `source/metadata.yaml` and `source/attachments/` — capture facts and recovered originals
+- `對話閱讀版.md` — human-readable complete conversation
+- `對話快速導覽.md` — all author prompts, plus native Markdown headings from AI responses (no AI interpretation)
+
+On the tagging page choose **「從電腦開啟 AT ZIP 或 conversation.jsonl」**. A ZIP exported by AT opens directly, without GitHub and without extraction. After tagging, **「下載已標記 ZIP」** keeps the original source/attachments and adds `outline.json` to the same folder. Open that new ZIP next time to resume. Legacy `conversation.jsonl` plus an optional `outline.json` are still accepted together.
+
+The ZIP writer uses an uncompressed ZIP32 archive for broad compatibility and binary integrity; the importer validates the CRC of each entry and accepts one conversation per ZIP. Chrome download preferences can change the outer ZIP filename but no longer scatter the component files. No file is uploaded to an AT server.
+
+**Capture fidelity:** In ChatGPT API captures the extension now saves the model slug when exposed by the site, converts supported interactive list templates to text without running scripts, and retains DIL citation reference identifiers instead of replacing every reference with a generic `[來源]`. These are source-reference IDs, **not** guaranteed resolvable external URLs; if the site does not expose a concrete URL, the extension cannot reconstruct it. Rich interactive UI states and citation mapping may require further platform-specific capture work. GitHub capture structure stays unchanged.
+
+**Verification:** Source syntax checked; standalone ZIP pack/read/UTF-8/binary/CRC checks and synthetic ChatGPT capture cleanup tested. Actual Chrome popup, file picker, offline re-save, and GitHub regression testing remain required before merging this candidate.
+
 ## What's new in v0.8.1 — shorter AI-draft prompts
 
 The **AI draft** action still creates `outline.ai.json` for your review. v0.8.1 moves its detailed rules and JSON format out of the copied GitHub prompt and into one canonical guide, [`outline-ai-guide.md`](outline-ai-guide.md).
@@ -123,7 +141,7 @@ Three ways to open it (each opens a new tab):
 - At the bottom of the extension popup, click 「標記擷取過的對話」 (tag captured conversations) and pick one from the list (tagged ones are marked; you can search titles).
 - After a batch capture finishes, click 「開始標記對話」 (start tagging).
 
-Without GitHub, use 「從電腦開啟 conversation.jsonl」 (open conversation.jsonl from your computer) on the list page; select `outline.json` (and an AI's `outline.ai.json`, if you have one) at the same time to continue earlier tagging.
+Without GitHub, open the AT ZIP directly from the list page and save a new ZIP with `outline.json` inside. For legacy loose downloads, select `conversation.jsonl` together with `outline.json` (and optionally `outline.ai.json`) to resume.
 
 ### How to tag
 
@@ -349,6 +367,16 @@ After-thinking Capture 是 [After-thinking](../../README.md) 的 Chrome 擴充�
 「讓其他 AI 協助預先標記」是一條**選用**路徑。其「下載 AI 預先標記請求檔」輸出包含原文及規則的 Markdown，目的是讓其他 AI 產生 `outline.ai.json`；這份請求檔本身不是標記結果，也不是進入工作台的必要條件。AI 回傳建議後可從本機匯入審查。
 
 新版會優先辨識原始 Markdown `#` 標題；對舊版從畫面純文字擷取的 AI 回覆，若出現至少兩個結構明確的「一、…／二、…」或數字編號式小標題，會嘗試建立章節概覽。這是保守的純文字解析，不會改寫 `source/conversation.jsonl`，無法辨識的舊回覆仍可展開全文。過去未保存的原生 Markdown 層級不能保證完全重建。
+
+## v0.9.0 離線 ZIP 下載與標記（開發候選版）
+
+「只下載」改成一次下載單一 ZIP，解決 Chrome 下載資料夾不固定、檔案散落且難以辨認的情況。ZIP 內有 `README-請先看.md`、`source/conversation.jsonl`、`source/metadata.yaml`、附件、`對話閱讀版.md` 和 `對話快速導覽.md`。JSONL 是給程式看的原始資料，像 `\n` 這類跳脫字元不是壞掉的中文；請用閱讀版瀏覽。
+
+不設定 GitHub 也能標記：在「標記對話」選 ZIP 直接開啟，不用解壓；儲存時按「下載已標記 ZIP」，標記結果會放到同一資料包的 `outline.json`，下次開新 ZIP 就能接著標。舊的 `conversation.jsonl` 與 `outline.json` 多選匯入仍支援。
+
+擷取品質同步改進：ChatGPT 有提供時保存模型 slug；保留引用的原始識別資訊；程式能辨認的互動選項轉為可讀文字，不執行內嵌腳本。引用識別碼不能直接當網址，若平台沒提供對應網址仍須另行查證。
+
+目前測過 JavaScript 語法、ZIP 中文與二進位檔打包/解開及 CRC 驗證、模擬 ChatGPT 內容清理；Chrome 端到端操作與 GitHub 回歸測試尚未完成，故暫不合併主分支。
 
 ## v0.9.0 桌面標記工作台（開發候選版）
 

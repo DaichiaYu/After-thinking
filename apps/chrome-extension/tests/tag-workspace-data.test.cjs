@@ -177,3 +177,30 @@ test("no stable neighbor prevents fallback to unverified renumbered content",()=
   assert.equal(env.S.unmatchedSections.length,1);
   assert.equal(Object.keys(env.S.sectionKeys).length,0);
 });
+
+test("old plain-text Chinese numbered headings form sections", () => {
+  const env=fixture();
+  const input="一、研究問題\n問題描述\n二、研究方法\n分析內容";
+  assert.deepEqual(Array.from(env.api.parts.parse(input),s=>s.title),["一、 研究問題","二、 研究方法"]);
+});
+test("ordinary paragraphs or a single list item do not force an outline", () => {
+  const env=fixture();
+  assert.equal(env.api.parts.parse("這是一段文字。\n第二段文字繼續說明。").length,0);
+  assert.equal(env.api.parts.parse("1. just one item\nother details").length,0);
+});
+test("native Markdown and code fences take precedence over numbered fallback", () => {
+  const env=fixture();
+  const input="~~~md\n## Fake\n~~~\n## Real\nText\n一、備註\n二、附註";
+  assert.deepEqual(Array.from(env.api.parts.parse(input),s=>s.title),["Real"]);
+});
+test("numbered heading section marks persist without rewriting the original", () => {
+  const env=fixture();
+  env.msgs[0].content="一、研究問題\n問題描述\n二、研究方法\n分析內容";
+  const before=env.msgs[0].content;
+  const part=env.api.parts.parse(before)[1];
+  env.api.parts.toggle(0,part);
+  const saved=env.api.save();
+  env.api.boot();env.api.load(saved);
+  assert.equal(env.msgs[0].content,before);
+  assert.equal(env.api.parts.marked(0,env.api.parts.parse(before)[1]),true);
+});

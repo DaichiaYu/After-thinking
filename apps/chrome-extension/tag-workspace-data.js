@@ -55,7 +55,9 @@ const ATSections = (() => {
         S.unmatchedSections.push({...entry,reason:"原訊息找不到"});continue;
       }
       const candidates=parse(msgs[i].content).filter(x=>x.fingerprint===entry.section_fingerprint&&x.title===entry.heading&&x.level===entry.level);
-      const s=candidates.find(x=>x.start===entry.heading_start)||(candidates.length===1?candidates[0]:null);
+      const oldMessageFp=entry.message_fingerprint || ((doc.source?.message_fingerprints || []).find(x=>Array.isArray(x)&&x[0]===entry.message_id)||[])[1];
+      const unchanged=oldMessageFp && oldMessageFp===fingerprint(msgs[i]);
+      const s=candidates.length===1?candidates[0]:(unchanged?candidates.find(x=>x.start===entry.heading_start):null);
       if(!s){S.unmatchedSections.push({...entry,reason:"小節原文已變動"});continue;}
       (S.sectionKeys[msgs[i].id]||=[]).push({heading:s.title,level:s.level,start:s.start,end:s.end,fingerprint:s.fingerprint});
     }
@@ -65,7 +67,7 @@ const ATSections = (() => {
   buildOutline=function(){
     const doc=oldBuild();doc.outline_version=6;
     doc.section_key_points=msgs.flatMap(m=>(S.sectionKeys[m.id]||[]).map(s=>({
-      message_id:m.id,heading:s.heading,level:s.level,
+      message_id:m.id,message_fingerprint:fingerprint(m),heading:s.heading,level:s.level,
       heading_start:s.start,section_end:s.end,section_fingerprint:s.fingerprint,origin:"user"
     })));
     doc.unmatched_section_key_points=S.unmatchedSections.slice();

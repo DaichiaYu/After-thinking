@@ -70,19 +70,20 @@ async function captureViaApi(platform) {
     const render = (t) => {
       const n = t.name, raw = t.raw;
       if (t.closing) return n === "badge" ? "）" : "";
+      if (n === "checkbox") return t.selfClosing ? "- [互動選項]\n" : "- [ ] ";
+      if (n === "button" && t.selfClosing) return "[互動按鈕]";
       if (CONTAINERS.test(n)) {
         if (t.selfClosing) return "";
         return n === "badge" ? "（" : n === "list-item" ? "- " : "";
       }
       if (n === "Link") { const u = str(raw, "url"), ti = str(raw, "title"); return u && ti ? "[" + ti + "](" + u + ")" : (u || ti || "[動態連結，網址未保留]"); }
-      if (n === "Cite") { const ref = str(raw, "ref") || str(raw, "refs"); return ref ? "[來源：" + ref + "]" : "[來源（原始引用標記）]"; }
+      if (n === "Cite") { const ref = str(raw, "ref") || str(raw, "refs") || (raw.match(/\brefs?=\{([^}]+)\}/) || [])[1] || ""; return ref ? "[來源：" + ref + "]" : "[來源（原始引用標記）]"; }
       if (n === "MemoryCite") return "[引用記憶]";
       if (n === "FileCite") { const a = num(raw, "line_range_start"), b = num(raw, "line_range_end"); return a && b ? "[引用附件第 " + a + "–" + b + " 行]" : "[引用附件]"; }
       if (n === "Entity") return str(raw, "value");
       if (n === "AsyncImage" || n === "Image") { const q = str(raw, "query") || str(raw, "alt"); return q ? "[網路圖片：" + q + "]" : "[網路圖片]"; }
       if (n === "Chart") { const ti = jsonStr(raw, "title") || jsonStr(raw, "description"); return ti ? "[圖表：" + ti + "]" : "[圖表]"; }
-      if (n === "checkbox") return t.selfClosing ? "- [互動選項]\n" : "- [ ] ";
-       if (n === "button") return t.selfClosing ? "[互動按鈕]" : "";
+      
        if (n === "input" || n === "select" || n === "slider" || n === "date-picker" || n === "textarea") return "[互動輸入欄位]";
        if (n === "divider") return "\n---\n";
       return "";   // icon、favicon、spacer

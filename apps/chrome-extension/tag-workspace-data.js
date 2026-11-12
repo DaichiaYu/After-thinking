@@ -16,7 +16,7 @@ const ATSections = (() => {
       } else if (!fence) {
         const h=line.match(/^ {0,3}(#{1,6})[ \t]+(.+?)\s*$/);
         if (h) {
-          const title=h[2].replace(/\s+#+\s*$/,"").trim();
+          const title=h[2].replace(/(?:^|[ \t]+)#+[ \t]*$/,"").trim();
           if (title) marks.push({title,level:h[1].length,start:offset,bodyStart:offset+line.length+1});
         }
       }
@@ -44,24 +44,64 @@ const ATSections = (() => {
     UI.workspaceFocus=null;UI.workspaceOpenTopic=null;UI.workspaceOpenNote=null;
     UI.workspaceFull=new Set();UI.workspaceExpanded={};
   };
+  // Conservative fallback: never trust renumbered message_id alone. A unique
+  // unchanged section at the same ordinal requires a stable neighbouring message
+  // (or an otherwise single-message conversation) before auto-restoring.
+  function candidateFor(entry, doc, resolve) {
+    const i=resolve(entry.message_id);
+    if(i>=0 && msgs[i]?.speaker==="assistant") return {i,reason:null};
+    const j=msgs.findIndex(m=>m.id===entry.message_id && m.speaker==="assistant");
+    if(j<0) return {i:-1,reason:"找不到可確認的原訊息"};
+    const old=doc.source?.message_fingerprints;
+    const k=Array.isArray(old)?old.findIndex(x=>Array.isArray(x)&&x[0]===entry.message_id):-1;
+    const sameLength=Array.isArray(old)&&old.length===msgs.length;
+    const sameIndex=k>=0 && k===j;
+    const stableNeighbours=[];
+    for(const n of [j-1,j+1]){
+      if(n<0||n>=msgs.length||!Array.isArray(old?.[n]))continue;
+      if(old[n][1]===fingerprint(msgs[n]))stableNeighbours.push(n);
+    }
+    const sectionMatches=msgs.flatMap((m,pos)=>m.speaker==="assistant"
+      ? parse(m.content).filter(s=>s.fingerprint===entry.section_fingerprint&&s.title===entry.heading&&s.level===entry.level).map(s=>({pos,s}))
+      : []);
+    const sectionUnique=sectionMatches.length===1 && sectionMatches[0].pos===j;
+    const stableContext=stableNeighbours.length>0 || (msgs.length===1&&old?.length===1);
+    if(sameLength && sameIndex && stableContext && sectionUnique)return {i:j,reason:null};
+    if(sectionMatches.some(x=>x.pos===j))return {i:-1,reason:"小節內容仍存在，但無法確認原訊息身分"};
+    return {i:-1,reason:"候選訊息的小節已變動或原訊息身分不明"};
+  }
+  function sectionIdentity(e) {
+    return String(e.message_id)+"|"+String(e.section_fingerprint)+"|"+String(e.heading_start)+"|"+String(e.heading);
+  }
   applyOutline=function(doc){
     const result=oldApply(doc);
-    S.sectionKeys={};S.unmatchedSections=(doc&&Array.isArray(doc.unmatched_section_key_points))?doc.unmatched_section_key_points.slice():[];
-    if(!doc || !Array.isArray(doc.section_key_points))return result;
+    S.sectionKeys={};S.unmatchedSections=[];
+    if(!doc)return result;
     const resolver=makeResolver(doc).resolve;
-    for(const entry of doc.section_key_points){
-      const i=resolver(entry.message_id);
-      if(i<0||msgs[i].speaker!=="assistant"){
-        S.unmatchedSections.push({...entry,reason:"原訊息找不到"});continue;
+    // Retry previously unresolved items on every open; do not merely carry them forward.
+    const incoming=[...(Array.isArray(doc.section_key_points)?doc.section_key_points:[]),
+      ...(Array.isArray(doc.unmatched_section_key_points)?doc.unmatched_section_key_points:[])];
+    const seen=new Set();
+    for(const entry of incoming){
+      if(!entry||!entry.message_id||!entry.section_fingerprint)continue;
+      const key=sectionIdentity(entry);
+      if(seen.has(key))continue;seen.add(key);
+      const match=candidateFor(entry,doc,resolver);
+      const i=match.i;
+      if(i<0){
+        S.unmatchedSections.push({...entry,reason:match.reason||"無法安全對應原訊息"});
+        continue;
       }
       const candidates=parse(msgs[i].content).filter(x=>x.fingerprint===entry.section_fingerprint&&x.title===entry.heading&&x.level===entry.level);
-      const oldMessageFp=entry.message_fingerprint || ((doc.source?.message_fingerprints || []).find(x=>Array.isArray(x)&&x[0]===entry.message_id)||[])[1];
+      const oldMessageFp=entry.message_fingerprint||((doc.source?.message_fingerprints||[]).find(x=>Array.isArray(x)&&x[0]===entry.message_id)||[])[1];
       const unchanged=oldMessageFp && oldMessageFp===fingerprint(msgs[i]);
       const s=candidates.length===1?candidates[0]:(unchanged?candidates.find(x=>x.start===entry.heading_start):null);
-      if(!s){S.unmatchedSections.push({...entry,reason:"小節原文已變動"});continue;}
-      (S.sectionKeys[msgs[i].id]||=[]).push({heading:s.title,level:s.level,start:s.start,end:s.end,fingerprint:s.fingerprint});
+      if(!s){S.unmatchedSections.push({...entry,reason:"小節原文已變動或存在重複小節，需人工確認"});continue;}
+      const id=msgs[i].id;
+      (S.sectionKeys[id]||=[]).push({heading:s.title,level:s.level,start:s.start,end:s.end,fingerprint:s.fingerprint});
     }
-    if(S.unmatchedSections.length)showStatus("有 "+S.unmatchedSections.length+" 個小節重點無法安全對應原文，已保留待核對記錄。",true,true);
+    // The inspector shows a persistent warning; a transient status could be overwritten
+    // by reportResolve() in startConversation().
     return result;
   };
   buildOutline=function(){

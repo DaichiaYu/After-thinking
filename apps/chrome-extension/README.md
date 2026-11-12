@@ -23,6 +23,8 @@ The extension's interface is in Traditional Chinese. Button and label names belo
 - `對話閱讀版.md` — human-readable complete conversation
 - `對話快速導覽.md` — all author prompts, plus native Markdown headings from AI responses (no AI interpretation)
 
+**Extensionless download compatibility (UUID filenames):** On the local file picker, select the download even if it has no `.zip` suffix. The picker intentionally shows all files and checks the ZIP signature (`PK`) in its bytes, not the filename or MIME type. The archive still goes through full ZIP structure and checksum validation; files that only have a `.zip` name but are not ZIP data are rejected. The original source and attachments remain in the archive when exporting a tagged ZIP.
+
 On the tagging page choose **「從電腦開啟 AT ZIP 或 conversation.jsonl」**. A ZIP exported by AT opens directly, without GitHub and without extraction. After tagging, **「下載已標記 ZIP」** keeps the original source/attachments and adds `outline.json` to the same folder. Open that new ZIP next time to resume. Legacy `conversation.jsonl` plus an optional `outline.json` are still accepted together.
 
 The ZIP writer uses an uncompressed ZIP32 archive for broad compatibility and binary integrity; the importer validates the CRC of each entry and accepts one conversation per ZIP. Chrome download preferences can change the outer ZIP filename but no longer scatter the component files. No file is uploaded to an AT server.
@@ -372,7 +374,7 @@ After-thinking Capture 是 [After-thinking](../../README.md) 的 Chrome 擴充�
 
 「只下載」改成一次下載單一 ZIP，解決 Chrome 下載資料夾不固定、檔案散落且難以辨認的情況。ZIP 內有 `README-請先看.md`、`source/conversation.jsonl`、`source/metadata.yaml`、附件、`對話閱讀版.md` 和 `對話快速導覽.md`。JSONL 是給程式看的原始資料，像 `\n` 這類跳脫字元不是壞掉的中文；請用閱讀版瀏覽。
 
-不設定 GitHub 也能標記：在「標記對話」選 ZIP 直接開啟，不用解壓；儲存時按「下載已標記 ZIP」，標記結果會放到同一資料包的 `outline.json`，下次開新 ZIP 就能接著標。舊的 `conversation.jsonl` 與 `outline.json` 多選匯入仍支援。
+不設定 GitHub 也能標記：在「標記對話」選 ZIP 直接開啟，不用解壓；如果檔案被 Chrome 改成 UUID 名稱、沒有 `.zip` 副檔名也能選，程式會依實際 ZIP 檔頭辨認；儲存時按「下載已標記 ZIP」，標記結果會放到同一資料包的 `outline.json`，下次開新 ZIP 就能接著標。舊的 `conversation.jsonl` 與 `outline.json` 多選匯入仍支援。
 
 擷取品質同步改進：ChatGPT 有提供時保存模型 slug；保留引用的原始識別資訊；程式能辨認的互動選項轉為可讀文字，不執行內嵌腳本。引用識別碼不能直接當網址，若平台沒提供對應網址仍須另行查證。
 

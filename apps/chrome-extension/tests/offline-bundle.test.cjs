@@ -30,3 +30,16 @@ test('ZIP rejects duplicate or unsafe paths', () => {
   assert.throws(() => ATBundle.pack([{ path: '../outside', data: 'x' }]), /路徑/);
   assert.throws(() => ATBundle.pack([{ path: 'a.txt', data: 'x' }, { path: 'a.txt', data: 'y' }]), /路徑/);
 });
+
+test('ZIP is recognized by signature even if Chrome renames it to a UUID without extension', async () => {
+  const blob = ATBundle.pack([{ path: 'random/source/conversation.jsonl', data: '{"speaker":"author","content":"你好"}\n' }]);
+  const renamed = new Blob([await blob.arrayBuffer()], { type: 'application/octet-stream' });
+  renamed.name = '8244edc0-9bf5-499f-ac74-991cbe4f17d2(1)';
+  assert.equal(await ATBundle.looksLikeZip(renamed), true);
+  const files = await ATBundle.unpack(renamed);
+  assert.equal(ATBundle.decode(files.get('random/source/conversation.jsonl')).includes('你好'), true);
+});
+test('normal text and fake ZIP names are rejected by signature', async () => {
+  assert.equal(await ATBundle.looksLikeZip(new Blob(['normal JSONL'], { type: 'text/plain' })), false);
+  assert.equal(await ATBundle.looksLikeZip(new Blob(['PKnotzip'], { type: 'application/zip' })), false);
+});

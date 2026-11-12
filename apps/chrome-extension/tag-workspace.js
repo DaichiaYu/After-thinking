@@ -165,9 +165,126 @@ const ATWorkspace = (() => {
     input.checked=checked;input.addEventListener("change",()=>action(input.checked));
     return el("label",{class:"inspector-check"},input,el("span",{text:label}));
   }
+
+  // Persistent, actionable review for section markers that could not be matched.
+  // This is separate from the transient status line, which reportResolve can replace.
+  function unmatchedId(entry) {
+    return [entry.message_id,entry.section_fingerprint,entry.heading_start,entry.heading].join("|");
+  }
+  function unmatchedCandidates(entry) {
+    const out=[];
+    msgs.forEach((m,i)=>{
+      if(m.speaker!=="assistant")return;
+      ATSections.parse(m.content).forEach(section=>{
+        const sameHash=section.fingerprint===entry.section_fingerprint;
+        const sameTitle=section.title===entry.heading;
+        if(!sameHash&&!sameTitle)return;
+        out.push({i,section,sameHash,sameTitle});
+      });
+    });
+    return out.sort((a,b)=>Number(b.sameHash)-Number(a.sameHash)
+      ||Number(b.sameTitle)-Number(a.sameTitle)
+      ||Math.abs(a.i-msgs.findIndex(m=>m.id===entry.message_id))
+       -Math.abs(b.i-msgs.findIndex(m=>m.id===entry.message_id)));
+  }
+  function ensureInspectorVisible(){
+    const cols=$("workspace-columns");
+    if(cols?.classList.contains("no-right")){
+      cols.classList.remove("no-right");
+      $("toggle-right")?.setAttribute("aria-expanded","true");
+    }
+  }
+  function renderUnmatchedBanner(){
+    const banner=$("unmatched-banner");
+    if(!banner)return;
+    const count=(S.unmatchedSections||[]).length;
+    banner.hidden=count===0;
+    banner.replaceChildren();
+    if(!count)return;
+    const note=el("span",{text:"有 "+count+" 個 AI 小節重點無法安全對應原文，需檢查後才能確定標記是否正確。"});
+    const button=elBtn("在右側檢查",()=>{
+      ensureInspectorVisible();
+      UI.workspaceShowUnmatched=true;
+      renderWorkspaceInspector();
+      const panel=$("unmatched-review");
+      if(panel){panel.open=true;panel.scrollIntoView({block:"nearest",behavior:"smooth"});}
+    },"secondary small");
+    banner.append(note,button);
+  }
+  function reviewUnmatched(box){
+    const entries=S.unmatchedSections||[];
+    if(!entries.length)return;
+    const details=el("details",{id:"unmatched-review",class:"unmatched-review"});
+    details.open=UI.workspaceShowUnmatched!==false;
+    details.addEventListener("toggle",()=>{UI.workspaceShowUnmatched=details.open;});
+    details.append(el("summary",{text:"待核對的小節重點 · "+entries.length+" 項"}));
+    const caption=el("p",{class:"inspector-details",text:"原文可能已更新。下方只提供候選小節，必須由你確認才會重新標記；若無合適候選，可保留待日後處理。"});
+    details.append(caption);
+    entries.forEach((entry,index)=>{
+      const k=unmatchedId(entry);
+      const section=el("div",{class:"unmatched-entry"});
+      section.append(el("strong",{text:(entry.heading||"（無標題）")}),
+        el("p",{class:"inspector-details",text:"原訊息 "+entry.message_id+" · "+(entry.reason||"尚未確認")}));
+      const candidates=unmatchedCandidates(entry),choice=el("select",{class:"unmatched-candidate"});
+      choice.append(el("option",{value:"",text:candidates.length?"選擇候選小節":"沒有可辨識的同名／同內容小節"}));
+      candidates.forEach(c=>{
+        const key=c.i+"|"+c.section.start;
+        const kind=c.sameHash?"原文一致":"需人工核對";
+        const snippet=c.section.body.replace(/\s+/g," ").slice(0,32);
+        choice.append(el("option",{value:key,text:pad(c.i)+" · "+c.section.title+" · "+kind+(snippet?" · "+snippet:"")}));
+      });
+      const previous=UI.workspaceUnmatchedChoices?.[k];
+      if(previous&&candidates.some(c=>c.i+"|"+c.section.start===previous))choice.value=previous;
+      choice.addEventListener("change",()=>{
+        (UI.workspaceUnmatchedChoices ||= {})[k]=choice.value;
+      });
+      section.append(choice);
+      const actions=el("div",{class:"inspector-actions"});
+      actions.append(elBtn("查看候選",()=>{
+        const [i,start]=String(choice.value).split("|").map(Number);
+        if(!choice.value||!Number.isInteger(i)||!Number.isInteger(start))return;
+        const section=ATSections.parse(msgs[i]?.content).find(s=>s.start===start);
+        if(!section)return;
+        UI.workspaceFocus=i;
+        (UI.workspaceExpanded[msgs[i].id] ||= new Set()).add(section.start);
+        UI.workspaceFull.delete(msgs[i].id);
+        rerender();
+        scrollToMessage(i);
+      },"secondary"));
+      actions.append(elBtn("確認重新標記",()=>{
+        const [i,start]=String(choice.value).split("|").map(Number);
+        if(!choice.value||!Number.isInteger(i)||!Number.isInteger(start))return;
+        const candidate=ATSections.parse(msgs[i]?.content).find(s=>s.start===start);
+        if(!candidate)return;
+        if(candidate.fingerprint!==entry.section_fingerprint &&
+          !confirm("這個小節的內容指紋與原標記不同。要把它當作原先標記的重點嗎？"))return;
+        const mid=msgs[i].id;
+        if(!ATSections.marked(i,candidate)){
+          (S.sectionKeys[mid] ||= []).push({heading:candidate.title,level:candidate.level,
+            start:candidate.start,end:candidate.end,fingerprint:candidate.fingerprint});
+        }
+        S.unmatchedSections.splice(index,1);
+        UI.workspaceFocus=i;
+        changed(true);
+        showStatus("已人工確認小節「"+candidate.title+"」的對應。");
+      },"secondary"));
+      if(!candidates.length)section.append(el("p",{class:"inspector-details",text:"目前沒有符合的候選；可先保留，等待原文恢復或重新擷取。"}));
+      actions.append(elBtn("捨棄舊標記",()=>{
+        if(!confirm("確定要捨棄「"+(entry.heading||"未命名小節")+"」的舊標記？這項操作會寫入下一次儲存的草稿。"))return;
+        S.unmatchedSections.splice(index,1);
+        changed(true);
+        showStatus("已捨棄舊的小節標記。");
+      },"workspace-link"));
+      section.append(actions);
+      details.append(section);
+    });
+    box.append(details,el("div",{class:"inspector-separator"}));
+  }
   function renderWorkspaceInspector(){
     const box=$("inspector-body");if(!box||!S.mode)return;
     box.replaceChildren();
+    renderUnmatchedBanner();
+    reviewUnmatched(box);
     const i=UI.workspaceFocus;
     if(i===null||i===undefined||!msgs[i]){
       const n=Object.values(S.sectionKeys).reduce((a,x)=>a+x.length,0);

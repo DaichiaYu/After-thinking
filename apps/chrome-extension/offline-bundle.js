@@ -72,6 +72,17 @@ const ATBundle = (() => {
     parts.push(end);
     return new Blob(parts, { type: "application/zip" });
   }
+  // Chrome/其他下載管理器有時會把 ZIP 另存成 UUID、沒有 .zip 副檔名。
+  // 只讀前 4 bytes 判斷 ZIP signature；不依賴檔名、MIME 或使用者重命名。
+  async function looksLikeZip(file) {
+    if (!file || typeof file.slice !== "function") return false;
+    const head = new Uint8Array(await file.slice(0, 4).arrayBuffer());
+    return head.length === 4 && head[0] === 0x50 && head[1] === 0x4b &&
+      ((head[2] === 0x03 && head[3] === 0x04) ||
+       (head[2] === 0x05 && head[3] === 0x06) ||
+       (head[2] === 0x07 && head[3] === 0x08));
+  }
+
   async function unpack(file) {
     const bytes = new Uint8Array(await file.arrayBuffer());
     const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
@@ -121,5 +132,5 @@ const ATBundle = (() => {
     return files;
   }
   const decode = (bytes) => decoder.decode(bytes);
-  return { pack, unpack, decode };
+  return { pack, unpack, decode, looksLikeZip };
 })();

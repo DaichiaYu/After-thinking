@@ -373,7 +373,7 @@ function reportResolve(stats) {
   if (moved || lost || !stats.checked) { dirty = true; editVersion++; }
 }
 
-const draftKey = () => "outlineDraft:" + (ctx.kind === "repo" ? config.repo + ":" + ctx.folder : "file:" + ctx.fileName);
+const draftKey = () => "outlineDraft:" + (ctx.kind === "repo" ? config.repo + ":" + ctx.folder : "file:" + (ctx.bundlePrefix || ctx.fileName));
 
 async function startConversation(outline) {
   computeAnchors();
@@ -429,7 +429,7 @@ async function startConversation(outline) {
 
   $("picker").hidden = true;
   $("top-actions").hidden = false;
-  $("save").textContent = ctx.kind === "repo" ? "儲存到 GitHub" : "下載 outline.json";
+  $("save").textContent = ctx.kind === "repo" ? "儲存到 GitHub" : ctx.kind === "zip" ? "下載已標記 ZIP" : "下載 outline.json";
   showMain();
   // 請 AI 先標一版：長對話、還沒標過的，預設打開
   renderAiPanel();
@@ -479,27 +479,43 @@ async function loadFromRepo(folder) {
 
 async function loadFromFiles(files) {
   const list = Array.from(files);
-  // .jsonl 是對話；.json 看內容分辨是標記檔還是 AI 建議（瀏覽器重複下載會改檔名，所以不看檔名）
-  const conv = list.find((f) => /\.jsonl$/i.test(f.name)) || list.find((f) => !/\.json$/i.test(f.name));
-  if (!conv) throw new Error("請選 conversation.jsonl");
+  const zip = list.find(f => /\.zip$/i.test(f.name));
+  if (zip) {
+    const entries = await ATBundle.unpack(zip);
+    const candidates = [...entries.keys()].filter(p => /(^|\/)source\/conversation\.jsonl$/.test(p));
+    if (candidates.length !== 1) throw new Error("ZIP 必須含有且只能有一份 source/conversation.jsonl");
+    const path = candidates[0], prefix = path.slice(0, - "source/conversation.jsonl".length);
+    const text = ATBundle.decode(entries.get(path));
+    msgs = parseJsonl(text);
+    if (!msgs.length) throw new Error("ZIP 中的對話是空的");
+    let outline = null, aiRaw = null;
+    const outlinePath = prefix + "outline.json", aiPath = prefix + "outline.ai.json";
+    if (entries.has(outlinePath)) { try { outline = JSON.parse(ATBundle.decode(entries.get(outlinePath))); } catch (e) { throw new Error("ZIP 的 outline.json 格式錯誤：" + e.message); } }
+    if (entries.has(aiPath)) aiRaw = ATBundle.decode(entries.get(aiPath));
+    const meta = entries.has(prefix + "source/metadata.yaml") ? ATBundle.decode(entries.get(prefix + "source/metadata.yaml")) : "";
+    const field = name => { const m = meta.match(new RegExp("^\\s*" + name + ":\\s*(.+)$", "m")); if (!m) return null; try { return JSON.parse(m[1]); } catch (e) { return m[1].trim(); } };
+    ctx = { kind: "zip", fileName: zip.name, title: field("page_title") || zip.name.replace(/\.zip$/i, ""),
+      platform: field("platform"), url: field("source_url"), revision: Number(field("source_revision")) || 1,
+      bundleEntries: entries, bundlePrefix: prefix };
+    await startConversation(outline);
+    if (aiRaw) takeAi(aiRaw, "file");
+    return;
+  }
+  const conv = list.find(f => /\.jsonl$/i.test(f.name));
+  if (!conv) throw new Error("請選 AT ZIP 或 conversation.jsonl（舊版）。其他 JSON 檔不是原始對話。");
   msgs = parseJsonl(await conv.text());
   if (!msgs.length) throw new Error("這份對話是空的");
   let outline = null, aiRaw = null;
-  for (const f of list.filter((x) => x !== conv)) {
-    const text = await f.text();
-    let obj = null;
-    try { obj = JSON.parse(text); } catch (e) {
-      try { obj = parseAiText(text); } catch (e2) { obj = null; }   // AI 回的文字可能包在 ```json 裡
-    }
+  for (const f of list.filter(x => x !== conv && /\.json$/i.test(x.name))) {
+    const text = await f.text(); let obj;
+    try { obj = JSON.parse(text); } catch (e) { try { obj = parseAiText(text); } catch (e2) { obj = null; } }
     if (obj && obj.outline_version) outline = obj;
     else if (obj && (obj.format === "after-thinking/outline-suggestion" || obj.spans || obj.mode)) aiRaw = text;
-    else showStatus(f.name + " 不是標記檔也不是 AI 建議，略過。", true, true);
   }
-  ctx = { kind: "file", fileName: conv.name, folder: null, title: conv.name.replace(/\.jsonl?$/i, ""), platform: null, revision: 1 };
+  ctx = { kind: "file", fileName: conv.name, folder: null, title: conv.name.replace(/\.jsonl$/i, ""), platform: null, revision: 1 };
   await startConversation(outline);
   if (aiRaw) takeAi(aiRaw, "file");
 }
-
 // 選對話清單（showPicker）在 list.js
 
 // ── 變更、草稿 ──
@@ -671,12 +687,24 @@ async function save() {
             ? Object.assign({}, r, { outline_updated_at: outline.updated_at, outline_mode: outline.mode }) : r));
         });
       showStatus("已儲存到 " + config.repo + " 的 " + ctx.folder + OUTLINE_FILE);
+    } else if (ctx.kind === "zip") {
+      const entries = [...ctx.bundleEntries].filter(([name]) => name !== ctx.bundlePrefix + "outline.json").map(([path, data]) => ({ path, data }));
+      entries.push({ path: ctx.bundlePrefix + "outline.json", data: content });
+      const blob = ATBundle.pack(entries);
+      const name = ctx.fileName.replace(/\.zip$/i, "") + "-已標記.zip";
+      const url = URL.createObjectURL(blob);
+      const a = el("a", { href: url, download: name });
+      document.body.append(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+      ctx.bundleEntries = new Map(entries.map(item => [item.path, typeof item.data === "string" ? new TextEncoder().encode(item.data) : item.data]));
+      ctx.fileName = name;
+      showStatus("已下載包含 outline.json 的完整 ZIP。下次直接選新 ZIP，即可接著標記。");
     } else {
-      const a = el("a", { href: URL.createObjectURL(new Blob([content], { type: "application/json" })), download: OUTLINE_FILE });
-      document.body.append(a);
-      a.click();
-      a.remove();
-      showStatus("已下載 outline.json。下次要接著標，選 conversation.jsonl 時一起選它。");
+      const url = URL.createObjectURL(new Blob([content], { type: "application/json" }));
+      const a = el("a", { href: url, download: OUTLINE_FILE });
+      document.body.append(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+      showStatus("已下載 outline.json。下次請和 conversation.jsonl 一起選取。");
     }
     savedAt = outline.updated_at;
     if (editVersion === version) {

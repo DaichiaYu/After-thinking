@@ -7,6 +7,13 @@
 <link rel="stylesheet" href="tag.css">
 </head>
 <body>
+<nav class="global-nav" aria-label="主要導覽">
+  <a class="brand" href="tag.html" aria-label="After-thinking 對話庫"><span class="brand-mark">AT</span> After-thinking</a>
+  <a class="global-link active" href="tag.html">對話庫</a>
+  <a class="global-link" href="batch.html">批量擷取</a>
+  <span class="global-spacer"></span>
+  <a class="global-link" href="options.html">GitHub 設定</a>
+</nav>
 <header class="top">
   <div class="wrap top-row">
     <div class="title-block">
@@ -142,56 +149,63 @@
     <ol id="preview" class="preview" aria-label="你問過的問題"></ol>
   </section>
 
-  <!-- 標記 -->
+  <!-- 桌面標記工作台：連續閱讀 + 主題側欄 + 情境檢查器 -->
   <section id="workspace" hidden>
-    <div id="multi-panel" hidden>
-      <div class="section-head">
-        <h2>主題</h2>
-        <span id="left" class="pill"></span>
+    <div class="workspace-titlebar">
+      <div class="view-switch seg" role="group" aria-label="檢視方式">
+        <button id="view-time" aria-pressed="true">照時間</button>
+        <button id="view-topic" aria-pressed="false">照主題</button>
       </div>
-      <div id="topics" class="topic-grid"></div>
-      <div class="toolbar">
-        <div class="seg" role="group" aria-label="檢視方式">
-          <button id="view-time" aria-pressed="true">照時間</button>
-          <button id="view-topic" aria-pressed="false">照主題</button>
-        </div>
-        <span class="hint grow">點每句旁邊的主題標籤就能直接改，選單裡也可以加上「也跟別的主題有關」。要一次改很多句：點編號選取；按住 Shift 再點另一個編號，或按「選到這裡」，中間整串一起選。AI 的回覆預設跟著上一句你的發言，岔題時按「另外分類」。</span>
-      </div>
+      <span class="hint">在訊息下方直接標記；選取訊息可以查看右側詳細資訊</span>
+      <button id="toggle-left" type="button" class="secondary small" aria-expanded="true">主題面板</button>
+      <button id="toggle-right" type="button" class="secondary small" aria-expanded="true">檢查器</button>
     </div>
-
-    <div id="flow-panel" hidden>
-      <div class="card flow-card">
-        <div class="section-head">
-          <h2>這段對話的主題</h2>
-          <span id="key-count" class="muted"></span>
-        </div>
-        <div class="row wrap-row">
-          <input id="flow-name" type="text" aria-label="主題名稱" class="strong">
-          <input id="flow-note" type="text" aria-label="主題補充說明" placeholder="補充說明，例如：在評估要不要養貓" class="grow2">
-        </div>
-      </div>
-      <div class="toolbar">
-        <div id="filters" class="seg" role="group" aria-label="顯示範圍"></div>
-        <span class="hint grow">每一句都可以按「標為關鍵」，會照發言的人分成你說的和 AI 說的。一整段都重要時：點第一句的編號，再按最後一句的「選到這裡」（或按住 Shift 點它），然後按「整段標成關鍵」。</span>
-      </div>
-    </div>
-
-    <p class="key-vs-turn"><strong>★ 關鍵</strong>：這句的內容重要，整理時優先讀。<strong>轉向</strong>：方向從這裡改了，這句本身不一定重要，但前後要分開理解，前面的結論可能不算數。</p>
-
     <div class="sticky-stack">
-      <div id="navbar" class="navbar"></div>
+      <div id="navbar" class="navbar" aria-label="快速導航"></div>
       <div id="selbar" class="selbar" hidden></div>
     </div>
-
-    <div id="list" class="list" aria-label="對話"></div>
-
-    <section class="card out">
-      <div class="section-head">
-        <h2>交給下一步的資料</h2>
-        <button id="copy-output" class="secondary small">複製</button>
+    <div class="workspace-columns" id="workspace-columns">
+      <aside id="topic-sidebar" class="topic-sidebar" aria-label="主題結構">
+        <div id="multi-panel" hidden>
+          <div class="section-head">
+            <h2>主題結構</h2>
+            <span id="left" class="pill"></span>
+          </div>
+          <div id="topics" class="topic-grid"></div>
+        </div>
+        <div id="flow-panel" hidden>
+          <div class="section-head">
+            <h2>這段對話的主題</h2>
+            <span id="key-count" class="muted"></span>
+          </div>
+          <div class="flow-fields">
+            <input id="flow-name" type="text" aria-label="主題名稱" class="strong">
+            <input id="flow-note" type="text" aria-label="主題補充說明" placeholder="主題補充說明">
+          </div>
+          <div id="filters" class="seg flow-filters" role="group" aria-label="顯示範圍"></div>
+        </div>
+        <details class="sidebar-guide">
+          <summary>標記說明</summary>
+          <p><strong>關鍵</strong>：重要內容，分析時優先讀。</p>
+          <p><strong>轉向</strong>：討論方向改變，前後脈絡需要分開理解。</p>
+          <p>點訊息編號，搭配 Shift 可批量選取。</p>
+        </details>
+      </aside>
+      <div class="reader-column">
+        <div id="list" class="list" aria-label="對話"></div>
       </div>
-      <pre id="output"></pre>
-    </section>
+      <aside id="inspector" class="inspector" aria-label="標記檢查器">
+        <div class="inspector-header"><h2>標記檢查器</h2><span class="hint">詳細資訊</span></div>
+        <div id="inspector-body"></div>
+      </aside>
+    </div>
+    <details class="out">
+      <summary>交給下一步的資料 <span class="hint">展開檢查標記摘要</span></summary>
+      <div class="out-body">
+        <div class="section-head"><h2>標記摘要</h2><button id="copy-output" class="secondary small">複製</button></div>
+        <pre id="output"></pre>
+      </div>
+    </details>
   </section>
 </main>
 

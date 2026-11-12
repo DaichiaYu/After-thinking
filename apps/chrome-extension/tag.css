@@ -460,3 +460,29 @@ main.wrap { padding:14px 20px 50px; gap:12px; }
 }
 @media(prefers-reduced-motion:reduce) { * {scroll-behavior:auto!important;} }
 /* End AT desktop workspace v2 */
+
+/* Contextual controls added by workspace JS. */
+#workspace .msg .line1 > .chip,
+#workspace .msg .line1 > .follow,
+#workspace .msg .line1 > .turn,
+#workspace .msg .line1 > .also-chip,
+#workspace .msg .line1 > .range-chip,
+#workspace .msg .line1 > .ok-btn { display:none; }
+#workspace .msg .line1 { min-height:20px; }
+#workspace .msg .actions .select-to { visibility:visible; font-size:11px; }
+#workspace .workspace-pick-choices { display:flex; flex-wrap:wrap; gap:6px; padding:5px 0 12px; }
+#workspace .workspace-pick-choices button {
+  border:1px solid #cfd6df; background:#fff; color:#405064;
+  height:30px; padding:0 10px; font-size:12px; border-radius:5px;
+}
+#workspace .workspace-pick-choices .related-picked { background:#eaf6f1; color:#176e5d; border-color:#5f9c8c; }
+#workspace .workspace-topic-picker { margin-top:8px; max-width:660px; display:block; }
+#workspace .workspace-topic-picker .inspector-label { margin:3px 0 5px; }
+#workspace button.workspace-link { border:0; background:none; color:#335d9b; border-radius:3px; height:auto; padding:5px 7px; font-size:12px; font-weight:500; text-align:left; }
+#workspace button.workspace-link:hover { text-decoration:underline; }
+#workspace .workspace-note { margin:10px 0; }
+#workspace .workspace-note textarea { width:100%; resize:vertical; border:1px solid var(--line-2); border-radius:5px; padding:8px 10px; color:var(--ink); background:#fff; }
+#workspace .inspector-suggestion { border-left:2px solid #cfa966; padding-left:10px; margin:12px 0; }
+#workspace .inspector-suggestion strong { font-size:12px; }
+#workspace .inspector-field .inspector-check { display:flex; align-items:flex-start; line-height:1.5; }
+#workspace .inspector-field .inspector-check input { margin-top:3px; }

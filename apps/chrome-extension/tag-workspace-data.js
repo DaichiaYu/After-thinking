@@ -4,6 +4,7 @@ const ATSections = (() => {
   const oldDefault = defaultState, oldApply = applyOutline, oldBuild = buildOutline;
   const oldOutput = outputText, oldReviewItems = reviewItems, oldLabel = itemLabel;
   const oldSource = sourceLabel, oldRows = rowsToShow, oldGoTo = goTo;
+  const oldItems = itemsOf;
   function parse(content) {
     const marks = []; let offset=0, fence=null;
     const lines=String(content||"").split("\n");
@@ -80,6 +81,7 @@ const ATSections = (() => {
     msgs.forEach((m,i)=>{if(marks(i).length)a.push({i,kind:"section",count:marks(i).length,pending:false,origin:"user"});});
     return a.sort((x,y)=>posOf(x)-posOf(y));
   };
+  itemsOf=function(kind){return kind==="key"?reviewItems().filter(x=>["key","range","section"].includes(x.kind)):oldItems(kind);};
   itemLabel=function(it){return it.kind==="section"?"★ AI 小節重點（"+it.count+" 節）":oldLabel(it);};
   sourceLabel=function(it){return it.kind==="section"?"你標的 Markdown 小節":oldSource(it);};
   rowsToShow=function(){

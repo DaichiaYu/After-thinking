@@ -64,10 +64,10 @@
     <div id="convos" class="convos"></div>
     <div class="file-open">
       <p class="muted">沒有用 GitHub，或想標記下載下來的檔案：</p>
-      <label class="file-btn">從電腦開啟 conversation.jsonl
-        <input id="file" type="file" accept=".jsonl,.json" multiple>
+      <label class="file-btn">從電腦開啟 AT ZIP 或 conversation.jsonl
+        <input id="file" type="file" accept=".zip,.jsonl,.json" multiple>
       </label>
-      <p class="hint">要接著標之前存的結果，可以同時選 <code>conversation.jsonl</code> 和 <code>outline.json</code>；有 AI 給的 <code>outline.ai.json</code> 也可以一起選。</p>
+      <p class="hint">ZIP 可直接開啟且自帶附件，不用 GitHub。舊版檔案要接著標，可以同時選 <code>conversation.jsonl</code> 和 <code>outline.json</code>；有 AI 給的 <code>outline.ai.json</code> 也可以一起選。</p>
     </div>
   </section>
 
@@ -224,6 +224,7 @@
 <script src="github.js"></script>
 <script src="capture.js"></script>
 <script src="guide.js"></script>
+<script src="offline-bundle.js"></script>
 <script src="tag.js"></script>
 <script src="tag-ai.js"></script>
 <script src="labels.js"></script>

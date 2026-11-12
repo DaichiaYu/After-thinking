@@ -479,7 +479,14 @@ async function loadFromRepo(folder) {
 
 async function loadFromFiles(files) {
   const list = Array.from(files);
-  const zip = list.find(f => /\.zip$/i.test(f.name));
+  // 檔名可能被瀏覽器改成 UUID 或失去副檔名；依檔案實際標頭辨認 ZIP。
+  const zipCandidates = [];
+  for (const f of list) {
+    if (await ATBundle.looksLikeZip(f)) zipCandidates.push(f);
+    else if (/\.zip$/i.test(f.name)) throw new Error(f.name + " 副檔名是 ZIP，但內容不是可辨識的 ZIP 壓縮檔");
+  }
+  if (zipCandidates.length > 1) throw new Error("一次只能載入一份 ZIP 資料包，請重新選取");
+  const zip = zipCandidates[0];
   if (zip) {
     const entries = await ATBundle.unpack(zip);
     const candidates = [...entries.keys()].filter(p => /(^|\/)source\/conversation\.jsonl$/.test(p));
@@ -691,7 +698,7 @@ async function save() {
       const entries = [...ctx.bundleEntries].filter(([name]) => name !== ctx.bundlePrefix + "outline.json").map(([path, data]) => ({ path, data }));
       entries.push({ path: ctx.bundlePrefix + "outline.json", data: content });
       const blob = ATBundle.pack(entries);
-      const name = ctx.fileName.replace(/\.zip$/i, "") + "-已標記.zip";
+      const name = ctx.fileName.replace(/\.zip$/i, "").replace(/-已標記$/i, "") + "-已標記.zip";
       const url = URL.createObjectURL(blob);
       const a = el("a", { href: url, download: name });
       document.body.append(a); a.click(); a.remove();

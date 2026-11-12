@@ -1,4 +1,4 @@
-# After-thinking Capture v0.8.1
+# After-thinking Capture v0.9.0 (candidate)
 
 > **Capture ChatGPT, Claude, Gemini, and Grok conversations as After-thinking source files, then tag them yourself before any AI analysis.**
 
@@ -629,3 +629,14 @@ ChatGPT 的回覆裡會夾著它自己的版面語法（`<box>`、`<row>`、`<te
 - `metadata.yaml` 多了 `capture`（擷取資訊）欄位，After-thinking 的 `docs/source-format.md` 之後需要補上這個欄位的說明。
 - 重新擷取時 `message_id` 會照位置重新編號，這不符合 `docs/source-format.md` 對整理過原文的規定。標記能靠內容指紋對回去（見「存成什麼」），但已經寫好、引用了訊息編號的分析檔不會自動跟著改。
 - 轉向提示是精確比對字詞：換個說法就抓不到，也可能誤抓含有這些字的詞（「不對稱」裡有「不對」），所以要你確認才算數。
+
+## Desktop tagging workspace — v0.9.0 (implementation branch)
+
+The tagging page has a desktop-first editor layout: global navigation on top, a compact topic sidebar, continuous reading in the center, and a contextual inspector on the right. The topic and inspector panes can be collapsed; the existing pending/key/turn/all navigation, arrow buttons, J/K shortcuts, original conversation list, AI-draft review, batch selection, offline drafts and GitHub save remain available.
+
+- **Tag directly under a message** with the primary topic and multiple also-related topics (stored as `topics[].also_messages`). For AI replies, the user can override the inherited topic without changing the preceding question.
+- **Mark individual AI sections** by native Markdown `#` headings, expand one section at a time, or switch to the full original response. A section key does not mark the whole reply. The key filter and review outline include section-level marks.
+- `outline.json` version 6 adds `section_key_points[]` and `unmatched_section_key_points[]`. The latter preserves marks that could not be matched safely after re-capture. Earlier outline versions continue to load.
+- The plugin interface is still intended for Chrome on desktop. A separate mobile-capable GitHub-backed display/editor web app is **not** included in this branch.
+
+The original capture and attachment logic is otherwise unchanged. **Validation boundary:** source/syntax/contracts are checked in this implementation branch, but hands-on browser regression testing with captured conversations and a disposable GitHub analysis repository is still required before production merging.

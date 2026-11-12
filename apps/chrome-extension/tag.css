@@ -504,3 +504,75 @@ main.wrap { padding:14px 20px 50px; gap:12px; }
 #workspace .unmatched-entry .inspector-actions { margin-top:6px; }
 #workspace .unmatched-entry .inspector-actions button { font-size:11.5px; white-space:normal; min-height:32px; height:auto; }
 @media(max-width:750px){.unmatched-banner{align-items:flex-start;flex-wrap:wrap;}}
+
+/* Three independent desktop scroll regions — main editor never grows with messages.
+   This mode is enabled only for an active tagging workspace, not picker/preview. */
+@media (min-width: 901px) {
+  html:has(body.tagging-active) { height:100%; overflow:hidden; }
+  body.tagging-active {
+    height:100vh;
+    height:100dvh;
+    min-height:0;
+    overflow:hidden;
+    display:flex;
+    flex-direction:column;
+  }
+  body.tagging-active > .global-nav,
+  body.tagging-active > .top { flex:0 0 auto; }
+  body.tagging-active > main.wrap {
+    flex:1 1 auto;
+    min-height:0;
+    width:100%;
+    overflow:hidden;
+    display:flex;
+    flex-direction:column;
+    padding-top:10px;
+    padding-bottom:10px;
+    gap:8px;
+  }
+  body.tagging-active #workspace {
+    flex:1 1 auto;
+    min-height:0;
+    height:auto;
+    overflow:hidden;
+  }
+  body.tagging-active .workspace-titlebar,
+  body.tagging-active .sticky-stack { flex:0 0 auto; }
+  body.tagging-active #workspace .sticky-stack { position:relative; top:auto; }
+  body.tagging-active .workspace-columns {
+    flex:1 1 auto;
+    min-height:0;
+    height:0;
+    overflow:hidden;
+  }
+  body.tagging-active .topic-sidebar,
+  body.tagging-active .reader-column,
+  body.tagging-active .inspector {
+    min-height:0;
+    max-height:100%;
+    overflow-y:auto;
+    overflow-x:hidden;
+    overscroll-behavior:contain;
+    scrollbar-gutter:stable;
+  }
+  body.tagging-active .topic-sidebar,
+  body.tagging-active .inspector { position:relative; }
+  body.tagging-active #workspace .out {
+    flex:0 0 auto;
+    max-height:36%;
+    overflow-y:auto;
+  }
+  body.tagging-active #ai-panel[open] {
+    flex:0 1 auto;
+    min-height:0;
+    max-height:min(28vh, 245px);
+    overflow-y:auto;
+  }
+  body.tagging-active #error,
+  body.tagging-active #status,
+  body.tagging-active #unmatched-banner,
+  body.tagging-active #draft-banner { flex:0 0 auto; max-height:18vh; overflow-y:auto; }
+  /* The older directory drawer sits outside the workspace and stays fixed. */
+}
+/* If the window is too narrow for three usable columns, preserve page scrolling
+   instead of trapping content in columns narrower than their controls. */

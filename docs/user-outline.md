@@ -83,3 +83,27 @@ Analysis must not read `outline.ai.json` as author judgment, and must not prefer
 - **原文變過時**：先比對內容指紋，用指紋或平台訊息編號對回去，對不上的要問，不能只照編號或位置用。
 - **v0.8.1 的精簡指令**：能讀寫 GitHub 的 AI 先讀使用者資料倉庫的 `guides/outline-ai.md`（由擴充功能管理），下載檔方式則在 Markdown 內附上同一份規則與完整對話。原始規則見 [`apps/chrome-extension/outline-ai-guide.md`](../apps/chrome-extension/outline-ai-guide.md)。這只改變提示詞如何交付，不改六階段的正式輸入規則。
 - **`outline.ai.json`** 是 AI 的建議，只給作者審閱用，分析時不讀，也不能優先於 `outline.json`。
+
+
+### Desktop tagging workspace and section-level key points (outline v6)
+
+Capture v0.9.0 adds a three-column desktop tagging workspace. Topic assignment can be edited directly below each message, without leaving the reading flow. Each message still has **one primary topic** in `topics[].messages` and zero or more cross-references in `topics[].also_messages`. A separately marked AI reply can have its own assignment; otherwise it follows the preceding author message.
+
+`section_key_points[]` (v6) records the author's judgment that **a Markdown section within an assistant message** is important, without declaring the entire reply a key point. Each entry contains:
+
+- `message_id` — assistant message in `source/conversation.jsonl`
+- `heading`, `level` — title and ATX Markdown heading depth (`#` through `######`)
+- `heading_start`, `section_end` — UTF-16 offsets into the captured `content`, for display and locating the section
+- `section_fingerprint` — FNV-1a fingerprint of `section` + newline + the original substring from this heading to the next heading (or message end), computed in UTF-16 code units
+- `origin: user` — directly selected by the author
+
+This is a content-location cue, not source evidence by itself. Stage 1 and Stage 2 should read and cite the underlying message (and relevant section text). A section marker never silently promotes all other sections in the reply to key content. A message can independently appear in `key_points[]`, `key_ranges[]` and `section_key_points[]`.
+
+The extension parses native Markdown ATX headings outside fenced code blocks; it does not ask an AI to infer headings. If the source changes, a saved section mark is restored only when its message and section fingerprint resolve safely. Unmatched entries are preserved in `unmatched_section_key_points[]` for review, not silently attached to a different heading. Versions 1–5 remain readable.
+
+### 桌面標記工作台與 AI 小節重點（第 6 版）
+
+- 訊息下方可直接改「主要主題」與「其他相關主題」，保留一個主要歸屬、可有多個交叉參照的設計。
+- `section_key_points[]` 是使用者只選中 AI 回覆某個原生 Markdown 小節的重點，不等於整則訊息都是關鍵。
+- 小節定位含訊息 ID、標題、層級、原文位置與內容指紋；重新擷取導致小節內容變動時，不會直接套到看起來相似但內容不同的標題。
+- 對不回去的標記保留在 `unmatched_section_key_points[]`，供人工核對。既有 `outline.json` 第 1–5 版仍可讀。

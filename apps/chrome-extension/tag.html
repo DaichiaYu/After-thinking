@@ -81,13 +81,13 @@
 
   <!-- 請 AI 先標一版 -->
   <details id="ai-panel" class="card ai-panel" hidden>
-    <summary><span class="ai-title">請 AI 先標一版</span> <span id="ai-status" class="muted"></span></summary>
+    <summary><span class="ai-title">讓其他 AI 協助預先標記</span> <span id="ai-status" class="muted"></span></summary>
     <div class="ai-body">
-      <p class="hint">對話太長、不想從頭看時，可以請你喜歡的 AI 先標一版，再到這裡看它怎麼標。AI 的建議會用虛線顯示，你可以接受、修改或刪掉；<strong>沒動的會當作你同意</strong>，但會記下這是 AI 標的、你沒有反駁。</p>
+      <p class="hint">這裡是選用功能：請其他 AI 先產生標記建議，再匯回這個工作台讓你審查。你也可以完全跳過，直接自己標記。AI 的建議會用虛線顯示，你可以接受、修改或刪掉；<strong>沒動的會當作你同意</strong>，但會記下這是 AI 標的、你沒有反駁。</p>
       <div id="ai-current" class="ai-current"></div>
       <div class="ai-ways">
         <section id="ai-way-b" class="ai-way">
-          <h3>讓 AI 直接寫進倉庫</h3>
+          <h3>方式 A｜讓 AI 將建議寫到 GitHub</h3>
           <p class="hint">適合能讀寫 GitHub 的 AI，例如 Claude Code、Codex、有接 GitHub 的 Claude。「複製指令」只給對話位置與原文指紋；完整規則會檢查並寫入你資料倉庫的 <code>guides/outline-ai.md</code>。確認寫入狀態後再貼給 AI，讓它只產生 <code>outline.ai.json</code>，不要改你的標記和原文。</p>
           <div class="row wrap-row">
             <button id="ai-copy-b">複製指令</button>
@@ -95,13 +95,14 @@
           </div>
         </section>
         <section class="ai-way">
-          <h3>下載檔案給任何 AI</h3>
+          <h3>方式 B｜下載對話與規則，請其他 AI 產生建議</h3>
           <ol class="hint steps">
-            <li>下載檔案（包含完整標記規則和編號好的對話，無須另外找指引）。</li>
+            <li>下載給 AI 的請求檔，內含對話及標記規則（這不是標記結果檔）。</li>
             <li>把檔案和下面這句話一起丟給 AI。</li>
-            <li>把 AI 給的 <code>outline.ai.json</code> 匯入。</li>
+            <li>取得 AI 回傳的 <code>outline.ai.json</code> 後，在此匯入並審查；不必連 GitHub。</li>
           </ol>
-          <div class="row wrap-row"><button id="ai-download">下載給 AI 的檔案</button></div>
+          <p class="hint">若你只想自己標記，不需要下載這份請求檔。從標記頁入口載入 <code>conversation.jsonl</code>，完成後按「下載 outline.json」即可。</p>
+          <div class="row wrap-row"><button id="ai-download">下載 AI 預先標記請求檔</button></div>
           <div class="prompt-box"><span id="ai-prompt-a"></span><button id="ai-copy-a" class="secondary small">複製這句話</button></div>
           <div class="row wrap-row">
             <label class="file-btn">匯入 AI 給的檔案<input id="ai-file" type="file" accept=".json,.txt,.md"></label>

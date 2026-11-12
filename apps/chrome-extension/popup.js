@@ -420,28 +420,47 @@ async function main() {
   });
 
   document.getElementById("download").addEventListener("click", async (event) => {
-    const prepared = prepare();
-    if (!prepared) return;
+    const prepared = prepare(); if (!prepared) return;
     const { id, kept } = prepared;
     event.target.disabled = true;
-    status.textContent = "下載中…";
-    const base = "after-thinking/" + id + "/source/";
+    status.textContent = "正在建立單一 ZIP 資料包…";
     try {
-      const saved = await download(base + "conversation.jsonl", buildJsonl(kept));
-      await download(base + "metadata.yaml", buildMetadata(kept.length, items.length, platform, page));
+      const root = id + "/";
+      const guide = ["# After-thinking 離線資料包", "",
+        "可直接在 AT「標記對話」頁選這個 ZIP，不需要 GitHub 或解壓。", "",
+        "- source/conversation.jsonl：完整原始對話（給程式使用，不是亂碼）",
+        "- source/metadata.yaml：來源、日期和擷取資訊",
+        "- source/attachments/：下載成功的圖片與附件",
+        "- 對話閱讀版.md：給人閱讀的 Markdown 對話",
+        "- 對話快速導覽.md：完整提問與 AI 回覆的原生標題",
+        "- outline.json：完成標記後重新下載 ZIP 才會出現", "",
+        "操作：在標記頁選 ZIP → 標記 → 下載已標記 ZIP → 下次選新 ZIP 接續。",
+        "原始資料與正式標記分離，閱讀版只供快速瀏覽。", ""].join("\n");
+      const readable = ["# " + (page.title || "AI 對話"), "", "來源：" + page.url, ""];
+      const quick = ["# 對話快速導覽", "", "程式產生，不是 AI 摘要。", ""];
+      kept.forEach((m, i) => {
+        const no = String(i+1).padStart(3, "0");
+        readable.push("## " + no + " · " + (m.speaker === "author" ? "你" : "AI"), "", m.content || "", "");
+        quick.push("## " + no + " · " + (m.speaker === "author" ? "你" : "AI"), "");
+        if (m.speaker === "author") quick.push(m.content || "", "");
+        else { const hs = String(m.content || "").split("\n").filter(line => /^#{1,6}\s+\S/.test(line));
+          quick.push(hs.length ? hs.map(h => "- " + h.replace(/^#{1,6}\s+/, "")).join("\n") : "（沒有 Markdown 小標題）", ""); }
+      });
+      const entries = [
+        { path: root + "README-請先看.md", data: guide },
+        { path: root + "source/conversation.jsonl", data: buildJsonl(kept) },
+        { path: root + "source/metadata.yaml", data: buildMetadata(kept.length, items.length, platform, page) },
+        { path: root + "對話閱讀版.md", data: readable.join("\n") },
+        { path: root + "對話快速導覽.md", data: quick.join("\n") }
+      ];
       for (const f of filesFor(kept)) {
-        await download(base + f.path, Uint8Array.from(atob(f.base64), (c) => c.charCodeAt(0)));
+        if (!/^attachments\/[^/]+$/.test(f.path)) continue;
+        entries.push({ path: root + "source/" + f.path, data: Uint8Array.from(atob(f.base64), c => c.charCodeAt(0)) });
       }
-      const normalized = saved.replace(/\\/g, "/");
-      if (normalized.endsWith(base + "conversation.jsonl")) {
-        status.textContent = "已下載 " + kept.length + " 則訊息到「下載」資料夾的 after-thinking/" + id + "/source/";
-      } else {
-        status.textContent = "已下載，但 Chrome 沒有採用指定的檔名，實際存成：" + saved +
-          "。通常是其他會接管下載的擴充功能造成的，請回報給開發者。";
-      }
-    } catch (e) {
-      status.textContent = "下載失敗：" + e.message;
-    }
+      const blob = ATBundle.pack(entries);
+      const saved = await download("after-thinking-" + id + ".zip", blob);
+      status.textContent = "已下載一份 ZIP（" + kept.length + " 則），可直接在標記頁開啟，無需 GitHub。" + (saved ? " 路徑：" + saved : "");
+    } catch (e) { status.textContent = "下載失敗：" + e.message; }
     event.target.disabled = false;
   });
 }

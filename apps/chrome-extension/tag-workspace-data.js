@@ -5,27 +5,57 @@ const ATSections = (() => {
   const oldOutput = outputText, oldReviewItems = reviewItems, oldLabel = itemLabel;
   const oldSource = sourceLabel, oldRows = rowsToShow, oldGoTo = goTo;
   const oldItems = itemsOf;
+  // Original Markdown headings have highest priority. Some older DOM/innerText
+  // captures have no '#' markers; a conservative numbered-heading fallback
+  // can still expose a section outline without changing source content.
   function parse(content) {
-    const marks = []; let offset=0, fence=null;
-    const lines=String(content||"").split("\n");
-    for (const line of lines) {
-      const t=line.trim(), f=t.match(/^(\x60{3,}|~{3,})/);
-      if (f) {
-        if (!fence) fence={ch:f[1][0],n:f[1].length};
-        else if (f[1][0]===fence.ch && f[1].length>=fence.n) fence=null;
-      } else if (!fence) {
+    const text=String(content||""),native=[],numbered=[];
+    const lines=text.split("\n");
+    let offset=0,fence=null;
+    for(let i=0;i<lines.length;i++){
+      const line=lines[i],trim=line.trim();
+      const fenceMark=trim.match(/^(`{3,}|~{3,})/);
+      if(fenceMark) {
+        if(!fence)fence={ch:fenceMark[1][0],size:fenceMark[1].length};
+        else if(fence.ch===fenceMark[1][0]&&fenceMark[1].length>=fence.size)fence=null;
+      } else if(!fence){
         const h=line.match(/^ {0,3}(#{1,6})[ \t]+(.+?)\s*$/);
-        if (h) {
+        if(h){
           const title=h[2].replace(/(?:^|[ \t]+)#+[ \t]*$/,"").trim();
-          if (title) marks.push({title,level:h[1].length,start:offset,bodyStart:offset+line.length+1});
+          if(title)native.push({title,level:h[1].length,start:offset,bodyStart:offset+line.length+1,source:"markdown"});
+        } else {
+          // A numbered outline requires at least two distinct, short entries
+          // in the same numbering family; single numbered list items do not count.
+          const zh=line.match(/^ {0,3}([一二三四五六七八九十]{1,3})[、．.][ \t]*(.{2,60})\s*$/);
+          const ar=line.match(/^ {0,3}(\d{1,2})[.、．)][ \t]+(.{2,60})\s*$/);
+          const paren=line.match(/^ {0,3}[（(]([一二三四五六七八九十\d]{1,3})[）)][ \t]*(.{2,60})\s*$/);
+          const m=zh||ar||paren;
+          if(m){
+            const family=zh?"zh":ar?"numeric":"paren";
+            const title=(m[1]+(zh?"、":ar?".":"）")+" "+m[2]).trim();
+            // Avoid treating complete question/sentence paragraphs as headings.
+            if(!/[。！？.!?]$/.test(m[2].trim()))
+              numbered.push({title,level:0,start:offset,bodyStart:offset+line.length+1,
+                source:"numbered",family,ordinal:m[1]});
+          }
         }
       }
       offset+=line.length+1;
     }
-    return marks.map((s,i)=>{
-      const end=marks[i+1]?marks[i+1].start:content.length;
-      return {...s,end,body:content.slice(s.bodyStart,end).trim(),
-        fingerprint:fingerprint({speaker:"section",content:content.slice(s.start,end)})};
+    let selected=native;
+    if(!selected.length && numbered.length>=2){
+      const groups={};
+      numbered.forEach(m=>(groups[m.family]||=[]).push(m));
+      const valid=Object.values(groups)
+        .filter(a=>a.length>=2&&new Set(a.map(x=>x.ordinal)).size>=2)
+        .filter(a=>a.some((x,i)=>i<a.length-1 && text.slice(x.bodyStart,a[i+1].start).trim()));
+      valid.sort((a,b)=>b.length-a.length);
+      selected=valid[0]||[];
+    }
+    return selected.map((s,i)=>{
+      const end=selected[i+1]?selected[i+1].start:text.length;
+      return {...s,end,body:text.slice(s.bodyStart,end).trim(),
+        fingerprint:fingerprint({speaker:"section",content:text.slice(s.start,end)})};
     });
   }
   function marks(i) { return S.sectionKeys[msgs[i].id] || []; }

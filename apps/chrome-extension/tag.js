@@ -699,6 +699,9 @@ async function save() {
 function showMain() {
   updateTop();
   const choosing = !S.mode;
+  // Only lock the viewport while the three-column tagging editor is visible.
+  // The conversation picker and mode preview remain normal scrolling pages.
+  document.body.classList.toggle("tagging-active", !choosing);
   $("mode-choice").hidden = !choosing;
   $("workspace").hidden = choosing;
   $("drawer").hidden = choosing || !UI.drawer;
@@ -1303,7 +1306,7 @@ $("change-mode").addEventListener("click", () => {
   $("mode-choice").hidden = false;
   $("workspace").hidden = true;
   $("drawer").hidden = true;
-  document.body.classList.remove("drawer-open");
+  document.body.classList.remove("drawer-open", "tagging-active");
   renderPreview();
 });
 $("view-time").addEventListener("click", () => { UI.view = "time"; render(); });

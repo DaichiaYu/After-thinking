@@ -144,6 +144,6 @@ Grok 回覆裡的 `<grok:render …>` 標籤在擷取時也已拿掉（`capture.
 
 新版標記工作台把主題選擇移到每則訊息下方，右側保留詳細審查與備註。主要主題仍記在 `topics[].messages`，其他相關主題記在 `topics[].also_messages`；不要將交叉參照視為另一份原文。
 
-`outline.json` 第 6 版可多出 `section_key_points[]`：它記錄作者指定的 **AI 回覆內某個 Markdown 小節**，包含 `message_id`、`heading`、`level`、`heading_start`、`section_end`、`section_fingerprint` 與 `origin`。這是「局部關鍵」，不代表整則 AI 回覆皆重要。分析時應回到 `source/conversation.jsonl` 閱讀該節內容，不能只憑標題猜測結論。
+`outline.json` 第 6 版可多出 `section_key_points[]`：它記錄作者指定的 **AI 回覆內某個 Markdown 小節**，包含 `message_id`、`message_fingerprint`（整則訊息指紋）、`heading`、`level`、`heading_start`、`section_end`、`section_fingerprint` 與 `origin`。這是「局部關鍵」，不代表整則 AI 回覆皆重要。分析時應回到 `source/conversation.jsonl` 閱讀該節內容，不能只憑標題猜測結論。
 
 讀取前請先核對訊息及小節指紋。不匹配的小節保存在 `unmatched_section_key_points[]`，不能擅自對應到相似標題。舊版沒有這兩個欄位是正常情況，不影響原有標記。

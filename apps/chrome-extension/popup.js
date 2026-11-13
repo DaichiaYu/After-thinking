@@ -198,6 +198,10 @@ let lastScrollLog = null;
 let lastApiLog = null;
 let lastAttachmentReport = null;
 
+document.getElementById("open-agent").addEventListener("click", () => {
+  chrome.tabs.create({ url: chrome.runtime.getURL("agent.html") });
+});
+
 document.getElementById("open-tags").addEventListener("click", () => {
   chrome.tabs.create({ url: chrome.runtime.getURL("tag.html") });
 });

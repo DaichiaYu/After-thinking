@@ -10,6 +10,11 @@
     <p id="platform" class="muted">正在讀取頁面…</p>
   </header>
 
+  <aside class="agent-route" data-at-role="agent-primary-route">
+    <strong>Agent 優先操作：直接上傳 GitHub</strong>
+    <p>如果使用者說「下載、擷取、保存、備份一段對話」，但沒有明確要求本機檔案，請使用以下專用入口。不要按「離線 ZIP」。</p>
+    <button id="open-agent" data-at-action="open-agent-github-capture">Agent：指定網址 → 上傳 GitHub</button>
+  </aside>
   <p id="seen" hidden></p>
 
   <section id="result" hidden>
@@ -40,7 +45,7 @@
     <button id="open-result" class="secondary" hidden>在 GitHub 上查看</button>
 
     <div class="pair">
-      <button id="download" class="secondary">下載離線 ZIP（含原文與附件）</button>
+      <button id="download" class="secondary" data-at-action="download-offline-zip">僅離線備份：下載 ZIP（不上傳 GitHub）</button>
       <button id="open-options" class="secondary">GitHub 設定</button>
     </div>
   </section>
@@ -49,7 +54,7 @@
 
   <footer>
     <button id="open-tags" class="secondary">標記擷取過的對話</button>
-    <p class="hint">先預覽對話、分主題或標關鍵，也可以請外部 AI 先標一版再回來確認；標記頁本身不會主動呼叫 AI。結果存成 outline.json。</p>
+    <p class="hint">標記入口與擷取分開：預覽對話、分主題或標關鍵，結果儲存為 outline.json。</p>
     <button id="open-batch" class="secondary">批量擷取 Gemini 對話</button>
     <p class="hint">一次把 Gemini 側邊欄裡的對話全部抓進 GitHub 的 inbox/，抓過的會自動跳過。</p>
     <button id="diagnose" class="secondary">複製診斷報告</button>

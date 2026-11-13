@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AT — Agent 指定網址擷取</title>
+  <link rel="stylesheet" href="agent.css">
+</head>
+<body>
+<main>
+  <header>
+    <div class="eyebrow">AFTER-THINKING · CAPTURE</div>
+    <h1>Agent 擷取 → GitHub</h1>
+    <p>預設目的地：<strong>已設定的私人 GitHub 倉庫</strong>。輸入 AI 平台的原始私人對話網址，AT 會在已登入的 Chrome 擷取，確認後直接上傳。<strong>此流程不會下載 ZIP。</strong></p>
+  </header>
+  <section class="panel">
+    <label for="target-url">對話網址</label>
+    <textarea id="target-url" rows="2" spellcheck="false" placeholder="https://chatgpt.com/c/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"></textarea>
+    <p id="url-hint" class="hint">支援 ChatGPT、Claude、Gemini、Grok；公開分享網址不能直接代替原始私人對話。</p>
+    <label class="check" for="auto-upload">
+      <input id="auto-upload" type="checkbox" checked>
+      <span><strong>擷取完整就自動上傳 GitHub</strong>（若有缺漏警告則先暫停，讓你確認）</span>
+    </label>
+    <button id="capture" data-at-action="capture-to-github" data-at-step="1">擷取並上傳 GitHub</button>
+    <p class="hint">只會針對你指定的 AI 網站要求瀏覽器存取授權。若網站要求重新登入，請先完成登入後重試。</p>
+  </section>
+  <section id="review" class="panel" hidden>
+    <h2>擷取檢查</h2>
+    <p class="hint" id="review-explainer">擷取有警告或已關閉自動上傳，確認後可繼續。</p>
+    <dl id="summary"></dl>
+    <label for="discussion-id">儲存資料夾名稱（Discussion ID）</label>
+    <input id="discussion-id" type="text" spellcheck="false">
+    <p id="capture-warnings" class="warning" hidden></p>
+    <label id="incomplete-wrap" class="check" hidden>
+      <input id="accept-incomplete" type="checkbox"> 我已確認擷取警告，仍要保存目前能取得的資料
+    </label>
+    <div class="actions">
+      <button id="upload" data-at-action="commit-to-github" data-at-step="2" disabled>確認上傳 GitHub（不下載 ZIP）</button>
+      <button id="back" data-at-action="reset" class="subtle" type="button">重新指定網址</button>
+    </div>
+  </section>
+  <section id="done" class="panel" hidden>
+    <h2>完成</h2>
+    <p id="result-text"></p>
+    <p class="hint">Agent 可直接讀取下方結果 JSON，回報成功儲存的倉庫與資料夾。</p>
+    <pre id="result-json" class="machine-output" aria-label="Agent 執行結果 JSON"></pre>
+    <div class="actions">
+      <button id="copy-result" data-at-action="copy-result" class="subtle">複製執行結果 JSON（給 Agent）</button>
+      <button id="open-folder" data-at-action="open-github-folder">開啟 GitHub 資料夾</button>
+      <button id="open-tag" data-at-action="open-desktop-tag" class="subtle">在電腦上標記</button>
+    </div>
+    <p class="hint">手機標記網頁尚在規劃中，這個測試版僅提供 GitHub 路徑及電腦版標記入口。</p>
+  </section>
+  <section class="panel log">
+    <h2>執行狀態</h2>
+    <output id="status" role="status" aria-live="polite">尚未開始。</output>
+    <pre id="agent-status-json" class="machine-output" data-at-role="agent-status" aria-label="Agent 階段狀態 JSON"></pre>
+  </section>
+  <footer>AT Capture Agent URL PoC · 不會擷取其他分頁 · 不會將對話傳到 AT 伺服器</footer>
+</main>
+<script src="github.js"></script>
+<script src="capture.js"></script>
+<script src="guide.js"></script>
+<script src="agent-url.js"></script>
+<script src="agent.js"></script>
+</body>
+</html>

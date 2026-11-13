@@ -1,4 +1,4 @@
-# After-thinking Capture v0.9.0 (candidate)
+# After-thinking Capture v0.9.1 (candidate)
 
 > **Capture ChatGPT, Claude, Gemini, and Grok conversations as After-thinking source files, then tag them yourself before any AI analysis.**
 

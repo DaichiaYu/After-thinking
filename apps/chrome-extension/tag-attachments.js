@@ -26,7 +26,7 @@ const ATAttachments = (() => {
     return att.name || (pathFor(att) ? pathFor(att).split("/").pop() : kindOf(att) + " " + (index + 1));
   }
   function extension(att) {
-    const name = (att.name || att.file || "").split("/").pop();
+    const name = (att.content_note === "extracted_text" ? att.file : (att.name || att.file || "")).split("/").pop();
     return (name.match(/\.([a-z0-9]{1,10})$/i) || [,""])[1].toLowerCase();
   }
   function typeOf(att, bytes) {
@@ -47,14 +47,10 @@ const ATAttachments = (() => {
     const dialog = $dialog();
     if (dialog?.open) dialog.close();
   }
-  function contextKey() {
-    if (!ctx) return "";
-    return ctx.kind + "|" + (ctx.kind === "repo" ? config.repo + "/" + branch + "/" + ctx.folder :
-      ctx.kind === "zip" ? ctx.bundlePrefix : ctx.fileName);
-  }
   function ensureContext() {
-    const key = contextKey();
-    if (key !== activeContext) { reset(); activeContext = key; }
+    // Compare the actual loaded discussion, not its folder name:
+    // reimporting a revised ZIP into the same folder must invalidate cached bytes and blob URLs.
+    if (ctx !== activeContext) { reset(); activeContext = ctx; }
   }
   function decodeBase64(base64, maxBytes) {
     const clean = String(base64 || "").replace(/\s+/g, "");
@@ -124,7 +120,11 @@ const ATAttachments = (() => {
   function download(att, url) {
     const a = document.createElement("a");
     a.href = url;
-    a.download = labelOf(att, 0).replace(/[\\/]/g, "_").replace(/[^\w.\- \u4e00-\u9fff\u3040-\u30ff]/g, "_");
+    const sourceName = labelOf(att, 0);
+    const actualName = att.content_note === "extracted_text"
+      ? sourceName.replace(/\.[^.]+$/, "") + "-擷取文字.txt"
+      : sourceName;
+    a.download = actualName.replace(/[\\/]/g, "_").replace(/[^\w.\- \u4e00-\u9fff\u3040-\u30ff]/g, "_");
     document.body.append(a); a.click(); a.remove();
   }
   function showModal(att, resource) {

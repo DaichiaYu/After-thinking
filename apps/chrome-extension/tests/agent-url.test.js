@@ -8,6 +8,7 @@ const uuid = "12345678-abcd-1234-abcd-123456789abc";
 const cases = [
   ["https://chatgpt.com/c/" + uuid, "chatgpt", uuid],
   ["https://chat.openai.com/c/" + uuid + "?utm_source=test#reply", "chatgpt", uuid],
+  ["https://chatgpt.com/g/g-p-abcdef0123456789-example-project/c/" + uuid, "chatgpt", uuid],
   ["https://claude.ai/chat/" + uuid, "claude", uuid],
   ["https://gemini.google.com/app/abc123def4567890", "gemini", "abc123def4567890"],
   ["https://gemini.google.com/gem/some-gem/abc123def4567890", "gemini", "abc123def4567890"],
@@ -63,4 +64,12 @@ assert.ok(popupJs.includes('getURL("agent.html")'));
 assert.ok(agentJs.includes("chrome.permissions.request"));
 assert.ok(agentJs.includes("chrome.scripting.executeScript"));
 assert.ok(agentJs.includes("commitFiles("));
+assert.ok(html.includes('id="auto-upload"'), "Agent auto-upload toggle missing");
+assert.ok(html.includes('data-at-action="capture-to-github"'), "Agent primary action marker missing");
+assert.ok(html.includes('id="result-json"'), "Agent machine result output missing");
+assert.ok(agentJs.includes("if (shouldAutoUpload) await uploadCaptured()"), "One-click auto-upload flow missing");
+assert.ok(agentJs.includes("warnings.length === 0"), "Auto-upload safety gate missing");
+assert.ok(agentJs.includes("machine.result = outcome"), "Machine status missing success result");
+assert.ok(popupHtml.includes('data-at-role="agent-primary-route"'), "Agent guidance not visible in popup");
+assert.ok(popupHtml.includes('僅離線備份：下載 ZIP（不上傳 GitHub）'), "Offline ZIP ambiguity not resolved");
 console.log("AT agent URL PoC: " + cases.length + " valid URLs, " + rejected.length + " rejected URLs, wiring checks OK.");

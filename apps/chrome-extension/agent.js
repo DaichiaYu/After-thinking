@@ -107,6 +107,7 @@
     if (!target.ok) { setStatus(target.reason, "invalid_target"); return; }
     const autoUpload = el("auto-upload").checked;
     let shouldAutoUpload = false;
+    let agentTabId = null;
     machine.target = target.url;
     machine.platform = target.platform;
     machine.ok = false;
@@ -123,6 +124,11 @@
       setStatus("正在要求這個 AI 網站的瀏覽器存取權限…", "authorizing");
       const granted = await chrome.permissions.request({ origins: [target.origin_pattern] });
       if (!granted) throw new Error("未授權讀取此網站，因此取消擷取。");
+      // Permission is requested before any other awaited operation to preserve
+      // Chrome's user gesture. Remember this tab so the agent can read results.
+      if (typeof chrome.tabs.getCurrent === "function") {
+        try { agentTabId = (await chrome.tabs.getCurrent())?.id ?? null; } catch (_) {}
+      }
       if (target.platform === "gemini") {
         try { await ensureGeminiRecorder(); } catch (_) { /* timestamps optional */ }
       }
@@ -193,6 +199,11 @@
     } catch (e) {
       setStatus("擷取失敗：" + (e.message || String(e)) + "\n不會上傳任何對話。", "capture_failed");
     } finally {
+      // Bring the Agent's task/status page back after opening the AI chat.
+      // Keeping the target chat active during extraction helps scroll fallback.
+      if (agentTabId !== null && typeof chrome.tabs.update === "function") {
+        try { await chrome.tabs.update(agentTabId, { active: true }); } catch (_) {}
+      }
       running = false;
       el("capture").disabled = false;
       updateUploadEnabled();

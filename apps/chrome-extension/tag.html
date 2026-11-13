@@ -221,6 +221,16 @@
   <ol id="drawer-list" class="drawer-list"></ol>
 </aside>
 
+<dialog id="attachment-preview" class="attachment-preview-dialog" aria-labelledby="attachment-preview-title">
+  <div class="attachment-preview-header">
+    <h2 id="attachment-preview-title">附件預覽</h2>
+    <div class="attachment-preview-header-actions">
+      <button type="button" id="attachment-preview-download" class="secondary">下載原檔</button>
+      <button type="button" id="attachment-preview-close" class="secondary" aria-label="關閉附件預覽">關閉</button>
+    </div>
+  </div>
+  <div id="attachment-preview-body" class="attachment-preview-body"></div>
+</dialog>
 <script src="github.js"></script>
 <script src="capture.js"></script>
 <script src="guide.js"></script>
@@ -232,5 +242,6 @@
 <script src="list.js"></script>
 <script src="tag-workspace-data.js"></script>
 <script src="tag-workspace.js"></script>
+<script src="tag-attachments.js"></script>
 </body>
 </html>

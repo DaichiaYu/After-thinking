@@ -212,7 +212,14 @@ function parseJsonl(text) {
     speaker: r.speaker === "author" || r.speaker === "assistant" ? r.speaker : "external",
     content: typeof r.content === "string" ? r.content : "",
     ts: r.timestamp || null,
-    pid: r.platform_message_id || null
+    pid: r.platform_message_id || null,
+    attachments: Array.isArray(r.attachments) ? r.attachments.filter(a => a && typeof a === "object").map(a => ({
+      kind: typeof a.kind === "string" ? a.kind : "file",
+      name: typeof a.name === "string" ? a.name : null,
+      file: typeof a.file === "string" ? a.file : null,
+      missing: typeof a.missing === "string" ? a.missing : null,
+      content_note: a.content_note === "extracted_text" ? "extracted_text" : null
+    })) : []
   }));
 }
 
@@ -519,7 +526,8 @@ async function loadFromFiles(files) {
     if (obj && obj.outline_version) outline = obj;
     else if (obj && (obj.format === "after-thinking/outline-suggestion" || obj.spans || obj.mode)) aiRaw = text;
   }
-  ctx = { kind: "file", fileName: conv.name, folder: null, title: conv.name.replace(/\.jsonl$/i, ""), platform: null, revision: 1 };
+  ctx = { kind: "file", fileName: conv.name, folder: null, title: conv.name.replace(/\.jsonl$/i, ""), platform: null, revision: 1,
+    looseAttachments: new Map(list.filter(f => f !== conv && !/\.json$/i.test(f.name)).map(f => [f.name, f])) };
   await startConversation(outline);
   if (aiRaw) takeAi(aiRaw, "file");
 }

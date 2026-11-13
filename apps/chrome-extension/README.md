@@ -1,4 +1,4 @@
-# After-thinking Capture v0.9.0 (candidate)
+# After-thinking Capture v0.9.1 (candidate)
 
 > **Capture ChatGPT, Claude, Gemini, and Grok conversations as After-thinking source files, then tag them yourself before any AI analysis.**
 
@@ -12,6 +12,21 @@ After-thinking Capture is the Chrome extension for [After-thinking](../../README
 The extension reads the current tab only when you click its icon (`manual_click` mode); it never listens in the background. Conversations go only to the GitHub repository you configure, with no other server in between.
 
 The extension's interface is in Traditional Chinese. Button and label names below are quoted in Chinese with an English gloss.
+
+## Attachment preview while tagging (v0.9.1 candidate)
+
+The tagging workspace now shows an **Attachments** area directly underneath the message that originally contained each uploaded file, screenshot or generated image. This uses the `attachments[]` records already captured in `source/conversation.jsonl`; it does not introduce a new outline schema or rewrite source text.
+
+- Images: lazily loaded thumbnail, click to open larger preview; full-size file can be downloaded.
+- PDFs: built-in PDF viewer when the browser permits it, plus original download.
+- UTF-8 text, Markdown, JSON, code and CSV: safe, read-only text preview; HTML and SVG are displayed as text rather than run.
+- Word, Excel, ZIP and other binary formats: download original (no external conversion service).
+- When Claude or another site only supplied extracted text instead of the actual original document, the interface explicitly says **extracted text only** and downloads with a `-擷取文字.txt` suffix.
+- Missing originals show an explicit message instead of a fake preview. If the user captured only a standalone JSONL, they can optionally select the matching attachment files together, or reopen a complete AT ZIP.
+
+**Sources:** Local ZIP reads bytes directly from `source/attachments/` in the archive. GitHub workspaces fetch the same path from the user's selected repository using their configured GitHub access token, with no AT server. Paths are validated, previews are capped at 25 MB, and URL objects are cleaned when switching discussions. The original source text is untouched; any missing attachment remains visibly missing.
+
+**Verification status:** JavaScript syntax, metadata wiring, synthetic ZIP/GitHub attachment retrieval, file-type checks and path validation passed. Real Chrome visual layout, private-repository file access and multiple PDF engines still need end-to-end checking.
 
 ## Portable offline ZIP workflow (v0.9.0 candidate)
 
@@ -369,6 +384,14 @@ After-thinking Capture 是 [After-thinking](../../README.md) 的 Chrome 擴充�
 「讓其他 AI 協助預先標記」是一條**選用**路徑。其「下載 AI 預先標記請求檔」輸出包含原文及規則的 Markdown，目的是讓其他 AI 產生 `outline.ai.json`；這份請求檔本身不是標記結果，也不是進入工作台的必要條件。AI 回傳建議後可從本機匯入審查。
 
 新版會優先辨識原始 Markdown `#` 標題；對舊版從畫面純文字擷取的 AI 回覆，若出現至少兩個結構明確的「一、…／二、…」或數字編號式小標題，會嘗試建立章節概覽。這是保守的純文字解析，不會改寫 `source/conversation.jsonl`，無法辨識的舊回覆仍可展開全文。過去未保存的原生 Markdown 層級不能保證完全重建。
+
+## v0.9.1 標記頁附件預覽（候選版）
+
+標記對話時，每則訊息下方現在會列出該訊息原本的圖片及附件：圖片縮圖可放大；PDF 可嘗試在瀏覽器內預覽；文字、Markdown、JSON、程式碼與 CSV 可以純文字安全預覽；Word、Excel 等其他檔案可下載原檔。這些功能不會修改原始對話，也不會改動 `outline.json` 格式。
+
+離線 ZIP 直接讀取壓縮包內的 `source/attachments/`，不用 GitHub；從 GitHub 開啟的討論則依原本倉庫權限讀取附件。找不到原檔、超過預覽大小或平台只提供擷取文字時，介面會明確說明。部分 Claude 文件只有平台保留的擷取文字，下載時會用 `-擷取文字.txt` 命名，避免誤認為原 Word / PDF。原始檔仍可能因平台限制無法擷取。
+
+目前通過語法與資料層模擬測試；真實 Chrome、私有 GitHub 讀取、PDF 檢視效果仍需端到端測試。
 
 ## v0.9.0 離線 ZIP 下載與標記（開發候選版）
 

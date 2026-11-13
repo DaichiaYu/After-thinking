@@ -1,6 +1,6 @@
 // After-thinking Capture — 共用的擷取與輸出程式（popup.js 和 batch.js 都會用到）
 
-const VERSION = "0.9.0";
+const VERSION = "0.9.1";
 
 function detectPlatform(url) {
   const host = new URL(url).hostname;

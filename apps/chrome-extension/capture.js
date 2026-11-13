@@ -971,6 +971,7 @@ function buildMetadata(kept, detected, platform, page, mode) {
     "  items_excluded_by_user: " + (detected - kept),
     "  source_url: " + q(page.url),
     "  page_title: " + q(page.title),
+    ...(page.project ? ["  project: {id: " + q(page.project.project_id) + ", name: " + q(page.project.name || "") + "}"] : []),
     "  captured_at: " + q(new Date().toISOString()),
     "  extension_version: " + q(VERSION),
     "notes: null",

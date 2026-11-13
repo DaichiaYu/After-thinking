@@ -66,7 +66,7 @@ v0.8.0 brings **both parallel developments into one extension**: (1) preview-fir
 
 **File roles:** `source/conversation.jsonl` is captured source; `source/attachments/` holds successfully recovered originals; `outline.ai.json` is a draft for review only; `outline.json` is the saved tagging structure; `inbox/index.jsonl` tracks captures and previews; `inbox/labels.json` tracks status, labels and notes independently of analysis.
 
-**Limits:** Only Gemini supports batch capture; X-embedded Grok is unsupported; attachments can be missing due to inaccessible site data or the per-file 20 MB limit. These features still require in-browser testing with real site data.
+**Limits:** Batch capture covers Gemini (whole sidebar) and ChatGPT Projects (one project at a time, branch `feat/chatgpt-project-batch`, untested on real data); X-embedded Grok is unsupported; attachments can be missing due to inaccessible site data or the per-file 20 MB limit. These features still require in-browser testing with real site data.
 
 ## What's new in v0.8.0
 
@@ -108,7 +108,7 @@ v0.8.0 brings **both parallel developments into one extension**: (1) preview-fir
 
 | Item | Support |
 |---|---|
-| Platforms | ChatGPT, Claude, Gemini, Grok (`grok.com`; Grok inside X is not supported) (batch capture and recovered original times are Gemini-only for now) |
+| Platforms | ChatGPT, Claude, Gemini, Grok (`grok.com`; Grok inside X is not supported) (batch capture: Gemini sidebar and ChatGPT Projects; recovered original times are Gemini-only) |
 | Extension interface | Traditional Chinese only, for now |
 | Conversation content | Any language. Text is copied as-is, never translated or rewritten |
 | Site interface language | Traditional Chinese, Simplified Chinese, English. The extension must recognize the site's "Show more" / "Show less" buttons to expand collapsed long messages, and Gemini batch capture must recognize the sidebar's "Show more". If the site is set to another language (e.g. Japanese): ChatGPT, Claude, and Grok are read from the site's own data first and are unaffected; on Gemini, or whenever scroll reading is used, collapsed long messages may stay collapsed and may not be detected — check message lengths after capturing |
@@ -266,14 +266,23 @@ Status, labels, and notes are saved in `inbox/labels.json`, separate from the ca
 Use this when you have many conversations and don't want to open them one by one.
 
 1. Finish the GitHub setup above.
-2. Click the extension icon, then 「批量擷取 Gemini 對話」 (batch capture Gemini conversations) at the bottom. A new tab opens.
+2. Click the extension icon, then 「批量擷取（Gemini／ChatGPT 專案）」 (batch capture) at the bottom. A new tab opens; keep 「Gemini 全部對話」 selected.
 3. Click 「讀取 Gemini 對話清單」 (read Gemini conversation list). A Gemini window opens, scrolls through the sidebar, and lists every conversation. Ones already captured are marked 「已擷取」 (captured) and unticked by default.
 4. Click 「開始擷取」 (start capture). The extension opens each conversation, loads it fully, and uploads it. Each conversation is its own commit, so anything already uploaded is kept if you stop or close the page midway.
 5. Keep the Gemini window visible (not minimized) while capturing; you can do other things. Each conversation takes from a few dozen seconds to two minutes.
 
 Upload locations (separate from single capture's `discussions/`):
 
-- `inbox/<year-month>/gemini-<conversation-id>/source/`: `conversation.jsonl`, `metadata.yaml`, and `attachments/` when there are attachments
+### ChatGPT Projects
+
+Two ways to pick a project:
+
+- **From the project:** open the project page (or any conversation inside it) on chatgpt.com, click the extension icon, then 「批量擷取這個專案的對話」 (batch capture this project). The batch page opens with that project filled in.
+- **From a list:** on the batch page choose 「ChatGPT 專案」, click 「讀取我的 ChatGPT 專案」 (read my projects), and pick one from the dropdown.
+
+Then click 「讀取這個專案的對話」 (read this project's conversations) and 「開始擷取」. The first time, Chrome asks for permission to read chatgpt.com; click Allow. The project's conversation list and each conversation are read from ChatGPT's own internal data (no scrolling, so it is much faster than Gemini). If that internal interface fails or changes, the extension falls back to the links on the project page and to scroll reading. The project id and name are written to `inbox/index.jsonl` (`project`) and `metadata.yaml` (`capture.project`).
+
+- `inbox/<year-month>/gemini-<conversation-id>/source/` or `inbox/<year-month>/chatgpt-<conversation-id>/source/`: `conversation.jsonl`, `metadata.yaml`, and `attachments/` when there are attachments
 - The month is **the month the conversation started** (original time); conversations without an original time go to `inbox/undated/`
 - `inbox/index.jsonl`: the capture log, one line per capture (title, URL, folder, batch or single, conversation start and last times, message count, characters, attachment count, warnings). Later sorting also starts from this file.
 - Conversations captured before v0.5.0 are in `inbox/gemini-<conversation-id>/` (no month); `index.jsonl` is authoritative for locations.
@@ -433,7 +442,7 @@ v0.8.0 將**兩套平行開發成果合在同一個擴充功能**：（1）先�
 
 **檔案分工：** `source/conversation.jsonl` 保存原文；`source/attachments/` 保存取回的附件；`outline.ai.json` 是待審草稿；`outline.json` 是保存的標記；`inbox/index.jsonl` 是擷取紀錄和提問預覽；`inbox/labels.json` 是處理狀態、標籤與備註，和正式分析分開。
 
-**限制：** 目前只有 Gemini 支援批量擷取，X 站內的 Grok 不支援。部分附件會因網站資料不可讀或單檔 20 MB 限制而無法保存；仍需要在 Chrome 以實際對話測試功能。
+**限制：** 批量擷取支援 Gemini（整個側邊欄）和 ChatGPT 專案（一次一個專案，在 `feat/chatgpt-project-batch` 分支，尚未用實際資料測試），X 站內的 Grok 不支援。部分附件會因網站資料不可讀或單檔 20 MB 限制而無法保存；仍需要在 Chrome 以實際對話測試功能。
 
 ## v0.8.0 新功能
 
@@ -461,7 +470,7 @@ v0.8.0 將**兩套平行開發成果合在同一個擴充功能**：（1）先�
 | 功能 | 說明 |
 |---|---|
 | 單段擷取 | 打開一段對話，按圖示。自動捲完、展開被摺疊的長訊息，可以取消勾選不要的訊息 |
-| 批量擷取（Gemini） | 讀 Gemini 側邊欄的所有對話，一段段抓進 `inbox/`，抓過的自動跳過 |
+| 批量擷取（Gemini／ChatGPT 專案） | 讀 Gemini 側邊欄的所有對話，或 ChatGPT 某個專案裡的所有對話，一段段抓進 `inbox/`，抓過的自動跳過 |
 | 附件原檔 | 四個平台都下載上傳的檔案、圖片和 AI 生成的圖（v0.8.0；Gemini 從 v0.6.0 開始） |
 | 原始時間（Gemini） | 補上每一則的原始時間 |
 | 擷取紀錄 | `inbox/index.jsonl` 記下每次擷取，知道哪些抓過、哪些已標記 |
@@ -475,7 +484,7 @@ v0.8.0 將**兩套平行開發成果合在同一個擴充功能**：（1）先�
 
 | 項目 | 支援 |
 |---|---|
-| 平台 | ChatGPT、Claude、Gemini、Grok（`grok.com`；X 裡面的 Grok 不支援）（批量擷取、補原始時間目前只有 Gemini） |
+| 平台 | ChatGPT、Claude、Gemini、Grok（`grok.com`；X 裡面的 Grok 不支援）（批量擷取：Gemini 側邊欄、ChatGPT 專案；補原始時間只有 Gemini） |
 | 擴充功能的介面 | 繁體中文（目前只有這個） |
 | 對話內容 | 任何語言都可以，原文照抄，不翻譯也不改寫 |
 | 網站本身的介面語言 | 繁體中文、簡體中文、英文。擴充功能要認得網站上「顯示更多」「顯示較少」之類的按鈕，才能自動展開摺疊的長訊息，Gemini 批量擷取也要認得側邊欄的「顯示更多」。網站設成其他語言（例如日文）時：ChatGPT、Claude、Grok 優先直接讀網站資料，不受影響；但 Gemini，以及改用捲動讀取的時候，摺疊的長訊息可能沒展開、也不一定偵測得到，擷取後請檢查訊息長度 |
@@ -619,14 +628,23 @@ AI 之後又寫了新的 `outline.ai.json`，會顯示「有新的 AI 建議」�
 對話很多、不想一段段打開時用這個。
 
 1. 先完成上面的 GitHub 設定。
-2. 按擴充功能圖示，在最下面按「批量擷取 Gemini 對話」，會打開一個新分頁。
+2. 按擴充功能圖示，在最下面按「批量擷取（Gemini／ChatGPT 專案）」，會打開一個新分頁，來源維持「Gemini 全部對話」。
 3. 按「讀取 Gemini 對話清單」：會開一個 Gemini 視窗，自動捲完側邊欄，列出所有對話。已經抓過的會標成「已擷取」，預設不勾。
 4. 按「開始擷取」：擴充功能會一段段打開對話、往上載入完整內容、上傳。每段都是一個獨立的提交，中途停止或關掉，已經上傳的都還在。
 5. 擷取時讓 Gemini 視窗留在畫面上（不要縮到最小），可以去做別的事。每段大約幾十秒到兩分鐘。
 
 上傳位置（和單段擷取的 `discussions/` 分開）：
 
-- `inbox/<年-月>/gemini-<對話編號>/source/`：`conversation.jsonl`、`metadata.yaml`，有附件時還有 `attachments/`
+### ChatGPT 專案
+
+選專案有兩種方式：
+
+- **從專案裡**：在 chatgpt.com 打開專案頁（或專案裡任何一段對話），按擴充功能圖示，按「批量擷取這個專案的對話」，批量頁會帶著這個專案打開。
+- **從清單選**：在批量頁選「ChatGPT 專案」，按「讀取我的 ChatGPT 專案」，從下拉選單選一個。
+
+接著按「讀取這個專案的對話」，再按「開始擷取」。第一次用時 Chrome 會問能不能讀取 chatgpt.com，請按允許。專案的對話清單和每段對話，都直接讀 ChatGPT 網頁自己的資料（不用捲動，比 Gemini 快很多）；這個內部介面失敗或改版時，會改讀專案頁上的連結和捲動讀取。專案編號和名稱會記在 `inbox/index.jsonl`（`project`）和 `metadata.yaml`（`capture.project`）。
+
+- `inbox/<年-月>/gemini-<對話編號>/source/` 或 `inbox/<年-月>/chatgpt-<對話編號>/source/`：`conversation.jsonl`、`metadata.yaml`，有附件時還有 `attachments/`
 - 月份是**對話開始的月份**（原始時間）；找不到原始時間的放 `inbox/undated/`
 - `inbox/index.jsonl`：擷取紀錄。每擷取一次記一行（標題、網址、存放位置、批量或單段、對話開始和最後的時間、訊息數、字數、附件數、警告）。之後分類也從這個檔案開始。
 - v0.5.0 以前抓的對話放在 `inbox/gemini-<對話編號>/`（沒有月份），位置以 `index.jsonl` 為準。

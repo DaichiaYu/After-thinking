@@ -5,8 +5,8 @@
   "use strict";
   const UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
   const rules = {
-    "chatgpt.com": { platform: "chatgpt", path: new RegExp("^/c/(" + UUID + ")/?$", "i") },
-    "chat.openai.com": { platform: "chatgpt", path: new RegExp("^/c/(" + UUID + ")/?$", "i") },
+    "chatgpt.com": { platform: "chatgpt", path: new RegExp("^(?:/g/[^/]+)?/c/(" + UUID + ")/?$", "i") },
+    "chat.openai.com": { platform: "chatgpt", path: new RegExp("^(?:/g/[^/]+)?/c/(" + UUID + ")/?$", "i") },
     "claude.ai": { platform: "claude", path: new RegExp("^/chat/(" + UUID + ")/?$", "i") },
     "gemini.google.com": { platform: "gemini", path: /^\/(?:app|gem\/[^/]+)\/([0-9a-f]{10,})\/?$/i },
     "grok.com": { platform: "grok", path: new RegExp("^/c/(" + UUID + ")/?$", "i") }

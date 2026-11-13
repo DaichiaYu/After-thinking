@@ -112,8 +112,10 @@ const ATAttachments = (() => {
     return promises.get(path);
   }
   async function openResource(att) {
+    const current = ctx;
     const path = pathFor(att);
     const bytes = await getBytes(att);
+    if (ctx !== current) throw new Error("對話已切換，請重新開啟附件");
     if (!urls.has(path)) urls.set(path, URL.createObjectURL(new Blob([bytes], { type: typeOf(att, bytes) })));
     return { url: urls.get(path), bytes, type: typeOf(att, bytes) };
   }

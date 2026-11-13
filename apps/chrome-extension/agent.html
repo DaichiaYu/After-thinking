@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AT — Agent 指定網址擷取</title>
+  <link rel="stylesheet" href="agent.css">
+</head>
+<body>
+<main>
+  <header>
+    <div class="eyebrow">AFTER-THINKING · CAPTURE</div>
+    <h1>從對話網址擷取</h1>
+    <p>給遠端 Agent 使用的測試入口。輸入 AI 平台上的<strong>原始私人對話網址</strong>，在已登入的 Chrome 開啟，再使用 AT Capture 擷取並上傳私人 GitHub。</p>
+  </header>
+  <section class="panel">
+    <label for="target-url">對話網址</label>
+    <textarea id="target-url" rows="2" spellcheck="false" placeholder="https://chatgpt.com/c/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"></textarea>
+    <p id="url-hint" class="hint">支援 ChatGPT、Claude、Gemini、Grok；公開分享網址不能直接代替原始私人對話。</p>
+    <button id="capture">開啟原始對話並擷取</button>
+    <p class="hint">只會針對你指定的 AI 網站要求瀏覽器存取授權。若網站要求重新登入，請先完成登入後重試。</p>
+  </section>
+  <section id="review" class="panel" hidden>
+    <h2>擷取預覽</h2>
+    <dl id="summary"></dl>
+    <label for="discussion-id">儲存資料夾名稱（Discussion ID）</label>
+    <input id="discussion-id" type="text" spellcheck="false">
+    <p id="capture-warnings" class="warning" hidden></p>
+    <label id="incomplete-wrap" class="check" hidden>
+      <input id="accept-incomplete" type="checkbox"> 我已確認擷取警告，仍要保存目前能取得的資料
+    </label>
+    <div class="actions">
+      <button id="upload" disabled>確認上傳私人 GitHub</button>
+      <button id="back" class="subtle" type="button">重新指定網址</button>
+    </div>
+  </section>
+  <section id="done" class="panel" hidden>
+    <h2>完成</h2>
+    <p id="result-text"></p>
+    <div class="actions">
+      <button id="copy-result" class="subtle">複製執行結果 JSON（給 Agent）</button>
+      <button id="open-folder">開啟 GitHub 資料夾</button>
+      <button id="open-tag" class="subtle">在電腦上標記</button>
+    </div>
+    <p class="hint">手機標記網頁尚在規劃中，這個測試版僅提供 GitHub 路徑及電腦版標記入口。</p>
+  </section>
+  <section class="panel log">
+    <h2>執行狀態</h2>
+    <output id="status" role="status" aria-live="polite">尚未開始。</output>
+  </section>
+  <footer>AT Capture Agent URL PoC · 不會擷取其他分頁 · 不會將對話傳到 AT 伺服器</footer>
+</main>
+<script src="github.js"></script>
+<script src="capture.js"></script>
+<script src="guide.js"></script>
+<script src="agent-url.js"></script>
+<script src="agent.js"></script>
+</body>
+</html>

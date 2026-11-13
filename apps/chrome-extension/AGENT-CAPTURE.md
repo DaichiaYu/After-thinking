@@ -1,18 +1,26 @@
-# Agent-directed capture by original conversation URL (PoC)
+# Agent-directed capture to private GitHub (PoC)
 
 This branch adds an **optional, user-authorized workflow** for a computer-use agent to direct the existing AT Capture extension at one specific conversation. It does not build a remote-control service or an always-on daemon.
 
 ## What it does
 
-1. A human or agent opens the extension popup and clicks **「依網址擷取（Agent / 遠端操作）」**.
+1. A user or computer-use agent opens AT's popup and clicks **「Agent：指定網址 → 上傳 GitHub」**. This primary GitHub path is visually separated from offline ZIP.
 2. Paste the **original private conversation URL**, not a public share/snapshot URL.
-3. Click **「開啟原始對話並擷取」** and grant Chrome permission **only for that conversation's AI website**. The extension opens exactly that conversation in a new desktop Chrome tab, where the user must already be authenticated.
+3. Leave **「擷取完整就自動上傳 GitHub」** enabled (default), click **「擷取並上傳 GitHub」**, and grant Chrome permission for the selected AI website. The extension opens the exact original conversation on desktop Chrome, where the user must already be signed in.
 4. The existing `captureViaApi` / `captureConversation` and `finalizeCapture` functions read messages and attempt to recover attachments.
-5. Return to the Agent capture tab; it shows the platform, conversation ID, message counts, capture method and missing-file warnings.
-6. Click **「確認上傳私人 GitHub」**. Existing `checkRepo`, `commitFiles`, `buildJsonl`, `buildMetadata`, `buildState` and `repoGuideFiles` create a new workspace with the ordinary capture index record. A public repo is rejected.
-7. Copy the resulting JSON (including GitHub folder URL) for the agent, or click the extension's desktop tagging link.
+5. The agent capture page displays the platform, conversation ID, message counts, method and warnings. **If there are no warnings, the one-click action proceeds directly to private GitHub upload.**
+6. If there are warnings or auto-upload was intentionally unchecked, review and click **「確認上傳 GitHub（不下載 ZIP）」**. The existing `checkRepo`, `commitFiles`, `buildJsonl`, `buildMetadata`, `buildState` and `repoGuideFiles` create a new private repository workspace.
+7. Read the on-screen result JSON, verify `phase: success`, `ok: true` and `result.github_url`, then report the GitHub folder. A separate desktop tagging link remains available.
 
 The page also accepts a prefilling URL in `chrome-extension://<your-extension-id>/agent.html?url=<encoded-original-url>`, **but does not automatically start capture or upload on page load**. An agent still has to press the buttons and accept permissions.
+
+## Agent intent and UI contract
+
+When the user says "download/capture/save/backup this conversation" or 「下載／擷取／抓取／保存對話」 **without asking for a file**, the destination is the configured **private GitHub repository**, not the local Downloads folder. The legacy popup button **「僅離線備份：下載 ZIP（不上傳 GitHub）」** is reserved for requests explicitly mentioning local/offline files or ZIPs.
+
+The agent page emits machine-readable JSON in `<pre data-at-role="agent-status">`. During the task it reports `phase` values such as `capturing`, `review_required`, `uploading`, `success`, `capture_failed` or `upload_failed`. A verified success includes `ok: true` and a `result` object with `repo`, `folder`, `github_url`, `messages`, attachment totals and warnings. The result is also visible in `#result-json` for agents that can read the page but not the extension state.
+
+Never assert GitHub success from the existence of a ZIP. Never fall back to ZIP on error, auto-accept missing data, invent private URLs from public share IDs or generate a duplicate folder to avoid conflicts.
 
 ## Where to get the original URL
 
@@ -26,11 +34,11 @@ Never assume that a public share link's UUID can be substituted into an original
 
 1. Load the extension from this branch through `chrome://extensions` (Load unpacked), and configure a **private GitHub repository** in AT's existing settings.
 2. On desktop Chrome, sign in to ChatGPT/Claude/Gemini/Grok, and manually open an eligible original conversation to confirm access.
-3. Open AT's extension popup → **依網址擷取**.
-4. Paste the exact URL and click **開啟原始對話並擷取**.
-5. After Chrome opens the target, switch back to the AT Agent capture tab and examine the counts.
-6. If the capture is incomplete, read the warning before checking the exception box. If you are testing GitHub uploads, use a disposable private test repository.
-7. Confirm upload; verify `source/conversation.jsonl` plus `inbox/index.jsonl` in GitHub. Copy the JSON report and check the GitHub URL.
+3. Open AT's extension popup → **Agent：指定網址 → 上傳 GitHub**.
+4. Paste the exact URL and click **擷取並上傳 GitHub** (auto-upload is enabled by default).
+5. After Chrome opens the target, return to the AT Agent tab. If no warnings occur, it uploads automatically; otherwise it pauses.
+6. If capture is incomplete, read its warning and do **not** let the Agent auto-accept it. For testing, use a disposable private repository.
+7. Verify `source/conversation.jsonl` and `inbox/index.jsonl` in GitHub and check the JSON success result.
 
 For an agent-driven trial, ask a *locally connected computer-use agent* to navigate this flow using the existing desktop browser. A cloud-only chat instance cannot see or operate the user's computer without a local connection and permission.
 
@@ -38,9 +46,9 @@ For an agent-driven trial, ask a *locally connected computer-use agent* to navig
 
 - Host validation is strict: HTTPS, allowlisted AI domains and known private conversation paths only; query strings and fragments are removed.
 - Page redirect/mismatch causes capture to stop rather than importing an unrelated conversation.
-- No auto-upload: target and message count are visible before GitHub upload; incomplete captures require explicit acknowledgement.
+- Auto-upload happens **only** after pressing **擷取並上傳 GitHub** and only when no warnings are present; any capture warning pauses for review.
 - Credentials stay in the extension's existing local storage; the exported JSON result does not contain the GitHub token.
-- **Only new workspaces**: if the folder already exists, this PoC refuses to overwrite it. Safe incremental recapture and preserving existing outlines require a later change.
+- **Only new workspaces**: an existing folder causes a safe failure. Never change the folder name silently to avoid a conflict; preserve existing outlines and analysis.
 - Chrome web session must already be logged in. No session/account switching, CAPTCHA bypass or 2FA automation is implemented.
 - The existing per-platform parsers may change when the AI sites change; count/attachments/scroll warnings need real-world verification.
 - Gemini's earlier-message capture and recovered original timestamps may still vary depending on page loading.

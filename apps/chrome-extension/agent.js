@@ -6,12 +6,19 @@
   "use strict";
 
   const el = (id) => document.getElementById(id);
-  const setStatus = (message) => { el("status").textContent = message; };
+  const machine = { schema_version: 1, task: "capture_to_private_github", phase: "idle", ok: false };
+  const setStatus = (message, phase) => {
+    el("status").textContent = message;
+    if (phase) machine.phase = phase;
+    machine.message = message;
+    el("agent-status-json").textContent = JSON.stringify(machine, null, 2);
+  };
   const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   const displayName = { chatgpt: "ChatGPT", claude: "Claude", gemini: "Gemini", grok: "Grok" };
   let captured = null;
   let outcome = null;
   let running = false;
+  setStatus("尚未開始。", "idle");
 
   const queryUrl = new URL(location.href).searchParams.get("url");
   if (queryUrl) el("target-url").value = queryUrl;
@@ -97,7 +104,13 @@
   el("capture").addEventListener("click", async () => {
     if (running) return;
     const target = showUrlHint();
-    if (!target.ok) { setStatus(target.reason); return; }
+    if (!target.ok) { setStatus(target.reason, "invalid_target"); return; }
+    const autoUpload = el("auto-upload").checked;
+    let shouldAutoUpload = false;
+    machine.target = target.url;
+    machine.platform = target.platform;
+    machine.ok = false;
+    delete machine.result;
 
     running = true;
     captured = null;
@@ -107,14 +120,14 @@
     el("done").hidden = true;
 
     try {
-      setStatus("正在要求這個 AI 網站的瀏覽器存取權限…");
+      setStatus("正在要求這個 AI 網站的瀏覽器存取權限…", "authorizing");
       const granted = await chrome.permissions.request({ origins: [target.origin_pattern] });
       if (!granted) throw new Error("未授權讀取此網站，因此取消擷取。");
       if (target.platform === "gemini") {
         try { await ensureGeminiRecorder(); } catch (_) { /* timestamps optional */ }
       }
 
-      setStatus("正在電腦 Chrome 開啟指定的私人對話…");
+      setStatus("正在電腦 Chrome 開啟指定的私人對話…", "capturing");
       const tab = await chrome.tabs.create({ url: target.url, active: true });
       await waitForTab(tab.id);
       // Check the actual opened URL: redirects to login/home must not result
@@ -158,7 +171,8 @@
           "、AI：" + items.filter((x) => x.speaker === "assistant").length + "）"],
         ["附件", (report.saved || 0) + "/" + (report.total || 0) + " 已取得"],
         ["擷取方式", page.api && page.api.ok ? "直接讀取頁面資料" : "捲動擷取"],
-        ["上傳", "尚未執行；必須先確認"]
+        ["儲存目的地", "私人 GitHub（已設定的倉庫）"],
+        ["上傳", warnings.length ? "因擷取警告暫停，待確認" : (autoUpload ? "擷取完成後將自動上傳" : "等待手動確認")]
       ]);
       el("discussion-id").value = defaultDiscussionId(target.platform, target.url, page.conversation_created_at);
       el("accept-incomplete").checked = false;
@@ -166,14 +180,27 @@
       el("capture-warnings").textContent = warnings.join("\n");
       el("incomplete-wrap").hidden = warnings.length === 0;
       el("review").hidden = false;
-      setStatus("對話已擷取至插件記憶體，尚未上傳。請先核對摘要，然後確認上傳。");
+      machine.messages = items.length;
+      machine.attachments_total = report.total || 0;
+      machine.attachments_saved = report.saved || 0;
+      machine.warnings = warnings;
+      shouldAutoUpload = autoUpload && warnings.length === 0;
+      el("review-explainer").textContent = warnings.length
+        ? "擷取有警告，為避免保存不完整原文，已暫停自動上傳。請檢查後再決定。"
+        : (autoUpload ? "擷取完成，將直接上傳到私人 GitHub。" : "自動上傳已關閉，請核對並手動確認。");
+      setStatus(shouldAutoUpload ? "對話擷取完成，將自動上傳 GitHub…" :
+        "對話已擷取但尚未上傳。請核對摘要與警告，再按上傳。", shouldAutoUpload ? "ready_to_upload" : "review_required");
     } catch (e) {
-      setStatus("擷取失敗：" + (e.message || String(e)) + "\n不會上傳任何對話。");
+      setStatus("擷取失敗：" + (e.message || String(e)) + "\n不會上傳任何對話。", "capture_failed");
     } finally {
       running = false;
       el("capture").disabled = false;
       updateUploadEnabled();
     }
+    // This is part of the single explicit "擷取並上傳 GitHub" action.
+    // Safety gate: a missing attachment, truncated message or fallback warning
+    // always stops automatic upload and requires review.
+    if (shouldAutoUpload) await uploadCaptured();
   });
 
   el("accept-incomplete").addEventListener("change", updateUploadEnabled);
@@ -183,24 +210,24 @@
     setStatus("已取消本次擷取預覽，尚未上傳。");
   });
 
-  el("upload").addEventListener("click", async () => {
+  async function uploadCaptured() {
     if (running || !captured) return;
     if (captured.warnings.length && !el("accept-incomplete").checked) return;
     const { target, page, attachmentFiles, warnings } = captured;
     const id = sanitizeId(el("discussion-id").value);
-    if (!id) { setStatus("討論編號不能為空。"); return; }
+    if (!id) { setStatus("討論編號不能為空。", "upload_failed"); return; }
 
     running = true;
     updateUploadEnabled();
     try {
       const config = await loadConfig();
-      setStatus("檢查 GitHub 私人倉庫與權限…");
+      setStatus("檢查 GitHub 私人倉庫與權限…", "uploading");
       const repoStatus = await checkRepo(config);
       if (!repoStatus.ok) throw new Error(repoStatus.message);
       const root = normalizeRoot(config.root);
       const folder = root + id + "/";
       if (await pathExists(config, repoStatus.branch, folder))
-        throw new Error("目標資料夾已存在。PoC 暫不覆蓋舊版對話和標記，請先用另一個 ID。");
+        throw new Error("這段資料夾已存在，為保護既有標記已停止。請回報使用者，不要自行換 ID 建立重複副本。");
       const validAttachments = attachmentFiles.filter((f) => /^attachments\/[^/]+$/.test(f.path));
       const files = [
         ...validAttachments.map((f) => ({ path: folder + "source/" + f.path, base64: f.base64 })),
@@ -229,16 +256,20 @@
         desktop_tag_url: chrome.runtime.getURL("tag.html?folder=" + encodeURIComponent(folder))
       };
       el("result-text").textContent = "成功上傳 " + page.items.length + " 則訊息至 " + config.repo + " / " + folder;
+      el("result-json").textContent = JSON.stringify(outcome, null, 2);
+      machine.ok = true;
+      machine.result = outcome;
       el("done").hidden = false;
       el("review").hidden = true;
-      setStatus("擷取及上傳成功。可複製結果 JSON 給 Agent 回報。");
+      setStatus("擷取及上傳成功。Agent 請依據下方 JSON 回報 GitHub 路徑。", "success");
     } catch (e) {
-      setStatus("上傳未完成：" + (e.message || String(e)) + "\n不會主動覆蓋既有資料。");
+      setStatus("上傳未完成：" + (e.message || String(e)) + "\n不會主動覆蓋既有資料。", "upload_failed");
     } finally {
       running = false;
       updateUploadEnabled();
     }
-  });
+  }
+  el("upload").addEventListener("click", uploadCaptured);
 
   el("copy-result").addEventListener("click", async () => {
     if (!outcome) return;

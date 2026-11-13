@@ -17,11 +17,16 @@
     <label for="target-url">對話網址</label>
     <textarea id="target-url" rows="2" spellcheck="false" placeholder="https://chatgpt.com/c/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"></textarea>
     <p id="url-hint" class="hint">支援 ChatGPT、Claude、Gemini、Grok；公開分享網址不能直接代替原始私人對話。</p>
-    <button id="capture" data-at-action="capture-to-github" data-at-step="1">開始擷取（下一步上傳 GitHub）</button>
+    <label class="check" for="auto-upload">
+      <input id="auto-upload" type="checkbox" checked>
+      <span><strong>擷取完整就自動上傳 GitHub</strong>（若有缺漏警告則先暫停，讓你確認）</span>
+    </label>
+    <button id="capture" data-at-action="capture-to-github" data-at-step="1">擷取並上傳 GitHub</button>
     <p class="hint">只會針對你指定的 AI 網站要求瀏覽器存取授權。若網站要求重新登入，請先完成登入後重試。</p>
   </section>
   <section id="review" class="panel" hidden>
-    <h2>擷取完成 · 確認上傳 GitHub</h2>
+    <h2>擷取檢查</h2>
+    <p class="hint" id="review-explainer">擷取有警告或已關閉自動上傳，確認後可繼續。</p>
     <dl id="summary"></dl>
     <label for="discussion-id">儲存資料夾名稱（Discussion ID）</label>
     <input id="discussion-id" type="text" spellcheck="false">

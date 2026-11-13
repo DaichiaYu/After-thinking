@@ -238,6 +238,8 @@ const ATAttachments = (() => {
     prevRenderList();
     renderRows();
   };
+  const closeButton = document.getElementById("attachment-preview-close");
+  if (closeButton) closeButton.addEventListener("click",() => $dialog()?.close());
   window.addEventListener("beforeunload",reset);
   return { reset, getBytes, typeOf, pathFor };
 })();

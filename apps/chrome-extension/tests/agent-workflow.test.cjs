@@ -27,6 +27,7 @@ async function simulate({ warning = false, auto = true, existing = false, repoOk
   element("target-url").value = url;
   element("auto-upload").checked = auto;
   let commits = 0;
+  let refocuses = 0;
   const page = {
     url, title: "Test conversation", strategy: "claude:api",
     items: [{ speaker: "author", content: "hi" }, { speaker: "assistant", content: "hello" }],
@@ -37,7 +38,9 @@ async function simulate({ warning = false, auto = true, existing = false, repoOk
     tabs: {
       onUpdated: { addListener() {}, removeListener() {} },
       async create() { return { id: 4 }; },
-      async get() { return { id: 4, status: "complete", url }; }
+      async get() { return { id: 4, status: "complete", url }; },
+      async getCurrent() { return { id: 3 }; },
+      async update(id, options) { if (id === 3 && options.active) refocuses++; }
     },
     permissions: { async request() { return true; } },
     scripting: { async executeScript() { return [{ result: page }]; } },
@@ -63,12 +66,13 @@ async function simulate({ warning = false, auto = true, existing = false, repoOk
   vm.runInNewContext(agentCode, context, { filename: "agent.js" });
   await handlers.capture.click();
   const status = () => JSON.parse(element("agent-status-json").textContent);
-  return { commits: () => commits, status, element, handlers };
+  return { commits: () => commits, refocuses: () => refocuses, status, element, handlers };
 }
 
 (async () => {
   const clean = await simulate();
   assert.equal(clean.commits(), 1, "No-warning auto-upload should commit once");
+  assert.equal(clean.refocuses(), 1, "Should return to agent status tab after capture");
   assert.equal(clean.status().phase, "success");
   assert.equal(clean.status().result.repo, "test/private");
   assert.ok(clean.status().result.github_url.includes("github.com/test/private"));

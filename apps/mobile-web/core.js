@@ -234,6 +234,67 @@
     const id=ids.find(x=>!m.topics.some(t=>t.id===x));if(!id)throw new Error("主題已達到 A–Z 上限");
     m.topics.push({id,name:name.trim()||"新主題 "+id,note:"",name_origin:"user"});markEdited(m);return id;
   }
+  function summaryText(m,doc) {
+    const all=m.msgs.map((_,i)=>i);
+    const format=i=>String(i+1).padStart(Math.max(3,String(m.msgs.length).length),"0");
+    const formatRanges=indices=>{
+      if(!indices.length)return "";
+      const out=[];let start=indices[0],last=indices[0];
+      for(const i of indices.slice(1).concat([-1])) {
+        if(i===last+1){last=i;continue;}
+        out.push(start===last?format(start):format(start)+"–"+format(last));
+        start=i;last=i;
+      }
+      return out.join("、");
+    };
+    const lines=[];
+    if(doc.mode==="multi_topic"){
+      for(const t of doc.topics){
+        const ix=all.filter(i=>m.primary[m.msgs[i].id]===t.id);
+        if(ix.length)lines.push(t.id+" "+t.name+(t.note?"（"+t.note+"）":"")+"："+formatRanges(ix));
+      }
+      const untagged=all.filter(i=>!m.primary[m.msgs[i].id]);
+      if(untagged.length)lines.push("還沒標："+formatRanges(untagged));
+      for(const t of doc.topics){
+        const ix=all.filter(i=>(m.related[m.msgs[i].id]||[]).includes(t.id));
+        if(ix.length)lines.push("也跟 "+t.id+" "+t.name+" 有關（主要在別的主題）："+formatRanges(ix));
+      }
+    }else{
+      lines.push("主題："+(doc.single_topic?.name||"（未命名）")+
+        (doc.single_topic?.note?"（"+doc.single_topic.note+"）":"")+"："+formatRanges(all));
+    }
+    for(const range of doc.key_ranges||[]){
+      const a=all.find(i=>m.msgs[i].id===range.from_message_id);
+      const b=all.find(i=>m.msgs[i].id===range.to_message_id);
+      if(a===undefined||b===undefined||a>b)continue;
+      const span=m.msgs.slice(a,b+1);
+      lines.push("關鍵段落："+(a===b?format(a):format(a)+"–"+format(b))+
+        "（你說的 "+span.filter(x=>x.speaker!=="assistant").length+" 則、AI 說的 "+
+        span.filter(x=>x.speaker==="assistant").length+" 則）");
+    }
+    for(const speaker of ["author","assistant"]){
+      const ix=all.filter(i=>!!m.keys[m.msgs[i].id]&&
+        (m.msgs[i].speaker==="assistant") === (speaker==="assistant"));
+      if(ix.length||doc.mode==="single_topic")lines.push((speaker==="assistant"?"AI 說的關鍵：":"你說的關鍵：")+
+        (ix.length?ix.map(format).join("、"):"無"));
+    }
+    const turns=all.filter(i=>!!m.turns[m.msgs[i].id]);
+    if(turns.length)lines.push("轉向（你確認的）："+turns.map(format).join("、"));
+    if((doc.turn_hints||[]).length) {
+      const ix=all.filter(i=>(doc.turn_hints||[]).some(x=>x.message_id===m.msgs[i].id));
+      if(ix.length)lines.push("可能轉向（程式提示，你還沒確認）："+ix.map(format).join("、"));
+    }
+    const notes=all.filter(i=>!!m.notes[m.msgs[i].id]);
+    if(notes.length)lines.push("備註：\n"+notes.map(i=>"  "+format(i)+" "+m.notes[m.msgs[i].id]).join("\n"));
+    const sectionMarks=all.flatMap(i=>(m.sectionMarks[m.msgs[i].id]||[]).map(x=>format(i)+"「"+x.heading+"」"));
+    if(sectionMarks.length)lines.push("AI 小節重點："+sectionMarks.join("、"));
+    if(m.unmatched.length)lines.push("待核對的小節標記："+m.unmatched.length+" 項");
+    const pending=Object.values(m.keys).filter(x=>x.origin==="ai_unreviewed").length+
+      Object.values(m.turns).filter(x=>x.origin==="ai_unreviewed").length+
+      (doc.key_ranges||[]).filter(x=>x.origin==="ai_unreviewed").length;
+    if(pending)lines.push("AI 建議仍待審查："+pending+" 項（未確認）");
+    return lines.join("\n");
+  }
   function makeOutline(m) {
     if(m.sourceMismatch)throw new Error("原始對話與載入的標記指紋不符，請先在桌面版核對，不可直接覆蓋");
     const doc=m.base?clone(m.base):{};
@@ -255,7 +316,7 @@
       const messages=all.filter(id=>m.primary[id]===t.id);
       const priorUnreviewed=new Set(old.ai_unreviewed_messages||[]);
       const priorConfirmed=new Set(old.ai_confirmed_messages||[]);
-      return {id:t.id,name:t.name,note:t.note,name_origin:t.name_origin,
+      return {...old,id:t.id,name:t.name,note:t.note,name_origin:t.name_origin,
         messages,also_messages:all.filter(id=>(m.related[id]||[]).includes(t.id)),
         ai_unreviewed_messages:messages.filter(id=>priorUnreviewed.has(id)),
         ai_confirmed_messages:messages.filter(id=>priorConfirmed.has(id)),
@@ -271,10 +332,7 @@
     doc.unmatched_section_key_points=clone(m.unmatched);
     doc.ai_suggestion=doc.ai_suggestion?{...doc.ai_suggestion,rejected:clone(m.aiRejected),seen_messages:clone(m.aiSeen)}
       :(m.aiRejected.length?{rejected:clone(m.aiRejected),seen_messages:clone(m.aiSeen)}:null);
-    const summaries=m.topics.map(t=>t.id+" "+t.name+"："+all.filter(id=>m.primary[id]===t.id).length+" 則");
-    doc.summary=summaries.join("\n")+"\n整則關鍵："+Object.keys(m.keys).length+
-      "；轉向："+Object.keys(m.turns).length+
-      "；AI 小節重點："+Object.values(m.sectionMarks).reduce((s,a)=>s+a.length,0);
+    doc.summary=summaryText(m,doc);
     return doc;
   }
   root.ATCore={fingerprint,parseJsonl,sourceFingerprint,sections,normalizeFolder,makeModel,

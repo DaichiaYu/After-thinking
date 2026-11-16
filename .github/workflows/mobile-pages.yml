@@ -1,0 +1,62 @@
+name: AT mobile tagging site
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/mobile-web/**'
+      - 'tests/mobile-web.test.cjs'
+      - '.github/workflows/mobile-pages.yml'
+  pull_request:
+    paths:
+      - 'apps/mobile-web/**'
+      - 'tests/mobile-web.test.cjs'
+      - '.github/workflows/mobile-pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mobile-github-pages
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Run mobile editor tests
+        run: node --test tests/mobile-web.test.cjs
+      - name: Check static production assets for embedded tokens
+        shell: bash
+        run: |
+          test -f apps/mobile-web/index.html
+          test -f apps/mobile-web/app.js
+          test -f apps/mobile-web/core.js
+          test -f apps/mobile-web/github.js
+          test -f apps/mobile-web/style.css
+          ! grep -R -E 'github_pat_[A-Za-z0-9_]{20,}|ghp_[A-Za-z0-9]{20,}' apps/mobile-web
+
+  deploy:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: validate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: apps/mobile-web
+      - id: deployment
+        uses: actions/deploy-pages@v4

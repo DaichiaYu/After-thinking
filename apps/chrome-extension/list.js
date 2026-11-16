@@ -50,6 +50,11 @@ function savePref() { try { localStorage.setItem("listPref", JSON.stringify(L.pr
 
 async function showPicker() {
   $("picker").hidden = false;
+  $("crumb").textContent = "對話庫";
+  $("title").textContent = "對話庫";
+  $("meta").textContent = "選擇一段對話，快速預覽內容並進入標記工作台。";
+  $("origin-line").hidden = true;
+  $("top-actions").hidden = true;
   $("file").addEventListener("change", async (e) => {
     $("error").hidden = true;
     try { await loadFromFiles(e.target.files); } catch (err) { showError(err.message); }
@@ -143,18 +148,24 @@ function renderListPage() {
   const tagged = all.filter((r) => r.outline_updated_at).length;
   const skip = all.filter((r) => statusOf(r) === "skip").length;
   const done = all.filter((r) => statusOf(r) === "done").length;
-  $("repo-line").textContent = config.repo + "｜擷取過 " + all.length + " 段對話｜已標記 " + tagged + " 段" +
-    (done ? "｜已整理 " + done + " 段" : "") + (skip ? "｜不用整理 " + skip + " 段" : "");
+  $("repo-line").textContent = config.repo + " · " + all.length + " 段對話" +
+    (tagged ? " · " + tagged + " 段有標記" : "") +
+    (done ? " · " + done + " 段已整理" : "") +
+    (skip ? " · " + skip + " 段不用整理" : "");
   renderFilters();
   renderLabelManager();
   renderBackfill();
   const box = $("convos");
   box.textContent = "";
   const shown = all.filter(matches);
-  if (!shown.length) { box.append(el("p", { class: "empty", text: all.length ? "沒有符合的對話" : "還沒有擷取過的對話" })); return; }
+  if (!shown.length) {
+    box.append(el("p", { class: "empty", text: all.length ? "沒有符合的對話" : "還沒有擷取過的對話" }));
+    return;
+  }
   groups(shown).forEach((g) => {
     const c = g.color !== null && g.color !== undefined ? LABEL_COLORS[g.color % LABEL_COLORS.length] : null;
-    box.append(el("h3", { class: "c-group", style: c ? { borderLeftColor: c.line } : {} }, g.label, el("span", { class: "hint", text: "　" + g.items.length + " 段" })));
+    box.append(el("h3", { class: "c-group", style: c ? { borderLeftColor: c.line } : {} },
+      g.label, el("span", { class: "hint", text: "　" + g.items.length + " 段" })));
     g.items.forEach((r) => box.append(convRow(r)));
   });
 }
@@ -162,9 +173,20 @@ function renderListPage() {
 function renderFilters() {
   const sb = $("status-filter");
   sb.textContent = "";
+  const countFor = (k) => {
+    if (k === "all") return L.items.length;
+    if (k === "untagged") return L.items.filter((r) => !r.outline_updated_at).length;
+    return L.items.filter((r) => statusOf(r) === k).length;
+  };
   STATUS_FILTERS.forEach(([k, label]) => {
-    const b = el("button", { "aria-pressed": String(L.pref.status === k), text: label });
-    b.addEventListener("click", () => { L.pref.status = k; savePref(); renderListPage(); });
+    const b = el("button", { "aria-pressed": String(L.pref.status === k) },
+      el("span", { text: label }),
+      el("span", { class: "filter-count", text: String(countFor(k)) }));
+    b.addEventListener("click", () => {
+      L.pref.status = k;
+      savePref();
+      renderListPage();
+    });
     sb.append(b);
   });
   const lb = $("label-filter");
@@ -172,15 +194,17 @@ function renderFilters() {
   const labels = labelStore.data.labels;
   L.pref.labels = L.pref.labels.filter((id) => id === "_none" || labels.some((l) => l.id === id));
   if (!labels.length) return;
-  lb.append(el("span", { class: "hint", text: "標籤：" }));
+  lb.append(el("span", { class: "hint filter-label", text: "標籤" }));
   labels.concat([{ id: "_none", name: "沒有標籤", color: null }]).forEach((l) => {
     const on = L.pref.labels.includes(l.id);
     const c = l.color === null ? { bg: "#EEF0F3", fg: "#4A515C", line: "#C9CED6" } : LABEL_COLORS[l.color % LABEL_COLORS.length];
     const b = el("button", { class: "label-chip btn", "aria-pressed": String(on),
-      style: { background: on ? c.bg : "#fff", color: c.fg, borderColor: c.line, borderStyle: on ? "solid" : "dashed" }, text: (on ? "✓ " : "") + l.name });
+      style: { background: on ? c.bg : "#fff", color: c.fg, borderColor: c.line, borderStyle: on ? "solid" : "dashed" },
+      text: (on ? "✓ " : "") + l.name });
     b.addEventListener("click", () => {
       L.pref.labels = on ? L.pref.labels.filter((x) => x !== l.id) : L.pref.labels.concat([l.id]);
-      savePref(); renderListPage();
+      savePref();
+      renderListPage();
     });
     lb.append(b);
   });
@@ -191,7 +215,11 @@ function renderFilters() {
 function convRow(r) {
   const st = labelStore.get(r.folder);
   const total = r.messages || 0;
-  const row = el("div", { class: "crow" + (st.status === "skip" ? " is-skip" : ""), "data-folder": r.folder });
+  const open = !!L.open[r.folder];
+  const row = el("article", {
+    class: "crow" + (open ? " is-open" : "") + (st.status === "skip" ? " is-skip" : ""),
+    "data-folder": r.folder
+  });
   const d = r.started_at || r.captured_at;
   const chips = el("span", { class: "c-chips" },
     r.outline_updated_at ? el("span", { class: "done", text: "已標記" }) : null,
@@ -202,24 +230,68 @@ function convRow(r) {
       if (!l) return null;
       const c = LABEL_COLORS[l.color % LABEL_COLORS.length];
       return el("span", { class: "label-chip", style: { background: c.bg, color: c.fg, borderColor: c.line }, text: l.name });
-    }));
-  const head = el("div", { class: "c-head" },
-    el("a", { class: "c-title", href: "tag.html?folder=" + encodeURIComponent(r.folder), text: r.title || r.folder }), chips);
-  const okUrl = r.url && /^https:\/\//.test(r.url);
+    })
+  );
+
+  const toggle = () => {
+    L.open[r.folder] = !open;
+    row.replaceWith(convRow(r));
+  };
+  const chevron = el("button", {
+    class: "c-toggle",
+    "aria-label": (open ? "收起 " : "展開 ") + (r.title || "這段對話"),
+    "aria-expanded": String(open),
+    text: open ? "⌄" : "›"
+  });
+  chevron.addEventListener("click", toggle);
+
+  const title = el("button", {
+    class: "c-title",
+    "aria-expanded": String(open),
+    text: r.title || r.folder
+  });
+  title.addEventListener("click", toggle);
+
   const meta = el("div", { class: "c-meta" },
     [PLATFORM_NAME[r.platform] || r.platform,
-      d ? "對話 " + new Date(d).toLocaleDateString() : "",
-      r.captured_at ? "擷取 " + new Date(r.captured_at).toLocaleString([], { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "",
-      r.outline_updated_at ? "標記 " + new Date(r.outline_updated_at).toLocaleString([], { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "",
-      total ? total + " 則" : "",
-      r.folder].filter(Boolean).join(" · "),
-    okUrl ? el("a", { class: "c-orig", href: r.url, target: "_blank", rel: "noopener", text: "打開原對話 ↗" }) : null);
-  const edit = el("button", { class: "secondary small c-edit-btn", "aria-expanded": String(!!L.open[r.folder]), text: L.open[r.folder] ? "收起" : "狀態、標籤、備註" });
-  edit.addEventListener("click", () => { L.open[r.folder] = !L.open[r.folder]; row.replaceWith(convRow(r)); });
-  row.append(el("div", { class: "c-top" }, el("div", { class: "c-main" }, head, meta), edit));
-  row.append(questionsBlock(r));
-  if (st.note && !L.open[r.folder]) row.append(el("p", { class: "c-note", text: "備註：" + st.note }));
-  if (L.open[r.folder]) row.append(editorBlock(r));
+      d ? new Date(d).toLocaleDateString() : "",
+      total ? total + " 則訊息" : "",
+      r.author_messages ? r.author_messages + " 個提問" : ""].filter(Boolean).join(" · "));
+
+  const summary = el("div", { class: "c-summary" },
+    chevron,
+    el("div", { class: "c-main" }, el("div", { class: "c-head" }, title), meta),
+    chips
+  );
+  row.append(summary);
+
+  if (open) {
+    const preview = el("section", { class: "c-preview-pane" },
+      el("div", { class: "c-pane-head" },
+        el("strong", { text: "對話重點預覽" }),
+        el("span", { class: "hint", text: "　你的提問" })),
+      questionsBlock(r)
+    );
+
+    const actions = el("div", { class: "c-card-actions" },
+      el("a", {
+        class: "c-start btn-link",
+        href: "tag.html?folder=" + encodeURIComponent(r.folder),
+        text: "開始標記 →"
+      })
+    );
+    const okUrl = r.url && /^https:\/\//.test(r.url);
+    if (okUrl) actions.append(el("a", {
+      class: "secondary btn-link",
+      href: r.url,
+      target: "_blank",
+      rel: "noopener",
+      text: "打開原對話 ↗"
+    }));
+
+    const side = el("aside", { class: "c-side-pane" }, actions, editorBlock(r));
+    row.append(el("div", { class: "c-expanded" }, preview, side));
+  }
   return row;
 }
 
@@ -348,8 +420,12 @@ function renderCounts() {
   const all = L.items;
   const skip = all.filter((r) => statusOf(r) === "skip").length;
   const done = all.filter((r) => statusOf(r) === "done").length;
-  $("repo-line").textContent = config.repo + "｜擷取過 " + all.length + " 段對話｜已標記 " + all.filter((r) => r.outline_updated_at).length + " 段" +
-    (done ? "｜已整理 " + done + " 段" : "") + (skip ? "｜不用整理 " + skip + " 段" : "");
+  const tagged = all.filter((r) => r.outline_updated_at).length;
+  $("repo-line").textContent = config.repo + " · " + all.length + " 段對話" +
+    (tagged ? " · " + tagged + " 段有標記" : "") +
+    (done ? " · " + done + " 段已整理" : "") +
+    (skip ? " · " + skip + " 段不用整理" : "");
+  renderFilters();
 }
 
 // ── 管理標籤：名稱、顏色、順序（順序就是優先順序） ──

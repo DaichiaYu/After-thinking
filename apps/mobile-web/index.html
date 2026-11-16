@@ -45,9 +45,65 @@
         <div class="filter-strip" aria-label="對話篩選" role="group"><button data-filter="all" class="active">全部</button><button data-filter="todo">未處理</button><button data-filter="done">已整理</button><button data-filter="skip">不用整理</button><button data-filter="untagged">還沒標記</button></div>
         <div id="library-list"></div>
       </section>
+      <section id="prepare-page" data-page="prepare" hidden>
+        <button id="prepare-back" class="prepare-back" type="button">‹ 對話庫</button>
+        <p class="eyebrow">CONVERSATION SETUP</p>
+        <h1>先看看這段對話</h1>
+        <p class="intro">快速判斷這段對話的性質，再進入標記工作台。選錯也能回來改。</p>
+        <article class="prepare-card">
+          <div class="prepare-card-icon">▤</div>
+          <div class="prepare-card-main"><h2 id="prepare-title">對話</h2><p id="prepare-meta" class="small muted"></p></div>
+          <span id="prepare-status" class="mini-label">未標記</span>
+        </article>
+        <section class="prepare-preview">
+          <div class="prepare-section-head"><div><h2>對話重點預覽</h2><p class="small muted">你的提問</p></div><button id="prepare-preview-toggle" class="inline-action" type="button">看全部</button></div>
+          <div id="prepare-preview-list" class="prepare-preview-list"></div>
+        </section>
+        <section class="prepare-mode">
+          <h2>看完覺得這段比較像：</h2>
+          <div class="mode-choice-grid" role="group" aria-label="選整理方式">
+            <button id="choose-multi" class="mode-choice" type="button"><span class="mode-radio"></span><span><strong>聊了好幾件事</strong><small>包含多個主題，中間可能換過方向</small></span></button>
+            <button id="choose-single" class="mode-choice" type="button"><span class="mode-radio"></span><span><strong>一直在聊同一件事</strong><small>主題集中，只需要標出關鍵與轉向</small></span></button>
+            <button id="choose-skip" class="mode-choice quiet" type="button"><span class="mode-radio"></span><span><strong>這篇不用整理</strong><small>閒聊、重複，或沒有需要留下的資訊</small></span></button>
+          </div>
+        </section>
+        <details id="ai-prepare-panel" class="ai-prepare-panel">
+          <summary><span>✦ 讓其他 AI 協助預先標記（選用）</span><span id="ai-panel-state" class="small muted"></span></summary>
+          <div class="ai-prepare-body">
+            <p class="small muted">AI 先產生主題、關鍵與轉向建議，再回到這裡審查；它不會直接取代你的判斷。</p>
+            <section id="ai-repo-way" class="ai-way">
+              <h3>方式 A｜使用可直接存取 GitHub 的 AI</h3>
+              <p class="small muted">複製短指令給已連接 GitHub 的 AI。它只應新增或覆寫這段對話的 <code>outline.ai.json</code>。</p>
+              <div class="ai-button-row"><button id="ai-copy-repo" class="secondary" type="button">複製指令</button><button id="ai-reload" class="primary" type="button">AI 寫好了，重新讀取</button></div>
+              <p id="ai-repo-state" class="small muted"></p>
+            </section>
+            <section class="ai-way">
+              <h3>方式 B｜使用其他 AI</h3>
+              <p class="small muted">下載內含完整規則與對話的檔案，或直接匯入 AI 回傳的結果。</p>
+              <div class="ai-button-row"><button id="ai-download-request" class="secondary" type="button">下載給 AI 的檔案</button><button id="ai-copy-file-prompt" class="secondary" type="button">複製這句話</button></div>
+              <label for="ai-file" class="secondary full file-action">匯入 AI 給的檔案</label><input id="ai-file" type="file" accept=".json,.txt,.md" hidden>
+              <details class="ai-paste"><summary>或貼上 AI 回的文字</summary><textarea id="ai-paste" rows="5" placeholder="貼上 outline.ai.json 或 AI 的完整回覆"></textarea><button id="ai-paste-go" class="secondary full" type="button">讀取貼上的內容</button></details>
+            </section>
+            <div id="ai-suggestion-summary" class="ai-suggestion-summary" hidden></div>
+          </div>
+        </details>
+        <button id="enter-workspace" class="primary full prepare-enter" type="button">進入標記工作台 →</button>
+      </section>
       <section id="reader-page" data-page="reader" hidden>
-        <div class="reader-heading"><button id="reader-back" aria-label="回對話庫" class="back-button">‹</button><div><h1 id="reader-title">對話標記</h1><p id="reader-info" class="small muted"></p></div><button id="open-topics" class="icon-button" aria-label="主題總覽">☷</button></div>
-        <div class="reader-toolbar"><label for="nav-kind" class="sr-only">跳轉類別</label><select id="nav-kind"><option value="all">全部</option><option value="pending">待確認</option><option value="key">關鍵</option><option value="turn">轉向</option></select><div class="reader-arrows"><button id="prev-item" aria-label="上一項">↑</button><button id="next-item" aria-label="下一項">↓</button><span id="position" class="small muted">—</span></div></div>
+        <div class="reader-heading workspace-heading">
+          <button id="reader-back" aria-label="回對話庫" class="back-button">‹</button>
+          <div class="reader-title-block"><h1 id="reader-title">對話標記</h1><div class="reader-subline"><p id="reader-info" class="small muted"></p><button id="reader-mode" class="reader-mode-link" type="button"></button></div></div>
+          <span id="reader-dirty" class="reader-dirty"></span><button id="reader-save" type="button" class="compact primary">儲存</button><button id="reader-more" type="button" class="icon-button" aria-label="更多">⋯</button>
+        </div>
+        <div class="reader-toolbar">
+          <div class="reader-filters" role="group" aria-label="快速索引">
+            <button data-kind="all" class="active" type="button">全部 <span id="count-all"></span></button>
+            <button data-kind="pending" type="button">待確認 <span id="count-pending"></span></button>
+            <button data-kind="key" type="button">關鍵 <span id="count-key"></span></button>
+            <button data-kind="turn" type="button">轉向 <span id="count-turn"></span></button>
+          </div>
+          <div class="reader-toolbar-actions"><button id="reader-review" class="toolbar-link" type="button">審查</button><button id="open-topics" class="toolbar-link" type="button">主題</button><div class="reader-arrows"><button id="prev-item" aria-label="上一項">↑</button><button id="next-item" aria-label="下一項">↓</button><span id="position" class="small muted">—</span></div></div>
+        </div>
         <div id="source-warning" class="warning" hidden></div>
         <div id="message-list" class="message-list"></div>
         <button id="load-more" class="load-more" hidden>繼續載入對話</button>
@@ -65,6 +121,7 @@
         <div id="review-list"></div>
       </section>
       <section id="settings-page" data-page="settings" hidden>
+        <button id="settings-back" class="prepare-back" type="button">‹ 返回</button>
         <p class="eyebrow">CONNECTION & STORAGE</p><h1>更多</h1>
         <div class="setting-group"><h2>連接來源</h2><p id="connection-detail"></p></div>
         <div class="setting-group"><h2>儲存與備份</h2><p id="save-detail" class="small muted"></p><button id="save-button" class="primary full">儲存到 GitHub</button><button id="download-button" class="secondary full">下載 outline.json 備份</button></div>

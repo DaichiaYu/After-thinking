@@ -85,6 +85,7 @@
       unmatched:[],manualAi:new Set(),aiRejected:[],aiSeen:[],sourceMismatch:false
     };
     const doc=model.base;
+    model.mode=doc?.mode==="single_topic"?"single_topic":"multi_topic";
     model.sourceMismatch=!!(doc && ((doc.outline_version&&doc.outline_version>6) ||
       (doc.source?.fingerprint&&doc.source.fingerprint!==sourceFingerprint(msgs)) ||
       (Number.isInteger(doc.source?.message_count)&&doc.source.message_count!==msgs.length) ||
@@ -234,6 +235,46 @@
     const id=ids.find(x=>!m.topics.some(t=>t.id===x));if(!id)throw new Error("主題已達到 A–Z 上限");
     m.topics.push({id,name:name.trim()||"新主題 "+id,note:"",name_origin:"user"});markEdited(m);return id;
   }
+
+  function setMode(m,mode) {
+    if(mode!=="multi_topic"&&mode!=="single_topic")throw new Error("未知的整理方式");
+    if(m.mode===mode){markEdited(m);return}
+    if(mode==="single_topic"){
+      if(m.mode==="multi_topic")m._multiSnapshot={topics:clone(m.topics),primary:clone(m.primary),related:clone(m.related)};
+      const baseSingle=m.base?.single_topic||{},first=m.topics[0]||{id:"A",name:"",note:"",name_origin:"user"},name=(baseSingle.name||first.name||m.title||"主要討論").trim();
+      m.topics=[{id:"A",name:name==="主題 A"?(m.title||"主要討論"):name,note:baseSingle.note||first.note||"",name_origin:first.name_origin||"user"}];m.primary={};m.related={};for(const msg of m.msgs)m.primary[msg.id]="A";
+    }else if(m._multiSnapshot){m.topics=clone(m._multiSnapshot.topics);m.primary=clone(m._multiSnapshot.primary);m.related=clone(m._multiSnapshot.related)}
+    else if(!m.topics.length)m.topics=[{id:"A",name:"主題 A",note:"",name_origin:"user"}];
+    m.mode=mode;markEdited(m);
+  }
+  function parseSuggestionText(text) {
+    const raw=String(text||""),fenced=raw.match(/```(?:json)?\s*([\s\S]*?)```/i);let body=fenced?fenced[1]:raw;
+    const a=body.indexOf("{"),b=body.lastIndexOf("}");if(a<0||b<a)throw new Error("找不到 JSON 內容");body=body.slice(a,b+1);try{return JSON.parse(body)}catch(e){throw new Error("JSON 格式不正確："+e.message)}
+  }
+  function checkSuggestion(m,d) {
+    const rep={errors:[],warnings:[],unknown:[],missing:[],stale:false,plan:null};
+    if(!d||typeof d!=="object"||Array.isArray(d)){rep.errors.push("內容不是 JSON 物件");return rep}
+    if(d.format&&d.format!=="after-thinking/outline-suggestion")rep.warnings.push("format 欄位不是 after-thinking/outline-suggestion");
+    const mode=d.mode==="multi_topic"?"multi_topic":d.mode==="single_topic"?"single_topic":null;if(!mode){rep.errors.push("mode 要是 multi_topic 或 single_topic");return rep}
+    if(d.source_fingerprint&&d.source_fingerprint!==sourceFingerprint(m.msgs))rep.stale=true;if(d.message_count!==undefined&&Number(d.message_count)!==m.msgs.length)rep.stale=true;
+    const ref=x=>{if(typeof x==="number"&&x>=1&&x<=m.msgs.length)return x-1;if(typeof x!=="string")return -1;const s=x.trim(),byId=m.msgs.findIndex(z=>z.id===s);if(byId>=0)return byId;if(/^\d{1,6}$/.test(s)){const n=Number(s);return n>=1&&n<=m.msgs.length?n-1:-1}return -1};
+    const readTopics=list=>{const topics=[],used=new Set(),at=new Array(m.msgs.length).fill(null);for(const raw of Array.isArray(list)?list:[]){if(!raw||typeof raw!=="object")continue;let id=typeof raw.id==="string"&&/^[A-Z]$/.test(raw.id.trim())&&!used.has(raw.id.trim())?raw.id.trim():ids.find(x=>!used.has(x));if(!id)continue;used.add(id);const spans=[],sourceSpans=Array.isArray(raw.spans)?raw.spans:(raw.from!==undefined?[{from:raw.from,to:raw.to}]:[]);for(const sp of sourceSpans){if(!sp)continue;let a=ref(sp.from),b=ref(sp.to===undefined?sp.from:sp.to);if(a<0||b<0){rep.unknown.push(String(sp.from??sp.to));continue}if(a>b)[a,b]=[b,a];spans.push([a,b])}for(const mid of Array.isArray(raw.messages)?raw.messages:[]){const i=ref(mid);if(i>=0)spans.push([i,i]);else rep.unknown.push(String(mid))}if(!spans.length){rep.warnings.push("主題「"+(raw.name||id)+"」沒有可用範圍");continue}const t={id,name:String(raw.name||"主題 "+id).trim(),note:String(raw.note||"").trim(),spans};topics.push(t);for(const [a,b] of spans)for(let i=a;i<=b;i++)at[i]=id}return{topics,at}};
+    const main=readTopics(d.topics);if(mode==="multi_topic"){if(!main.topics.length)rep.errors.push("multi_topic 但沒有任何可用主題");rep.missing=m.msgs.map((x,i)=>x.speaker!=="assistant"&&!main.at[i]?i:-1).filter(i=>i>=0)}
+    const previousAnchor=i=>{for(let j=i;j>=0;j--)if(m.msgs[j].speaker!=="assistant")return j;return -1},turns=[];for(const t of Array.isArray(d.turns)?d.turns:[]){let i=ref(t?.message_id);if(i<0){rep.unknown.push(String(t?.message_id||""));continue}if(m.msgs[i].speaker==="assistant")i=previousAnchor(i);if(i>=0&&!turns.some(x=>x.i===i))turns.push({i,reason:String(t?.reason||"")})}
+    const keys=[];for(const k of Array.isArray(d.key_points)?d.key_points:[]){const i=ref(k?.message_id);if(i<0){rep.unknown.push(String(k?.message_id||""));continue}if(!keys.some(x=>x.i===i))keys.push({i,reason:String(k?.reason||"")})}
+    const ranges=[];for(const r of Array.isArray(d.key_ranges)?d.key_ranges:[]){let a=ref(r?.from),b=ref(r?.to===undefined?r?.from:r?.to);if(a<0||b<0){rep.unknown.push(String(r?.from??r?.to??""));continue}if(a>b)[a,b]=[b,a];ranges.push({a,b,reason:String(r?.reason||"")})}
+    const single=d.single_topic&&typeof d.single_topic==="object"?{name:String(d.single_topic.name||""),note:String(d.single_topic.note||"")}:null;
+    const uncertain=(Array.isArray(d.uncertain)?d.uncertain:[]).map(u=>({i:ref(u?.message_id),question:String(u?.question||u?.reason||"")})).filter(u=>u.question);
+    const alternatives=(Array.isArray(d.alternatives)?d.alternatives:[]).map((a,k)=>{const alt=readTopics(a?.topics);return alt.topics.length?{label:String(a?.label||"另一種分法 "+(k+1)),...alt}:null}).filter(Boolean);
+    rep.unknown=[...new Set(rep.unknown.filter(Boolean))];rep.plan={mode,topics:main.topics,at:main.at,turns,keys,ranges,single,uncertain,alternatives,generated_at:d.generated_at||null,generated_by:d.generated_by||null};return rep;
+  }
+  function applySuggestion(m,raw,rep) {
+    if(!rep?.plan||(rep.errors||[]).length)throw new Error((rep?.errors||["AI 建議無法套用"]).join("；"));const p=rep.plan,base=m.base?clone(m.base):{};m.base=base;m.mode=p.mode;m.related={};m.primary={};
+    if(p.mode==="multi_topic"){m.topics=p.topics.map(t=>({id:t.id,name:t.name,note:t.note,name_origin:"ai"}));m.msgs.forEach((msg,i)=>{if(p.at[i])m.primary[msg.id]=p.at[i]});base.topics=m.topics.map(t=>({id:t.id,name:t.name,note:t.note,name_origin:"ai",messages:m.msgs.filter((x,i)=>p.at[i]===t.id).map(x=>x.id),also_messages:[],ai_unreviewed_messages:m.msgs.filter((x,i)=>p.at[i]===t.id).map(x=>x.id),ai_confirmed_messages:[]}));base.single_topic=base.single_topic||{name:"",note:""}}
+    else{const single=p.single||{},name=(single.name||m.title||"主要討論").trim();m.topics=[{id:"A",name,note:single.note||"",name_origin:"ai"}];for(const msg of m.msgs)m.primary[msg.id]="A";base.topics=[];base.single_topic={name,note:single.note||""}}
+    m.keys={};for(const k of p.keys){const msg=m.msgs[k.i];m.keys[msg.id]={message_id:msg.id,speaker:msg.speaker,origin:"ai_unreviewed",ai_reason:k.reason}}m.turns={};for(const t of p.turns){const msg=m.msgs[t.i];m.turns[msg.id]={message_id:msg.id,hinted_by:[],origin:"ai_unreviewed",ai_reason:t.reason}}
+    base.key_ranges=p.ranges.map(r=>({from_message_id:m.msgs[r.a].id,to_message_id:m.msgs[r.b].id,origin:"ai_unreviewed",ai_reason:r.reason}));base.ai_suggestion={file:"outline.ai.json",content_fingerprint:fingerprint({speaker:"ai-file",content:String(raw||"")}),generated_at:p.generated_at,generated_by:p.generated_by,source_matched:!rep.stale,applied_at:new Date().toISOString(),applied_how:"replace"};m.aiRejected=[];m.aiSeen=[];markEdited(m);
+  }
   function summaryText(m,doc) {
     const all=m.msgs.map((_,i)=>i);
     const format=i=>String(i+1).padStart(Math.max(3,String(m.msgs.length).length),"0");
@@ -302,14 +343,14 @@
     const all=m.msgs.map(x=>x.id);
     const now=new Date().toISOString();
     doc.outline_version=6;
-    doc.created_with="after-thinking-mobile-web 0.1.0";
+    doc.created_with="after-thinking-mobile-web 0.2.0";
     doc.updated_at=now;
     doc.source={...(doc.source||{}),folder:m.folder||doc.source?.folder||"",
       conversation_path:"source/conversation.jsonl",source_revision:m.revision,
       message_count:m.msgs.length,first_message_id:all[0],last_message_id:all[all.length-1],
       fingerprint:sourceFingerprint(m.msgs),
       message_fingerprints:m.msgs.map(x=>x.pid?[x.id,fingerprint(x),x.pid]:[x.id,fingerprint(x)])};
-    doc.mode=doc.mode==="single_topic"&&m.topics.length===1?"single_topic":"multi_topic";
+    doc.mode=m.mode;
     doc.numbering="顯示編號 = 依 order 排序後的位置（001 是第一則）；這個檔案裡一律用 message_id";
     doc.topics=m.topics.map(t=>{
       const old=existing[t.id]||{};
@@ -336,5 +377,6 @@
     return doc;
   }
   root.ATCore={fingerprint,parseJsonl,sourceFingerprint,sections,normalizeFolder,makeModel,
-    setPrimary,setRelated,toggleKey,toggleTurn,setNote,toggleSection,pending,decide,addTopic,makeOutline,keyOf,turnOf};
+    setPrimary,setRelated,toggleKey,toggleTurn,setNote,toggleSection,pending,decide,addTopic,setMode,
+    parseSuggestionText,checkSuggestion,applySuggestion,makeOutline,keyOf,turnOf};
 })(typeof window!=="undefined"?window:globalThis);

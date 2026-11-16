@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f8fafc">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://api.github.com; script-src 'self'; style-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>After-thinking · 行動標記工作台</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <a href="#main" class="skip">跳到主要內容</a>
+  <header class="topbar">
+    <div class="brand"><span class="symbol">AT</span><span>After-thinking</span></div>
+    <div class="topbar-actions">
+      <span id="sync-state" class="sync-state">未連線</span>
+      <button id="quick-save" type="button" class="compact primary" hidden>儲存</button>
+      <button id="menu-button" type="button" class="icon-button" aria-label="更多功能">⋯</button>
+    </div>
+  </header>
+  <div id="notice" class="notice" role="status" hidden></div>
+  <main id="main">
+    <section id="connect-page" class="connect-page" data-page="connect">
+      <p class="eyebrow">AFTER-THINKING / MOBILE</p>
+      <h1>接續你的對話標記。</h1>
+      <p class="intro">連接你自己選擇的 GitHub 資料倉庫，閱讀與編輯 AT 原本的標記檔。不需要安裝 Chrome 擴充功能。</p>
+      <form id="connect-form" class="connect-form">
+        <label for="repo-input">資料倉庫 <span class="muted">owner/repository</span></label>
+        <input id="repo-input" required autocomplete="off" spellcheck="false" autocapitalize="off" placeholder="your-account/your-conversations">
+        <label for="branch-input">分支</label>
+        <input id="branch-input" required value="main" autocomplete="off" autocapitalize="off" spellcheck="false">
+        <label for="token-input">Fine-grained Personal Access Token（細粒度存取憑證）</label>
+        <input id="token-input" type="password" required autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="僅限你指定的資料倉庫">
+        <p class="hint">Token 需要該資料倉庫的 Contents：Read and write。只保存在目前分頁的記憶體中，關閉或重新整理就會清除。不要將 Token 貼到公開 Issue、程式碼或網址。</p>
+        <button type="submit" id="connect-button" class="primary full">連接 GitHub 並開啟對話庫 <span aria-hidden="true">→</span></button>
+      </form>
+      <div class="offline-option"><span>或</span><label for="local-files" class="text-action">使用本機 conversation.jsonl＋outline.json</label><input id="local-files" type="file" accept=".jsonl,.json" multiple hidden></div>
+      <details class="explain"><summary>為什麼需要 Token？</summary><p>GitHub Pages 是靜態網站，不能在公開前端安全保存 OAuth Client Secret。此版本採用只授權使用者指定倉庫的 Token；未來可以透過獨立 GitHub App 授權服務取代手動輸入。</p></details>
+    </section>
+    <div id="workspace" hidden>
+      <section id="library-page" data-page="library" hidden>
+        <div class="title-row"><div><p class="eyebrow">CONVERSATION LIBRARY</p><h1>選擇對話</h1></div><button id="change-repo" class="ghost">切換倉庫</button></div>
+        <div id="repo-info" class="small muted"></div>
+        <div class="search-row"><label class="sr-only" for="search">搜尋對話</label><input id="search" type="search" placeholder="搜尋對話標題或提問…"><label class="sr-only" for="sort">排序</label><select id="sort"><option value="conversation">對話時間</option><option value="capture">擷取時間</option><option value="tagged">最後標記時間</option><option value="labels">標籤順序</option></select></div>
+        <div class="filter-strip" aria-label="對話篩選" role="group"><button data-filter="all" class="active">全部</button><button data-filter="todo">未處理</button><button data-filter="done">已整理</button><button data-filter="skip">不用整理</button><button data-filter="untagged">還沒標記</button></div>
+        <div id="library-list"></div>
+      </section>
+      <section id="reader-page" data-page="reader" hidden>
+        <div class="reader-heading"><button id="reader-back" aria-label="回對話庫" class="back-button">‹</button><div><h1 id="reader-title">對話標記</h1><p id="reader-info" class="small muted"></p></div><button id="open-topics" class="icon-button" aria-label="主題總覽">☷</button></div>
+        <div class="reader-toolbar"><label for="nav-kind" class="sr-only">跳轉類別</label><select id="nav-kind"><option value="all">全部</option><option value="pending">待確認</option><option value="key">關鍵</option><option value="turn">轉向</option></select><div class="reader-arrows"><button id="prev-item" aria-label="上一項">↑</button><button id="next-item" aria-label="下一項">↓</button><span id="position" class="small muted">—</span></div></div>
+        <div id="source-warning" class="warning" hidden></div>
+        <div id="message-list" class="message-list"></div>
+        <button id="load-more" class="load-more" hidden>繼續載入對話</button>
+      </section>
+      <section id="topics-page" data-page="topics" hidden>
+        <div class="title-row"><div><p class="eyebrow">DISCUSSION STRUCTURE</p><h1>主題總覽</h1></div><button id="new-topic" class="ghost">＋ 新增</button></div>
+        <div id="topic-overview" class="topic-overview"></div>
+        <div id="topic-list" class="topic-list"></div>
+        <p class="side-note"><strong>一個主要主題，多個相關主題。</strong> 同一則訊息可以跨主題關聯，但原文只有一份。</p>
+      </section>
+      <section id="review-page" data-page="review" hidden>
+        <div class="title-row"><div><p class="eyebrow">SUGGESTIONS & REVIEW</p><h1>標記審查</h1></div><span id="review-count" class="counter"></span></div>
+        <p class="intro small">確認 AI 建議，或回到原文重新檢查。審查結果會寫入同一份 outline.json。</p>
+        <div class="filter-strip"><button data-review="all" class="active">全部</button><button data-review="topic">主題</button><button data-review="key">關鍵</button><button data-review="turn">轉向</button></div>
+        <div id="review-list"></div>
+      </section>
+      <section id="settings-page" data-page="settings" hidden>
+        <p class="eyebrow">CONNECTION & STORAGE</p><h1>更多</h1>
+        <div class="setting-group"><h2>連接來源</h2><p id="connection-detail"></p></div>
+        <div class="setting-group"><h2>儲存與備份</h2><p id="save-detail" class="small muted"></p><button id="save-button" class="primary full">儲存到 GitHub</button><button id="download-button" class="secondary full">下載 outline.json 備份</button></div>
+        <div class="setting-group"><h2>安全與隱私</h2><p>原文及私人設定只從你選擇的資料來源載入；Token 不會被保存在網站程式、網址或本機儲存空間。請避免在共享裝置開啟私人倉庫。</p><button id="disconnect" class="secondary full">中斷連線</button></div>
+        <p class="small muted">此網頁是 AT 的標記工具；文章轉換屬於獨立的 display-AT 專案。</p>
+      </section>
+    </div>
+  </main>
+  <nav id="bottom-nav" class="bottom-nav" aria-label="主要功能" hidden>
+    <button data-tab="library"><span class="nav-glyph">▤</span>對話庫</button>
+    <button data-tab="reader"><span class="nav-glyph">▥</span>閱讀</button>
+    <button data-tab="topics"><span class="nav-glyph">▧</span>主題</button>
+    <button data-tab="review"><span class="nav-glyph">✓</span>審查<span id="nav-pending" class="bubble" hidden></span></button>
+  </nav>
+  <div id="sheet-overlay" class="sheet-overlay" hidden>
+    <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title">
+      <div class="handle" aria-hidden="true"></div>
+      <header class="sheet-header"><h2 id="sheet-title">標記主題</h2><button id="sheet-close" class="icon-button" aria-label="關閉">×</button></header>
+      <div id="sheet-content" class="sheet-content"></div>
+      <footer class="sheet-footer"><button id="sheet-apply" class="primary full">套用標記</button></footer>
+    </section>
+  </div>
+  <script src="./core.js" defer></script>
+  <script src="./github.js" defer></script>
+  <script src="./app.js" defer></script>
+</body>
+</html>

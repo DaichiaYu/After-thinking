@@ -5,7 +5,7 @@
 // 主題分配不算進來（AI 標過的話整篇都是，篩了等於沒篩），主題的確認在主題卡和每句的標籤上做。
 
 const KIND_ORDER = { range: 0, key: 1, turn: 2, hint: 3 };
-const NAV_KINDS = [["pending", "待確認"], ["key", "關鍵"], ["turn", "轉向"], ["all", "全部"]];
+const NAV_KINDS = [["pending", T("review.to_review")], ["key", T("tag.key_3")], ["turn", T("tag.turn")], ["all", T("tag.all")]];
 
 // 所有關鍵、關鍵段落、轉向、可能轉向，照位置排
 function reviewItems() {
@@ -32,16 +32,16 @@ function itemsOf(kind) {
 }
 
 function itemLabel(it) {
-  if (it.kind === "range") return "★ 關鍵段落 " + (it.i === it.end ? pad(it.i) : pad(it.i) + "–" + pad(it.end));
-  if (it.kind === "key") return msgs[it.i].speaker === "assistant" ? "★ AI 說的關鍵" : "★ 你說的關鍵";
-  if (it.kind === "turn") return "轉向";
-  return "可能轉向？";
+  if (it.kind === "range") return T("review.key_range", (it.i === it.end ? pad(it.i) : pad(it.i) + "–" + pad(it.end)));
+  if (it.kind === "key") return msgs[it.i].speaker === "assistant" ? T("tag.ai_key") : T("tag.your_key");
+  if (it.kind === "turn") return T("tag.turn");
+  return T("review.possible_turn");
 }
 function sourceLabel(it) {
-  if (it.kind === "hint") return "程式提示：" + hintReasons(it.i).map((r) => HINT_TEXT[r]).join("、");
-  if (it.pending) return "AI 建議";
-  if (it.origin === "ai_confirmed") return "AI 建議，你確認過";
-  return "你標的";
+  if (it.kind === "hint") return T("review.program_hint", hintReasons(it.i).map((r) => HINT_TEXT[r]).join(T("common.list_sep")));
+  if (it.pending) return T("ai.ai_suggestion");
+  if (it.origin === "ai_confirmed") return T("tag.ai_suggestion_confirmed_by_you");
+  return T("review.tagged_by_you");
 }
 
 // 確認／否決：跟每句旁邊的按鈕做的事一樣
@@ -71,7 +71,7 @@ function actAndAdvance(it, fn) {
   fn(it);
   const list = itemsOf(UI.navKind);
   const next = list.find((x) => posOf(x) > before) || list[0] || null;
-  if (next) goTo(next); else { UI.cursor = null; renderNavbar(); renderDrawer(); showStatus(UI.navKind === "pending" ? "待確認的都處理完了" : "這一類沒有了"); }
+  if (next) goTo(next); else { UI.cursor = null; renderNavbar(); renderDrawer(); showStatus(UI.navKind === "pending" ? T("review.everything_to_review_is_done") : T("review.none_left_in_this_category")); }
 }
 
 // 跳到某一項：被篩選藏起來的話先打開，畫面保留前後文
@@ -110,14 +110,14 @@ function renderNavbar() {
   bar.textContent = "";
   const counts = {};
   NAV_KINDS.forEach(([k]) => { counts[k] = itemsOf(k).length; });
-  const seg = el("div", { class: "seg small-seg", role: "group", "aria-label": "要跳的是哪一種" });
+  const seg = el("div", { class: "seg small-seg", role: "group", "aria-label": T("review.what_to_jump_between") });
   NAV_KINDS.forEach(([k, label]) => {
     const b = el("button", { "aria-pressed": String(UI.navKind === k), text: label + " " + counts[k] });
     b.addEventListener("click", () => { UI.navKind = k; UI.cursor = null; renderNavbar(); renderDrawer(); });
     seg.append(b);
   });
-  const up = el("button", { class: "secondary small", "aria-label": "上一個", title: "上一個（K）", text: "↑" });
-  const down = el("button", { class: "secondary small", "aria-label": "下一個", title: "下一個（J）", text: "↓" });
+  const up = el("button", { class: "secondary small", "aria-label": T("review.previous"), title: T("review.previous_k"), text: "↑" });
+  const down = el("button", { class: "secondary small", "aria-label": T("review.next"), title: T("review.next_j"), text: "↓" });
   up.disabled = down.disabled = !counts[UI.navKind];
   up.addEventListener("click", () => step(-1));
   down.addEventListener("click", () => step(1));
@@ -130,18 +130,18 @@ function renderNavbar() {
       el("span", { class: "mono", text: pad(cur.i) }), " " + itemLabel(cur),
       el("span", { class: "nav-src", text: "（" + sourceLabel(cur) + "）" }));
     if (cur.pending) {
-      const ok = el("button", { class: "small", text: "確認" });
+      const ok = el("button", { class: "small", text: T("tag.confirm") });
       ok.addEventListener("click", () => actAndAdvance(cur, confirmItem));
-      const no = el("button", { class: "secondary small", text: cur.kind === "hint" || cur.kind === "turn" ? "不是轉向" : "不是關鍵" });
+      const no = el("button", { class: "secondary small", text: cur.kind === "hint" || cur.kind === "turn" ? T("review.not_a_turn") : T("review.not_a_key") });
       no.addEventListener("click", () => actAndAdvance(cur, rejectItem));
       box.append(ok, no);
     }
     bar.append(box);
   } else {
-    bar.append(el("span", { class: "hint nav-cur", text: counts[UI.navKind] ? "按 ↓ 從第一個開始（鍵盤 J／K）" :
-      UI.navKind === "pending" ? "沒有待確認的關鍵或轉向" : "還沒有這一類" }));
+    bar.append(el("span", { class: "hint nav-cur", text: counts[UI.navKind] ? T("review.press_to_start_from_the_first") :
+      UI.navKind === "pending" ? T("review.no_keys_or_turns_to_review") : T("review.none_in_this_category_yet") }));
   }
-  const tog = el("button", { class: "secondary small drawer-toggle", "aria-expanded": String(UI.drawer), text: UI.drawer ? "收起目錄" : "目錄" });
+  const tog = el("button", { class: "secondary small drawer-toggle", "aria-expanded": String(UI.drawer), text: UI.drawer ? T("review.hide_index") : T("review.index") });
   tog.addEventListener("click", () => setDrawer(!UI.drawer));
   bar.append(tog);
 }
@@ -167,7 +167,7 @@ function renderDrawer() {
   });
   list.textContent = "";
   const items = itemsOf(UI.drawerKind);
-  if (!items.length) { list.append(el("li", { class: "empty-note", text: UI.drawerKind === "pending" ? "沒有待確認的項目" : "還沒有" })); return; }
+  if (!items.length) { list.append(el("li", { class: "empty-note", text: UI.drawerKind === "pending" ? T("review.nothing_to_review") : T("review.none_yet") })); return; }
   items.forEach((it) => {
     const m = msgs[it.i];
     const t = S.mode === "multi" ? topicById(tagOf(it.i)) : null;
@@ -183,9 +183,9 @@ function renderDrawer() {
     go.addEventListener("click", () => goTo(it));
     const li = el("li", { class: sameItem(it, UI.cursor) ? "current" : "" }, go);
     if (it.pending) {
-      const ok = el("button", { class: "ok-btn", "aria-label": "確認 " + pad(it.i) + " " + itemLabel(it), title: "確認", text: "✓" });
+      const ok = el("button", { class: "ok-btn", "aria-label": T("review.confirm", pad(it.i), itemLabel(it)), title: T("tag.confirm"), text: "✓" });
       ok.addEventListener("click", () => confirmItem(it));
-      const no = el("button", { class: "icon-btn", "aria-label": "否決 " + pad(it.i) + " " + itemLabel(it), title: "不是", text: "×" });
+      const no = el("button", { class: "icon-btn", "aria-label": T("review.reject", pad(it.i), itemLabel(it)), title: T("review.no"), text: "×" });
       no.addEventListener("click", () => rejectItem(it));
       li.append(el("span", { class: "d-acts" }, ok, no));
     }

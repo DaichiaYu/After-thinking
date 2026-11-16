@@ -5,7 +5,9 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 
-const code = fs.readFileSync(path.join(__dirname, '..', 'tag-attachments.js'), 'utf8');
+// UI strings come from i18n.js and the locale files; without a browser the language defaults to zh-TW.
+const i18nSource = ['i18n.js', 'locales/zh-TW.js', 'locales/en.js'].map((f) => fs.readFileSync(path.join(__dirname, '..', f), 'utf8')).join('\n');
+const code = i18nSource + '\n' + fs.readFileSync(path.join(__dirname, '..', 'tag-attachments.js'), 'utf8');
 function harness(ctx, fetchFn) {
   const sandbox = {
     ctx, msgs: [], config: { repo:'owner/private', token:'fake-token' }, branch:'main',

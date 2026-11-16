@@ -25,12 +25,12 @@ const AI = {
 function instructionsForRepo() {
   const nUser = msgs.filter((m) => m.speaker !== "assistant").length;
   return [
-    "請幫我先標記一段 AI 對話，結果寫成一個 JSON 檔案放進 GitHub 倉庫。",
+    T("ai.please_pre_tag_an_ai_conversation"),
     "",
-    "倉庫：" + config.repo + "（分支 " + branch + "）",
-    "資料夾：" + ctx.folder,
-    "原文：" + ctx.folder + "source/conversation.jsonl（一行一則訊息，照 order 排序）",
-    "要做的事：照倉庫裡的 " + OUTLINE_AI_GUIDE_PATH + " 做。這段共 " + msgs.length + " 則（我的 " + nUser + " 則），source_fingerprint 照抄：" + sourceFingerprint()
+    T("ai.repository_branch", config.repo, branch),
+    T("ai.folder", ctx.folder),
+    T("ai.source_source_conversation_jsonl_one_message", ctx.folder),
+    T("ai.what_to_do_follow_in_the", OUTLINE_AI_GUIDE_PATH, msgs.length, nUser, sourceFingerprint())
   ].join("\n");
 }
 
@@ -46,30 +46,30 @@ async function ensureOutlineAiGuide() {
 async function requestFileContent() {
   const nUser = msgs.filter((m) => m.speaker !== "assistant").length;
   const lines = [
-    "這個檔案前半是說明，後半是完整的對話原文。看完後請只輸出一個 outline.ai.json：",
-    "放在一個 ```json 程式碼區塊裡，或直接給我一個名為 outline.ai.json 的檔案。",
+    T("ai.the_first_half_of_this_file"),
+    T("ai.put_it_in_a_json_code"),
     "",
-    "這段對話共 " + msgs.length + " 則，其中我的訊息 " + nUser + " 則（speaker 是 author 的是我，assistant 是 AI）。",
-    "source_fingerprint 照抄：" + sourceFingerprint() + "　message_count 照抄：" + msgs.length,
+    T("ai.this_conversation_has_messages_of_them", msgs.length, nUser),
+    T("ai.copy_source_fingerprint_exactly_copy_message", sourceFingerprint(), msgs.length),
     "",
     await outlineAiGuideText(false),
     "",
-    "## 對話原文",
+    T("ai.conversation_source"),
     "",
-    "標題：" + (ctx.title || ""),
-    "每則開頭是 message_id、顯示編號和說話的人；回覆時一律用 message_id。",
+    T("ai.title", (ctx.title || "")),
+    T("ai.each_message_starts_with_its_message"),
     ""
   ];
   msgs.forEach((m, i) => {
-    lines.push("### " + m.id + "｜" + pad(i) + "｜" + (m.speaker === "author" ? "我（author）" : m.speaker === "assistant" ? "AI（assistant）" : "外部（external）"));
+    lines.push("### " + m.id + "｜" + pad(i) + "｜" + (m.speaker === "author" ? T("ai.me_author") : m.speaker === "assistant" ? "AI（assistant）" : T("ai.external_external")));
     lines.push("");
-    lines.push(m.content || "（只有附件）");
+    lines.push(m.content || T("tag.attachment_only"));
     lines.push("");
   });
   return lines.join("\n");
 }
 
-const SUGGESTED_PROMPT = "請照附檔開頭的說明，幫我標記附檔裡的對話，最後只輸出 outline.ai.json（放在一個 json 程式碼區塊裡）。";
+const SUGGESTED_PROMPT = T("ai.following_the_instructions_at_the_top");
 
 // ── 讀進來、檢查 ──
 
@@ -78,9 +78,9 @@ function parseAiText(text) {
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
   let body = fenced ? fenced[1] : text;
   const a = body.indexOf("{"), b = body.lastIndexOf("}");
-  if (a < 0 || b < a) throw new Error("找不到 JSON 內容");
+  if (a < 0 || b < a) throw new Error(T("ai.no_json_content_found"));
   body = body.slice(a, b + 1);
-  try { return JSON.parse(body); } catch (e) { throw new Error("JSON 格式不正確：" + e.message); }
+  try { return JSON.parse(body); } catch (e) { throw new Error(T("ai.invalid_json", e.message)); }
 }
 
 // 訊息編號：接受 message_id，也接受顯示編號（"013" 或 13）
@@ -97,10 +97,10 @@ function aiRef(ref) {
 // 檢查 AI 給的建議，整理成之後套用要用的樣子
 function checkSuggestion(d) {
   const rep = { errors: [], warnings: [], unknown: [], missing: [], stale: false, noFingerprint: false, plan: null };
-  if (!d || typeof d !== "object" || Array.isArray(d)) { rep.errors.push("內容不是一個 JSON 物件"); return rep; }
-  if (d.format && d.format !== AI_FORMAT) rep.warnings.push("format 欄位不是 " + AI_FORMAT + "，照內容盡量讀");
+  if (!d || typeof d !== "object" || Array.isArray(d)) { rep.errors.push(T("ai.the_content_is_not_a_json")); return rep; }
+  if (d.format && d.format !== AI_FORMAT) rep.warnings.push(T("ai.the_format_field_is_not_reading", AI_FORMAT));
   const mode = d.mode === "multi_topic" ? "multi" : d.mode === "single_topic" ? "flow" : null;
-  if (!mode) { rep.errors.push("mode 要是 multi_topic 或 single_topic"); return rep; }
+  if (!mode) { rep.errors.push(T("ai.mode_must_be_multi_topic_or")); return rep; }
   if (!d.source_fingerprint) rep.noFingerprint = true;
   else if (d.source_fingerprint !== sourceFingerprint()) rep.stale = true;
   if (d.message_count !== undefined && Number(d.message_count) !== msgs.length) rep.stale = true;
@@ -127,8 +127,8 @@ function checkSuggestion(d) {
       });
       // 也接受直接列 messages
       (Array.isArray(t.messages) ? t.messages : []).forEach((mid) => { const i = ref(mid); if (i >= 0) spans.push([i, i]); });
-      if (!spans.length) rep.warnings.push((label || "") + "主題「" + (t.name || id) + "」沒有可以對上的 spans，略過");
-      else out.push({ id, name: String(t.name || "主題 " + id).trim(), note: String(t.note || "").trim(), spans });
+      if (!spans.length) rep.warnings.push(T("ai.topic_has_no_spans_that_can", (label || ""), (t.name || id)));
+      else out.push({ id, name: String(t.name || T("ai.topic", id)).trim(), note: String(t.note || "").trim(), spans });
     });
     const at = new Array(msgs.length).fill(null);
     out.forEach((t) => t.spans.forEach(([a, b]) => { for (let i = a; i <= b; i++) at[i] = t.id; }));
@@ -136,7 +136,7 @@ function checkSuggestion(d) {
   };
   const main = readTopics(d.topics);
   if (mode === "multi") {
-    if (!main.topics.length) rep.errors.push("multi_topic 但沒有任何可用的主題");
+    if (!main.topics.length) rep.errors.push(T("ai.multi_topic_but_there_are_no"));
     else rep.missing = msgs.map((_, i) => i).filter((i) => isAnchor(i) && !main.at[i]);
   }
   const turns = [];
@@ -167,8 +167,8 @@ function checkSuggestion(d) {
   const alternatives = [];
   (Array.isArray(d.alternatives) ? d.alternatives : []).forEach((alt, k) => {
     if (!alt || !Array.isArray(alt.topics)) return;
-    const r = readTopics(alt.topics, "另一種分法裡的");
-    if (r.topics.length) alternatives.push({ label: String(alt.label || "另一種分法 " + (k + 1)), topics: r.topics, at: r.at });
+    const r = readTopics(alt.topics, T("ai.in_an_alternative_split"));
+    if (r.topics.length) alternatives.push({ label: String(alt.label || T("ai.alternative_split", (k + 1))), topics: r.topics, at: r.at });
   });
   const single = d.single_topic && typeof d.single_topic === "object"
     ? { name: String(d.single_topic.name || ""), note: String(d.single_topic.note || "") } : null;
@@ -181,13 +181,12 @@ function checkSuggestion(d) {
 // 有問題時，給 AI 的補正指令
 function fixInstructions(rep) {
   const items = [];
-  if (rep.missing.length) items.push("這些我的訊息沒有被任何主題的 spans 涵蓋，請放進適合的主題：" + rep.missing.map((i) => msgs[i].id).join("、"));
-  if (rep.unknown.length) items.push("這些編號在原文裡找不到，請改成正確的 message_id：" + rep.unknown.join("、"));
-  if (rep.noFingerprint) items.push("缺少 source_fingerprint，請照抄：" + sourceFingerprint());
-  if (rep.errors.length) items.push("格式問題：" + rep.errors.join("；"));
+  if (rep.missing.length) items.push(T("ai.these_messages_of_mine_are_not", rep.missing.map((i) => msgs[i].id).join(T("common.list_sep"))));
+  if (rep.unknown.length) items.push(T("ai.these_ids_do_not_exist_in", rep.unknown.join(T("common.list_sep"))));
+  if (rep.noFingerprint) items.push(T("ai.source_fingerprint_is_missing_copy_it", sourceFingerprint()));
+  if (rep.errors.length) items.push(T("ai.format_problems", rep.errors.join("；")));
   if (!items.length) return "";
-  return ["你給的 outline.ai.json 有幾個地方要修正。請只改這些，其他保持原樣，" +
-    (AI.from === "repo" ? "然後覆寫同一個檔案（" + ctx.folder + AI_FILE + "）。" : "然後重新給我完整的 outline.ai.json。"), ""]
+  return [T("ai.the_outline_ai_json_you_gave", (AI.from === "repo" ? T("ai.then_overwrite_the_same_file", ctx.folder, AI_FILE) : T("ai.then_give_me_the_complete_outline"))), ""]
     .concat(items.map((x) => "- " + x)).join("\n");
 }
 
@@ -219,19 +218,19 @@ function diffSnapshots(prev, next) {
   const changedTopics = [];
   ids.forEach((id) => { if ((prev.topic_of || {})[id] !== (next.topic_of || {})[id]) changedTopics.push(id); });
   if (changedTopics.length) {
-    out.push("主題不同：" + changedTopics.slice(0, 12).map((id) => num(id) + "（" + ((prev.topic_of || {})[id] || "沒標") + " → " +
-      ((next.topic_of || {})[id] || "沒標") + "）").join("、") + (changedTopics.length > 12 ? " 等 " + changedTopics.length + " 則" : ""));
+    out.push(T("ai.different_topics", changedTopics.slice(0, 12).map((id) => num(id) + "（" + ((prev.topic_of || {})[id] || T("ai.untagged")) + " → " +
+      ((next.topic_of || {})[id] || T("ai.untagged")) + "）").join(T("common.list_sep")), (changedTopics.length > 12 ? T("ai.in_total", changedTopics.length) : "")));
   }
   const setDiff = (a, b) => ({ add: b.filter((x) => !a.includes(x)), del: a.filter((x) => !b.includes(x)) });
-  [["key_points", "關鍵"], ["turns", "轉向"]].forEach(([k, label]) => {
+  [["key_points", T("tag.key_3")], ["turns", T("tag.turn")]].forEach(([k, label]) => {
     const d = setDiff(prev[k] || [], next[k] || []);
-    if (d.add.length) out.push("新增" + label + "：" + d.add.map(num).join("、"));
-    if (d.del.length) out.push("拿掉" + label + "：" + d.del.map(num).join("、"));
+    if (d.add.length) out.push(T("ai.added", label, d.add.map(num).join(T("common.list_sep"))));
+    if (d.del.length) out.push(T("ai.removed", label, d.del.map(num).join(T("common.list_sep"))));
   });
   const rs = (x) => (x || []).map((r) => r.join("~"));
   const d = setDiff(rs(prev.key_ranges), rs(next.key_ranges));
-  if (d.add.length || d.del.length) out.push("關鍵段落有變：" + d.add.concat(d.del).length + " 處");
-  if (prev.mode !== next.mode) out.push("整理方式從 " + prev.mode + " 變成 " + next.mode);
+  if (d.add.length || d.del.length) out.push(T("ai.key_ranges_changed", d.add.concat(d.del).length));
+  if (prev.mode !== next.mode) out.push(T("ai.mode_changed_from_to", prev.mode, next.mode));
   return out;
 }
 
@@ -338,7 +337,7 @@ function applySuggestion(how, useAlt) {
   changed(true);
   showMain();
   renderAiPanel();
-  showStatus("已套用 AI 建議。沒動的會當作你同意；改掉或刪掉的會記成你否決了這個建議。");
+  showStatus(T("ai.ai_suggestions_applied_anything_you_leave"));
 }
 
 function confirmAllAi() {
@@ -355,11 +354,11 @@ async function loadAiFromRepo(quiet) {
   if (!ctx || ctx.kind !== "repo") return;
   try {
     const raw = await readRawFile(config, branch, ctx.folder + AI_FILE);
-    if (raw === null) { if (!quiet) showStatus("倉庫裡還沒有 " + AI_FILE + "。AI 寫好之後再按一次。", false, true); takeAi(null); return; }
+    if (raw === null) { if (!quiet) showStatus(T("ai.is_not_in_the_repository_yet", AI_FILE), false, true); takeAi(null); return; }
     takeAi(raw, "repo");
-    if (!quiet) showStatus("已讀取最新的 AI 建議");
+    if (!quiet) showStatus(T("ai.loaded_the_latest_ai_suggestions"));
   } catch (e) {
-    if (!quiet) showStatus("讀不到 AI 建議：" + e.message, true, true);
+    if (!quiet) showStatus(T("ai.could_not_read_ai_suggestions", e.message), true, true);
   }
 }
 
@@ -391,54 +390,52 @@ function renderAiPanel(open) {
     const p = aiPendingCounts();
     const rejected = S.aiRejected.length;
     const line = el("div", { class: "ai-line" },
-      el("strong", { text: "已套用的 AI 建議" }),
+      el("strong", { text: T("ai.applied_ai_suggestions") }),
       " " + [applied.generated_by, applied.generated_at ? new Date(applied.generated_at).toLocaleString() : ""].filter(Boolean).join(" · "),
       el("br"),
-      p.total ? "你還沒動的：" + p.parts.join("、") + "（儲存時當作你同意）" : "AI 建議都處理過了",
-      rejected ? "；你否決了 " + rejected + " 項" : "");
+      p.total ? T("ai.untouched_by_you_treated_as_agreed", p.parts.join(T("common.list_sep"))) : T("ai.all_ai_suggestions_have_been_handled"),
+      rejected ? T("ai.you_rejected", rejected) : "");
     box.append(line);
     if (p.total) {
-      const all = el("button", { class: "secondary small", text: "全部確認" });
+      const all = el("button", { class: "secondary small", text: T("ai.confirm_all") });
       all.addEventListener("click", confirmAllAi);
-      box.append(el("div", { class: "row" }, all, el("span", { class: "hint", text: "按了等於逐項按「✓」：記成你確認過，不只是沒反駁。" })));
+      box.append(el("div", { class: "row" }, all, el("span", { class: "hint", text: T("ai.same_as_pressing_on_each_one") })));
     }
   }
 
   if (!AI.raw) {
-    status.textContent = applied ? "已套用" : "還沒有 AI 建議";
+    status.textContent = applied ? T("ai.applied") : T("ai.no_ai_suggestions_yet");
   } else {
     const rep = AI.report;
     const plan = rep && rep.plan;
-    status.textContent = isNew ? (applied ? "有新的 AI 建議" : "有 AI 建議，還沒套用") : "已套用最新的 AI 建議";
+    status.textContent = isNew ? (applied ? T("ai.new_ai_suggestions_available") : T("ai.ai_suggestions_available_not_applied_yet")) : T("ai.latest_ai_suggestions_applied");
     if (isNew) {
-      box.append(el("div", { class: "ai-line" }, el("strong", { text: applied ? "有新的 AI 建議" : "AI 建議" }),
+      box.append(el("div", { class: "ai-line" }, el("strong", { text: applied ? T("ai.new_ai_suggestions_available") : T("ai.ai_suggestion") }),
         " " + [plan && plan.generated_by, plan && plan.generated_at ? new Date(plan.generated_at).toLocaleString() : "",
-          AI.from === "repo" ? "來自倉庫的 " + AI_FILE : "匯入的檔案"].filter(Boolean).join(" · ")));
+          AI.from === "repo" ? T("ai.from_in_the_repository", AI_FILE) : T("ai.imported_file")].filter(Boolean).join(" · ")));
       if (plan) {
         const c = plan;
-        box.append(el("p", { class: "hint", text: (c.mode === "multi" ? "聊了好幾件事，" + c.topics.length + " 個主題（" + c.topics.map((t) => t.id + " " + t.name).join("、") + "）" : "一直在聊同一件事") +
-          "；轉向 " + c.turns.length + " 處、關鍵 " + c.keys.length + " 則、關鍵段落 " + c.ranges.length + " 段" +
-          (c.uncertain.length ? "、不確定 " + c.uncertain.length + " 處" : "") + (c.alternatives.length ? "、另外 " + c.alternatives.length + " 種分法" : "") }));
+        box.append(el("p", { class: "hint", text: T("ai.key", (c.mode === "multi" ? T("ai.several_topics", c.topics.length, c.topics.map((t) => t.id + " " + t.name).join(T("common.list_sep"))) : T("tag.one_continuous_topic")), c.turns.length, c.keys.length, c.ranges.length, (c.uncertain.length ? T("ai.uncertain", c.uncertain.length) : ""), (c.alternatives.length ? T("ai.alternative", c.alternatives.length) : "")) }));
       }
       // 和上次套用的那版差在哪
       if (applied && applied.snapshot && plan) {
         const d = diffSnapshots(applied.snapshot, snapshotOf(plan));
-        box.append(el("div", { class: "ai-diff" }, el("strong", { text: "和你之前處理的那版 AI 建議比：" }),
-          d.length ? el("ul", null, d.map((x) => el("li", { text: x }))) : " 沒有差別"));
+        box.append(el("div", { class: "ai-diff" }, el("strong", { text: T("ai.compared_with_the_ai_suggestions_you") }),
+          d.length ? el("ul", null, d.map((x) => el("li", { text: x }))) : T("ai.no_differences")));
       }
       // 檢查結果
       const probs = [];
       (rep.errors || []).forEach((x) => probs.push(["error", x]));
-      if (rep.stale) probs.push(["error", "AI 看的原文和現在的不一樣（原文指紋或訊息數對不上）。可能是對話之後重新擷取過，編號可能對不上。"]);
-      if (rep.noFingerprint) probs.push(["warn", "AI 沒有附上原文指紋，無法確認它看的是不是同一版。"]);
-      if (rep.missing && rep.missing.length) probs.push(["warn", "你有 " + rep.missing.length + " 則訊息 AI 沒分到主題：" + rep.missing.map(pad).join("、") + "（套用後會是「還沒標」）"]);
-      if (rep.unknown && rep.unknown.length) probs.push(["warn", "AI 用了原文裡沒有的編號，已略過：" + rep.unknown.slice(0, 10).join("、") + (rep.unknown.length > 10 ? "…" : "")]);
+      if (rep.stale) probs.push(["error", T("ai.the_source_the_ai_read_is")]);
+      if (rep.noFingerprint) probs.push(["warn", T("ai.the_ai_did_not_include_a")]);
+      if (rep.missing && rep.missing.length) probs.push(["warn", T("ai.of_your_messages_were_not_assigned", rep.missing.length, rep.missing.map(pad).join(T("common.list_sep")))]);
+      if (rep.unknown && rep.unknown.length) probs.push(["warn", T("ai.the_ai_used_ids_that_are", rep.unknown.slice(0, 10).join(T("common.list_sep")), (rep.unknown.length > 10 ? "…" : ""))]);
       (rep.warnings || []).forEach((x) => probs.push(["warn", x]));
       if (probs.length) box.append(el("ul", { class: "ai-probs" }, probs.map(([k, x]) => el("li", { class: k, text: x }))));
       const fix = fixInstructions(rep);
       if (fix) {
-        const b = el("button", { class: "secondary small", text: "複製給 AI 的修正指令" });
-        b.addEventListener("click", () => copyText(fix, "已複製修正指令，貼給同一個 AI。"));
+        const b = el("button", { class: "secondary small", text: T("ai.copy_fix_instructions_for_the_ai") });
+        b.addEventListener("click", () => copyText(fix, T("ai.fix_instructions_copied_paste_them_to")));
         box.append(el("div", { class: "row" }, b));
       }
       // 套用
@@ -450,12 +447,12 @@ function renderAiPanel(open) {
           row.append(b);
         };
         if (rep.stale) {
-          go(hasUserMarks() ? "fill" : "replace", "仍然套用（原文可能不同，請仔細檢查）", "secondary");
+          go(hasUserMarks() ? "fill" : "replace", T("ai.apply_anyway_the_source_may_differ"), "secondary");
         } else if (hasUserMarks()) {
-          go("fill", "只補我還沒標的地方");
-          go("replace", "整份換成 AI 建議", "secondary");
+          go("fill", T("ai.fill_in_only_what_i_have"));
+          go("replace", T("ai.replace_everything_with_the_ai_suggestions"), "secondary");
         } else {
-          go("replace", "套用 AI 建議");
+          go("replace", T("ai.apply_ai_suggestions"));
         }
         box.append(row);
       }
@@ -463,7 +460,7 @@ function renderAiPanel(open) {
     // 另一種分法、不確定的地方（套用後也看得到）
     const plan2 = AI.report && AI.report.plan;
     if (plan2 && plan2.alternatives.length && S.mode === "multi") {
-      const row = el("div", { class: "row wrap-row" }, el("span", { class: "hint", text: "AI 另外提的分法：" }));
+      const row = el("div", { class: "row wrap-row" }, el("span", { class: "hint", text: T("ai.other_splits_the_ai_proposed") }));
       plan2.alternatives.forEach((alt) => {
         const b = el("button", { class: "secondary small", text: alt.label + "（" + alt.topics.map((t) => t.name).join("／") + "）" });
         b.addEventListener("click", () => applySuggestion("replace-topics", alt));
@@ -472,7 +469,7 @@ function renderAiPanel(open) {
       box.append(row);
     }
     if (plan2 && plan2.uncertain.length) {
-      box.append(el("div", { class: "ai-line" }, el("strong", { text: "AI 拿不定主意的地方" })));
+      box.append(el("div", { class: "ai-line" }, el("strong", { text: T("ai.where_the_ai_was_unsure") })));
       const ul = el("ul", { class: "ai-uncertain" });
       plan2.uncertain.forEach((u) => {
         const li = el("li");
@@ -500,11 +497,11 @@ function previewAiLine() {
   p.textContent = "";
   p.hidden = !plan || !!S.mode;
   if (p.hidden) return;
-  const view = el("button", { class: "secondary small", text: "看 AI 建議" });
+  const view = el("button", { class: "secondary small", text: T("ai.view_ai_suggestions") });
   view.addEventListener("click", () => { $("ai-panel").open = true; $("ai-panel").scrollIntoView({ block: "start", behavior: "smooth" }); });
-  p.append("AI 先看過了，它認為" + (plan.mode === "multi"
-    ? "聊了好幾件事，分成 " + plan.topics.length + " 個主題（" + plan.topics.map((t) => t.id + " " + t.name).join("、") + "）"
-    : "一直在聊同一件事") + "。可以參考，不一定要照它選。 ", view);
+  p.append(T("ai.the_ai_took_a_first_look", (plan.mode === "multi"
+    ? T("ai.several_topics_split_into", plan.topics.length, plan.topics.map((t) => t.id + " " + t.name).join(T("common.list_sep")))
+    : T("tag.one_continuous_topic"))), view);
 }
 
 function jumpTo(i) {
@@ -518,7 +515,7 @@ function jumpTo(i) {
 
 async function copyText(text, done) {
   try { await navigator.clipboard.writeText(text); showStatus(done); }
-  catch (e) { showStatus("無法複製：" + e.message, true, true); }
+  catch (e) { showStatus(T("tag.could_not_copy", e.message), true, true); }
 }
 
 function downloadText(name, text, type) {
@@ -534,19 +531,19 @@ function slug() {
 
 $("ai-copy-b").addEventListener("click", async () => {
   // 先複製（剪貼簿要在按下的當下寫），再確認倉庫裡有完整指引
-  await copyText(instructionsForRepo(), "已複製。貼給能讀寫 GitHub 的 AI，它寫好後按「AI 寫好了，重新讀取」。");
+  await copyText(instructionsForRepo(), T("ai.copied_paste_it_to_an_ai"));
   try {
-    if (await ensureOutlineAiGuide()) showStatus("已複製指令，並把完整說明寫進倉庫的 " + OUTLINE_AI_GUIDE_PATH + "。貼給 AI 就可以了。");
+    if (await ensureOutlineAiGuide()) showStatus(T("ai.instructions_copied_and_the_full_guide", OUTLINE_AI_GUIDE_PATH));
   } catch (e) {
-    showStatus("已複製指令，但倉庫裡的 " + OUTLINE_AI_GUIDE_PATH + " 寫不進去：" + e.message + "。AI 可能讀不到完整說明，可以改用下載檔案的做法。", true, true);
+    showStatus(T("ai.instructions_copied_but_could_not_be", OUTLINE_AI_GUIDE_PATH, e.message), true, true);
   }
 });
 $("ai-reload").addEventListener("click", () => loadAiFromRepo(false));
 $("ai-download").addEventListener("click", async () => {
   downloadText("at-outline-request-" + slug() + ".md", await requestFileContent());
-  showStatus("已下載。把檔案和下面那句話一起丟給 AI，再把它給的 outline.ai.json 匯入。");
+  showStatus(T("ai.downloaded_give_the_file_and_the"));
 });
-$("ai-copy-a").addEventListener("click", () => copyText(SUGGESTED_PROMPT, "已複製建議的提示詞"));
+$("ai-copy-a").addEventListener("click", () => copyText(SUGGESTED_PROMPT, T("ai.suggested_prompt_copied")));
 $("ai-file").addEventListener("change", async (e) => {
   const f = e.target.files[0];
   if (f) takeAi(await f.text(), "file");

@@ -743,3 +743,7 @@ main.wrap { padding:14px 20px 50px; gap:12px; }
   #picker #label-filter { justify-content:flex-start; }
   #picker .c-card-actions { grid-template-columns:1fr; }
 }
+
+/* Language switch in the top navigation */
+.lang-switch { font:inherit; font-size:13px; color:var(--muted); background:transparent; border:1px solid transparent; border-radius:6px; padding:4px 6px; cursor:pointer; }
+.lang-switch:hover, .lang-switch:focus-visible { color:var(--ink); border-color:currentColor; }

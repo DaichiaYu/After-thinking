@@ -5,7 +5,9 @@ const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 
-const source = fs.readFileSync(path.join(__dirname, "..", "tag-workspace-data.js"), "utf8");
+// UI strings come from i18n.js and the locale files; without a browser the language defaults to zh-TW.
+const i18nSource = ["i18n.js", "locales/zh-TW.js", "locales/en.js"].map((f) => fs.readFileSync(path.join(__dirname, "..", f), "utf8")).join("\n");
+const source = i18nSource + "\n" + fs.readFileSync(path.join(__dirname, "..", "tag-workspace-data.js"), "utf8");
 const sample = [
   "Introduction", "## 第一節", "重要內容", "~~~md",
   "## 程式碼不是標題", "~~~", "### 子節", "更多內容", "## 第二節", "結論"

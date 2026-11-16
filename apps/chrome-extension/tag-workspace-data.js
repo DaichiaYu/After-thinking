@@ -81,7 +81,7 @@ const ATSections = (() => {
     const i=resolve(entry.message_id);
     if(i>=0 && msgs[i]?.speaker==="assistant") return {i,reason:null};
     const j=msgs.findIndex(m=>m.id===entry.message_id && m.speaker==="assistant");
-    if(j<0) return {i:-1,reason:"找不到可確認的原訊息"};
+    if(j<0) return {i:-1,reason:T("ws.no_original_message_could_be_confirmed")};
     const old=doc.source?.message_fingerprints;
     const k=Array.isArray(old)?old.findIndex(x=>Array.isArray(x)&&x[0]===entry.message_id):-1;
     const sameLength=Array.isArray(old)&&old.length===msgs.length;
@@ -97,12 +97,12 @@ const ATSections = (() => {
     const sectionUnique=sectionMatches.length===1 && sectionMatches[0].pos===j;
     const stableContext=stableNeighbours.length>0 || (msgs.length===1&&old?.length===1);
     if(sameLength && sameIndex && stableContext && sectionUnique)return {i:j,reason:null};
-    if(sectionMatches.some(x=>x.pos===j))return {i:-1,reason:"小節內容仍存在，但無法確認原訊息身分"};
+    if(sectionMatches.some(x=>x.pos===j))return {i:-1,reason:T("ws.the_section_content_still_exists_but")};
     if(sameLength && sameIndex && stableContext){
       const headingStillExists=parse(msgs[j].content).some(s=>s.title===entry.heading&&s.level===entry.level);
-      return {i:-1,reason:headingStillExists?"原訊息前後文吻合，但小節內文已變動":"原訊息前後文吻合，但小節標題或內容已變動"};
+      return {i:-1,reason:headingStillExists?T("ws.the_surrounding_messages_match_but_the"):T("ws.the_surrounding_messages_match_but_the_2")};
     }
-    return {i:-1,reason:"原訊息身分不明，或候選小節內容已變動"};
+    return {i:-1,reason:T("ws.the_original_message_is_unclear_or")};
   }
   function sectionIdentity(e) {
     return String(e.message_id)+"|"+String(e.section_fingerprint)+"|"+String(e.heading_start)+"|"+String(e.heading);
@@ -123,14 +123,14 @@ const ATSections = (() => {
       const match=candidateFor(entry,doc,resolver);
       const i=match.i;
       if(i<0){
-        S.unmatchedSections.push({...entry,reason:match.reason||"無法安全對應原訊息"});
+        S.unmatchedSections.push({...entry,reason:match.reason||T("ws.could_not_be_safely_matched_to")});
         continue;
       }
       const candidates=parse(msgs[i].content).filter(x=>x.fingerprint===entry.section_fingerprint&&x.title===entry.heading&&x.level===entry.level);
       const oldMessageFp=entry.message_fingerprint||((doc.source?.message_fingerprints||[]).find(x=>Array.isArray(x)&&x[0]===entry.message_id)||[])[1];
       const unchanged=oldMessageFp && oldMessageFp===fingerprint(msgs[i]);
       const s=candidates.length===1?candidates[0]:(unchanged?candidates.find(x=>x.start===entry.heading_start):null);
-      if(!s){S.unmatchedSections.push({...entry,reason:"小節原文已變動或存在重複小節，需人工確認"});continue;}
+      if(!s){S.unmatchedSections.push({...entry,reason:T("ws.the_section_text_changed_or_there")});continue;}
       const id=msgs[i].id;
       (S.sectionKeys[id]||=[]).push({heading:s.title,level:s.level,start:s.start,end:s.end,fingerprint:s.fingerprint});
     }
@@ -149,8 +149,9 @@ const ATSections = (() => {
   };
   outputText=function(){
     const extra=msgs.flatMap((m,i)=>marks(i).map(s=>pad(i)+"「"+s.heading+"」"));
-    return oldOutput()+(extra.length?"\nAI 小節重點："+extra.join("、"):"")+
-      (S.unmatchedSections.length?"\n待核對的小節重點："+S.unmatchedSections.length+" 項":"");
+    // Saved into outline.json as part of the summary, so built in the stored language.
+    return ATI18n.stored(()=>oldOutput()+(extra.length?T("ws.ai_section_highlights", extra.join(T("common.list_sep"))):"")+
+      (S.unmatchedSections.length?T("ws.section_highlights_to_verify_2", S.unmatchedSections.length):""));
   };
   KIND_ORDER.section=1.5;
   reviewItems=function(){
@@ -159,8 +160,8 @@ const ATSections = (() => {
     return a.sort((x,y)=>posOf(x)-posOf(y));
   };
   itemsOf=function(kind){return kind==="key"?reviewItems().filter(x=>["key","range","section"].includes(x.kind)):oldItems(kind);};
-  itemLabel=function(it){return it.kind==="section"?"★ AI 小節重點（"+it.count+" 節）":oldLabel(it);};
-  sourceLabel=function(it){return it.kind==="section"?"你標的 Markdown 小節":oldSource(it);};
+  itemLabel=function(it){return it.kind==="section"?T("ws.ai_section_highlights_2", it.count):oldLabel(it);};
+  sourceLabel=function(it){return it.kind==="section"?T("ws.markdown_sections_you_tagged"):oldSource(it);};
   rowsToShow=function(){
     if(S.mode==="multi"||UI.filter==="all")return oldRows();
     const filter=UI.filter;UI.filter="all";const rows=oldRows();UI.filter=filter;
@@ -169,10 +170,10 @@ const ATSections = (() => {
       if(r.kind!=="msg")return;
       const i=r.i,yes=isKeyish(i)||marks(i).length>0;
       if(!yes||(filter==="user"&&msgs[i].speaker==="assistant")||(filter==="ai"&&msgs[i].speaker!=="assistant"))return;
-      if(prev>=0&&i>prev+1)out.push({kind:"skip",label:"中間 "+(i-prev-1)+" 則沒顯示"});
+      if(prev>=0&&i>prev+1)out.push({kind:"skip",label:T("tag.in_between_not_shown", (i-prev-1))});
       out.push(r);prev=i;
     });
-    return out.length?out:[{kind:"empty",text:"還沒有關鍵內容"}];
+    return out.length?out:[{kind:"empty",text:T("ws.no_key_content_yet")}];
   };
   goTo=function(it){UI.workspaceFocus=it.i;oldGoTo(it);if(typeof renderWorkspaceInspector==="function")renderWorkspaceInspector();};
   return {parse,marks,marked,toggle};

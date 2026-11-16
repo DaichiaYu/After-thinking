@@ -49,6 +49,8 @@ test("source-compatible message hashes, outline v6, and reopened marks",()=>{
   const saved=C.makeOutline(m);
   assert.equal(saved.outline_version,6);
   assert.equal(saved.source.fingerprint,C.sourceFingerprint(msgs));
+  assert.match(saved.summary,/AI 小節重點/);
+  assert.match(saved.summary,/也跟/);
   assert.equal(saved.section_key_points.length,1);
   assert.ok(saved.topics.find(t=>t.id===topic).also_messages.includes("sample-2"));
   const reopened=C.makeModel(msgs,saved,{folder:"examples/sample/"});

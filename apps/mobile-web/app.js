@@ -1,7 +1,7 @@
 /* Production mobile editor. All conversation data is loaded only at runtime. */
 (() => {
 "use strict";
-const C=window.ATCore,G=window.ATGitHub,$=id=>document.getElementById(id);
+const C=window.ATCore,G=window.ATGitHub,D=window.ATDevice,$=id=>document.getElementById(id);
 const node=(tag,cls,value)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(value!==undefined)e.textContent=String(value);return e;};
 const btn=(value,fn,cls)=>{const b=node("button",cls,value);b.type="button";b.addEventListener("click",fn);return b;};
 const plain=x=>String(x||"").replace(/\s+/g," ").trim();
@@ -11,12 +11,70 @@ const S={page:"connect",previousPage:"connect",repo:false,local:false,rows:[],
  model:null,row:null,outlineSha:null,sourceSha:null,folder:"",
  search:"",filter:"all",sort:"conversation",previews:{},allQuestions:{},expanded:new Set(),
  count:20,cursor:null,kind:"all",review:"all",sheetAction:null,busy:false,readerY:0,prepareExpanded:false,modeConfirmed:false,
- aiRaw:null,aiReport:null,aiFrom:null,guideText:null};
+ aiRaw:null,aiReport:null,aiFrom:null,guideText:null,
+ usingSaved:false,draft:null,draftVersion:0,draftTimer:null};
 function notify(message,error=false){const e=$("notice");e.textContent=message||"";e.hidden=!message;e.classList.toggle("error",error);}
 function change(){
  $("bottom-nav").hidden=true;$("sync-state").textContent=S.model?.dirty?"尚未儲存":S.local?"本機":S.repo?"已連線":"未連線";$("quick-save").hidden=!S.model||!S.model.dirty||S.page==="reader";
  const pending=S.model?C.pending(S.model).length:0;$("nav-pending").hidden=!pending;$("nav-pending").textContent=pending;$("review-count").textContent=pending+" 項待確認";
  if($("reader-dirty")){$("reader-dirty").textContent=S.model?(S.model.dirty?"● 尚未儲存":"● 已儲存"):"";$("reader-dirty").classList.toggle("dirty",!!S.model?.dirty)}if($("reader-save"))$("reader-save").disabled=!S.model||!S.model.dirty||S.busy;if($("count-pending"))$("count-pending").textContent=pending||"";
+ queueDraft();
+}
+// ── 這台裝置：記住的連線與未儲存草稿（device.js，只存在這個瀏覽器）──
+function syncConnectForm(){
+ const c=D.loadConnection(),has=!!c?.token,can=D.available();
+ if(c?.repo&&!$("repo-input").value)$("repo-input").value=c.repo;
+ if(c?.branch)$("branch-input").value=c.branch;
+ $("token-input").required=!has;
+ $("token-input").placeholder=has?"已記住 Token，留空就使用它":"僅限你指定的資料倉庫";
+ $("remember-input").checked=has;$("remember-input").disabled=!can;
+ $("remember-state").textContent=!can?"這個瀏覽器不允許儲存（例如無痕模式），無法記住。"
+  :has?"這台裝置已記住 Token。取消勾選再連接，就會把它刪掉。"
+  :"下次打開不用再輸入。Token 會存在這個瀏覽器裡，共用的手機或電腦請不要勾。";
+}
+function draftRef(){
+ const m=model();if(!m)return null;
+ if(S.local)return["local",C.sourceFingerprint(m.msgs)];
+ const c=G.config();return c&&S.folder?[c.repo+"@"+c.branch,S.folder]:null;
+}
+function writeDraft(){
+ clearTimeout(S.draftTimer);S.draftTimer=null;
+ const m=model(),ref=draftRef();
+ // 還沒決定要不要用舊草稿時不覆蓋它
+ if(!m||!ref||!m.dirty||m.sourceMismatch||S.draft||S.draftVersion===m.editVersion)return;
+ try{
+  const version=m.editVersion;
+  if(D.saveDraft(ref[0],ref[1],{saved_at:new Date().toISOString(),base_sha:S.outlineSha||null,mode_confirmed:S.modeConfirmed,outline:C.makeOutline(m)}))S.draftVersion=version;
+ }catch(e){/* 存不了草稿不影響標記 */}
+}
+function queueDraft(){
+ const m=model();if(!m||!m.dirty||S.draft||S.draftTimer||S.draftVersion===m.editVersion)return;
+ S.draftTimer=setTimeout(writeDraft,600);
+}
+function findDraft(){
+ const ref=draftRef();S.draft=null;S.draftVersion=0;clearTimeout(S.draftTimer);S.draftTimer=null;
+ if(ref)S.draft=D.loadDraft(ref[0],ref[1]);
+}
+function renderDraftBanner(){
+ const d=S.draft;$("draft-banner").hidden=!d;if(!d)return;
+ const when=new Date(d.saved_at||d.outline.updated_at||"");
+ const moved=!S.local&&(d.base_sha||null)!==(S.outlineSha||null);
+ $("draft-text").textContent="這台裝置有一份"+(Number.isNaN(when.getTime())?"":" "+when.toLocaleString("zh-TW")+" ")+"還沒儲存的標記草稿。"
+  +(moved?"注意：在那之後，GitHub 上的標記又被更新過（可能是另一台裝置）。接著用草稿並儲存，會以草稿為準。":"");
+}
+function useDraft(){
+ const d=S.draft,m=model();if(!d||!m)return;
+ try{
+  const next=C.makeModel(m.msgs,d.outline,{folder:m.folder,title:m.title,revision:m.revision});
+  if(next.sourceMismatch)throw Error("草稿對應的原文和現在的不同，無法套用。可以丟掉草稿重新標記。");
+  next.dirty=true;next.editVersion=1;S.model=next;S.draft=null;S.draftVersion=1;
+  S.modeConfirmed=d.mode_confirmed!==false&&!!d.outline.mode;
+  renderPrepare();notify("已接著用草稿，記得儲存。");
+ }catch(err){notify(err.message,true)}
+}
+function dropDraft(){
+ const ref=draftRef();if(ref)D.dropDraft(ref[0],ref[1]);
+ S.draft=null;renderPrepare();notify("已丟掉草稿。");
 }
 function show(page){
  const leaving=S.page;if(leaving==="reader"&&page!=="reader")S.readerY=window.scrollY;if(page==="settings"&&leaving!=="settings")S.previousPage=leaving;S.page=page;document.body.dataset.page=page;
@@ -41,15 +99,24 @@ async function getIndex(){
  $("repo-info").textContent=G.config().repo+" · "+G.config().branch+" · "+S.rows.length+" 段對話";
 }
 async function connect(e){
- e.preventDefault();if(S.model?.dirty&&!confirm("仍有未儲存修改，確定要切換？"))return;
- notify("正在讀取 GitHub 對話索引…");
+ if(e)e.preventDefault();if(S.model?.dirty&&!confirm("仍有未儲存修改，確定要切換？"))return;
+ // 沒輸入 Token 時，使用這台裝置記住的那一個
+ const saved=D.loadConnection(),typed=$("token-input").value.trim(),token=typed||saved?.token||"",remember=$("remember-input").checked&&D.available();
+ S.usingSaved=!typed&&!!saved?.token;
+ notify(S.usingSaved?"正在用這台裝置記住的 Token 連線…":"正在讀取 GitHub 對話索引…");
  const submit=$("connect-button");submit.disabled=true;
  try{
-  await G.connect($("repo-input").value,$("branch-input").value,$("token-input").value);
-  $("token-input").value="";S.model=null;S.row=null;S.rows=[];
+  const cfg=await G.connect($("repo-input").value,$("branch-input").value,token);
+  D.saveConnection(cfg.repo,cfg.branch,token,remember);S.usingSaved=remember;
+  $("token-input").value="";S.model=null;S.row=null;S.rows=[];S.draft=null;
   await getIndex();show("library");notify("");
- }catch(err){$("token-input").value="";G.disconnect();notify(err.message,true)}
- finally{submit.disabled=false}
+ }catch(err){
+  // 記住的 Token 失效（401）時，onUnauthorized 已把它從這台裝置刪掉
+  const expired=err.status===401&&!typed&&!!saved?.token;
+  $("token-input").value="";G.disconnect();S.usingSaved=false;
+  notify(expired?"這台裝置記住的 Token 已失效，已經把它刪掉。請輸入新的 Token。":err.message,true);
+ }
+ finally{submit.disabled=false;syncConnectForm()}
 }
 async function loadLocal(e){
  const files=[...e.target.files];e.target.value="";
@@ -63,7 +130,7 @@ async function loadLocal(e){
   G.disconnect();S.repo=false;S.local=true;S.rows=[];
   S.model=C.makeModel(msgs,doc,{folder:"",title:conv.name,revision:doc?.source?.source_revision||1});
   S.row=null;S.folder="";S.sourceSha=null;S.outlineSha=null;S.count=20;S.expanded.clear();S.cursor=null;S.modeConfirmed=!!doc?.mode;
-  S.aiRaw=null;S.aiReport=null;S.aiFrom=null;S.prepareExpanded=false;show("prepare");notify("本機模式：儲存時會下載 outline.json，不會寫入 GitHub。");
+  S.aiRaw=null;S.aiReport=null;S.aiFrom=null;S.prepareExpanded=false;findDraft();show("prepare");notify("本機模式：儲存時會下載 outline.json，不會寫入 GitHub。");
  }catch(err){notify("無法載入本機檔案："+err.message,true)}
 }
 const status=r=>S.labels?.conversations?.[r.folder]||{};
@@ -133,7 +200,7 @@ async function openConversation(row){
  if(S.model?.dirty&&!confirm("上一段對話還有未儲存的修改。確定要離開？"))return;notify("讀取原文與標記中…");
  try{const folder=C.normalizeFolder(row.folder),source=await G.getFile(folder+"source/conversation.jsonl"),outline=await G.getFile(folder+"outline.json",{optional:true});let doc=null;if(outline){try{doc=JSON.parse(outline.text)}catch(err){throw Error("標記 JSON 損壞，為避免覆蓋，已停止載入")}}
   const msgs=C.parseJsonl(source.text);S.model=C.makeModel(msgs,doc,{folder,title:row.title||folder,revision:doc?.source?.source_revision||row.source_revision||1});S.row=row;S.folder=folder;S.outlineSha=outline?.sha||null;S.sourceSha=source.sha;S.count=20;S.cursor=null;S.kind="all";S.expanded.clear();S.readerY=0;S.prepareExpanded=false;S.modeConfirmed=!!doc?.mode;S.aiRaw=null;S.aiReport=null;S.aiFrom=null;
-  try{const ai=await G.getFile(folder+"outline.ai.json",{optional:true});if(ai)takeAi(ai.text,"repo",true)}catch(e){}show("prepare");notify(S.model.sourceMismatch?"原文指紋不一致：此對話禁止直接寫回，請先核對。":"",S.model.sourceMismatch);
+  try{const ai=await G.getFile(folder+"outline.ai.json",{optional:true});if(ai)takeAi(ai.text,"repo",true)}catch(e){}findDraft();show("prepare");notify(S.model.sourceMismatch?"原文指紋不一致：此對話禁止直接寫回，請先核對。":"",S.model.sourceMismatch);
  }catch(err){notify("無法開啟對話："+err.message,true)}
 }
 
@@ -150,7 +217,7 @@ function takeAi(raw,from,quiet=false){S.aiRaw=raw;S.aiFrom=from;try{S.aiReport=C
 async function reloadAi(){if(!S.repo)return notify("這個方式需要 GitHub。",true);$("ai-reload").disabled=true;try{const file=await G.getFile(S.folder+"outline.ai.json",{optional:true});if(!file){notify("倉庫裡還沒有 outline.ai.json。",true);return}takeAi(file.text,"repo");notify("已讀取最新的 AI 建議。")}catch(err){notify("讀不到 AI 建議："+err.message,true)}finally{$("ai-reload").disabled=false}}
 function applyAi(){if(!S.aiReport?.plan)return;if(S.aiReport.stale&&!confirm("AI 建議對應的原文版本可能不同。仍要套用並逐項核對嗎？"))return;const m=model(),hasExisting=!!m.base||Object.keys(m.keys).length||Object.keys(m.turns).length||Object.keys(m.notes).length||Object.keys(m.primary).length>0;if(hasExisting&&!confirm("套用 AI 建議會取代目前的主題、關鍵與轉向；備註和 AI 小節重點會保留。確定套用？"))return;try{C.applySuggestion(m,S.aiRaw,S.aiReport);S.modeConfirmed=true;renderPrepare();change();notify("已套用 AI 建議；進入工作台後可以逐項確認或修改。")}catch(err){notify(err.message,true)}}
 function renderAiSummary(){const box=$("ai-suggestion-summary"),rep=S.aiReport;$("ai-panel-state").textContent=rep?.plan?(rep.stale?"原文可能不同":"已有建議"):"";if(!rep){box.hidden=true;box.replaceChildren();return}box.hidden=false;box.replaceChildren();const errors=rep.errors||[],plan=rep.plan;if(errors.length){box.append(node("strong","error-text","AI 建議讀取失敗"),node("p","small",errors.join("；")));return}box.append(node("strong","",plan.mode==="multi_topic"?"AI 判斷：聊了好幾件事":"AI 判斷：一直在聊同一件事"),node("p","small muted",(plan.mode==="multi_topic"?"主題 "+plan.topics.length+" 個 · ":"")+"關鍵 "+plan.keys.length+" · 轉向 "+plan.turns.length+" · 關鍵段落 "+plan.ranges.length+(rep.missing.length?" · 漏分 "+rep.missing.length:"")+(rep.stale?" · 原文版本可能不同":"")));if(rep.warnings?.length)box.append(node("p","small warning-text",rep.warnings.join("；")));box.append(btn(rep.stale?"仍然套用並核對":"套用 AI 建議",applyAi,"primary full"))}
-function renderPrepare(){const m=model();if(!m)return;$("prepare-title").textContent=m.title;$("prepare-meta").textContent=[S.row?.platform,fmt(S.row?.started_at||S.row?.captured_at),m.msgs.length+" 則訊息"].filter(Boolean).join(" · ");$("prepare-status").textContent=m.base?"已有標記":"未標記";const questions=m.msgs.map((x,i)=>({x,i})).filter(z=>z.x.speaker!=="assistant").map(z=>({i:z.i,text:z.x.content})),list=$("prepare-preview-list");list.replaceChildren();const shown=S.prepareExpanded?questions:(questions.length<=4?questions:[...questions.slice(0,3),questions[questions.length-1]]);shown.forEach(q=>list.append(question(q)));if(!S.prepareExpanded&&questions.length>4)list.append(node("p","question-more","⋯ 共 "+questions.length+" 則提問（顯示前 3 則與最後 1 則）"));$("prepare-preview-toggle").textContent=S.prepareExpanded?"收起":"看全部";for(const [id,mode] of [["choose-multi","multi_topic"],["choose-single","single_topic"]])$(id).classList.toggle("selected",S.modeConfirmed&&m.mode===mode);$("choose-skip").classList.toggle("selected",status(S.row||{}).status==="skip");$("enter-workspace").disabled=!S.modeConfirmed||m.sourceMismatch;$("ai-repo-way").hidden=!S.repo;renderAiSummary();change()}
+function renderPrepare(){const m=model();if(!m)return;$("prepare-title").textContent=m.title;$("prepare-meta").textContent=[S.row?.platform,fmt(S.row?.started_at||S.row?.captured_at),m.msgs.length+" 則訊息"].filter(Boolean).join(" · ");$("prepare-status").textContent=m.base?"已有標記":"未標記";const questions=m.msgs.map((x,i)=>({x,i})).filter(z=>z.x.speaker!=="assistant").map(z=>({i:z.i,text:z.x.content})),list=$("prepare-preview-list");list.replaceChildren();const shown=S.prepareExpanded?questions:(questions.length<=4?questions:[...questions.slice(0,3),questions[questions.length-1]]);shown.forEach(q=>list.append(question(q)));if(!S.prepareExpanded&&questions.length>4)list.append(node("p","question-more","⋯ 共 "+questions.length+" 則提問（顯示前 3 則與最後 1 則）"));$("prepare-preview-toggle").textContent=S.prepareExpanded?"收起":"看全部";for(const [id,mode] of [["choose-multi","multi_topic"],["choose-single","single_topic"]])$(id).classList.toggle("selected",S.modeConfirmed&&m.mode===mode);$("choose-skip").classList.toggle("selected",status(S.row||{}).status==="skip");renderDraftBanner();$("enter-workspace").disabled=!S.modeConfirmed||m.sourceMismatch||!!S.draft;$("ai-repo-way").hidden=!S.repo;renderAiSummary();change()}
 function chooseMode(mode){try{C.setMode(model(),mode);S.modeConfirmed=true;renderPrepare();change()}catch(err){notify(err.message,true)}}
 function skipSheet(){if(!S.repo||!S.row)return notify("本機模式不能寫入「不用整理」狀態。",true);const wrap=node("div"),reasons=[["chat","閒聊"],["duplicate","重複了"],["no_info","沒什麼資訊"],["other","其他"]];wrap.append(node("p","sheet-label","為什麼不用整理？"));const radios=[];for(const [value,labelText] of reasons){const label=node("label","sheet-radio"),input=document.createElement("input");input.type="radio";input.name="skip-reason";input.value=value;input.checked=value==="chat";radios.push(input);label.append(input,node("span","",labelText));wrap.append(label)}const note=document.createElement("textarea");note.rows=3;note.placeholder="補充說明（可以不寫）";wrap.append(node("p","sheet-label","補充"),note);sheet("這篇不用整理",wrap,async()=>{const reason=radios.find(x=>x.checked)?.value||"chat";$("sheet-apply").disabled=true;try{const latest=await G.getFile("inbox/labels.json",{optional:true}),data=latest?JSON.parse(latest.text):{format:"after-thinking/conversation-labels",format_version:1,labels:[],conversations:{}};if(!data.labels)data.labels=[];if(!data.conversations)data.conversations={};const prev=data.conversations[S.row.folder]||{},next={...prev,status:"skip",skip_reason:reason,skip_note:note.value.trim(),updated_at:new Date().toISOString()};if(!next.skip_note)delete next.skip_note;data.conversations[S.row.folder]=next;const saved=await G.writeFile("inbox/labels.json",JSON.stringify(data,null,2)+"\n",latest?.sha||null,"After-thinking mobile: mark conversation as skip");S.labels=data;S.labelsSha=saved.sha;closeSheet();show("library");notify("已標成不用整理。")}catch(err){notify("儲存不用整理狀態失敗："+err.message,true);$("sheet-apply").disabled=false}},"標成不用整理")}
 
@@ -290,6 +357,8 @@ function renderReview(){
 function renderSettings(){
  const m=model();
  $("connection-detail").textContent=S.local?"本機檔案":G.config()?G.config().repo+" / "+G.config().branch:"未連線";
+ const drafts=D.draftCount();
+ $("device-detail").textContent=(D.hasToken()?"已記住 Token，下次打開會自動連線。":"沒有記住 Token，關閉或重新整理後要重新輸入。")+(drafts?" 有 "+drafts+" 份未儲存草稿。":"");
  $("save-detail").textContent=!m?"尚未選擇對話":m.dirty?"有尚未儲存的修改":"沒有待儲存修改";
  $("save-button").textContent=S.local?"下載 outline.json":"儲存到 GitHub";
  $("save-button").disabled=$("download-button").disabled=!m||m.sourceMismatch||S.busy;
@@ -300,6 +369,7 @@ function download(){
   const content=JSON.stringify(C.makeOutline(model()),null,2)+"\n";
   const url=URL.createObjectURL(new Blob([content],{type:"application/json;charset=utf-8"}));
   const a=document.createElement("a");a.href=url;a.download="outline.json";document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),5000);
+  if(S.local){const ref=draftRef();if(ref)D.dropDraft(ref[0],ref[1]);S.draftVersion=model().editVersion||0}
   notify("已下載 outline.json。");
  }catch(err){notify(err.message,true)}
 }
@@ -316,6 +386,8 @@ async function save(){
   const doc=C.makeOutline(m),result=await G.writeFile(S.folder+"outline.json",JSON.stringify(doc,null,2)+"\n",S.outlineSha,"After-thinking mobile: outline "+S.folder);
   S.outlineSha=result.sha;m.base=doc;
   m.dirty=(m.editVersion||0)!==savingVersion;
+  // 存好了就不需要草稿；儲存途中又改的，用新的版本重寫草稿
+  if(m.dirty){S.draftVersion=-1;queueDraft()}else{const ref=draftRef();if(ref)D.dropDraft(ref[0],ref[1]);S.draftVersion=m.editVersion||0}
   if(S.row){S.row.outline_updated_at=doc.updated_at;S.row.outline_mode=doc.mode}
   notify(m.dirty?"已儲存按下儲存時的版本；儲存過程中新增的修改尚未儲存，請再儲存一次。":"outline.json 已寫回 GitHub。");
   try{await G.refreshIndex(S.folder,doc.updated_at,doc.mode)}
@@ -324,18 +396,36 @@ async function save(){
  }catch(err){notify("儲存失敗："+err.message,true)}
  finally{buttonSave.disabled=false;$("quick-save").disabled=false;if(S.page==="settings")renderSettings()}
 }
+function leave(){
+ writeDraft();
+ G.disconnect();S.repo=false;S.local=false;S.model=null;S.row=null;S.rows=[];S.expanded.clear();S.previews={};S.allQuestions={};S.aiRaw=null;S.aiReport=null;S.aiFrom=null;S.readerY=0;S.modeConfirmed=false;S.usingSaved=false;S.draft=null;
+ $("token-input").value="";notify("");
+}
+// 切換倉庫：回到連線頁，這台裝置記住的設定和草稿都留著
+function changeRepo(){
+ if(model()?.dirty&&!confirm("還有未儲存的修改（已留草稿在這台裝置）。確定要切換？"))return;
+ leave();show("connect");syncConnectForm();
+}
+// 中斷連線並忘記這台裝置：刪掉記住的倉庫、Token 和所有草稿
 function disconnect(){
- if(model()?.dirty&&!confirm("尚未儲存的標記會消失，確定離開？"))return;
- G.disconnect();S.repo=false;S.local=false;S.model=null;S.row=null;S.rows=[];S.expanded.clear();S.previews={};S.allQuestions={};S.aiRaw=null;S.aiReport=null;S.aiFrom=null;S.readerY=0;S.modeConfirmed=false;
- $("repo-input").value="";$("token-input").value="";notify("");show("connect");
+ writeDraft();const drafts=D.draftCount();
+ if(!confirm("會刪掉這台裝置記住的倉庫和 Token"+(drafts?"，以及 "+drafts+" 份未儲存的標記草稿":"")+"。GitHub 上的資料不受影響。確定？"))return;
+ if(model())model().dirty=false;
+ leave();D.forgetAll();$("repo-input").value="";$("branch-input").value="main";show("connect");syncConnectForm();
 }
 function initialize(){
  $("connect-form").addEventListener("submit",connect);$("local-files").addEventListener("change",loadLocal);$("menu-button").addEventListener("click",()=>{if(S.model)show("settings");else{const detail=document.querySelector(".explain");if(detail)detail.open=true}});
- $("quick-save").addEventListener("click",save);$("save-button").addEventListener("click",save);$("reader-save").addEventListener("click",save);$("download-button").addEventListener("click",download);$("disconnect").addEventListener("click",disconnect);$("change-repo").addEventListener("click",disconnect);$("reader-back").addEventListener("click",()=>show("library"));$("prepare-back").addEventListener("click",()=>show("library"));$("settings-back").addEventListener("click",()=>show(S.previousPage==="settings"?"library":S.previousPage));
+ $("quick-save").addEventListener("click",save);$("save-button").addEventListener("click",save);$("reader-save").addEventListener("click",save);$("download-button").addEventListener("click",download);$("disconnect").addEventListener("click",disconnect);$("change-repo").addEventListener("click",changeRepo);$("draft-use").addEventListener("click",useDraft);$("draft-drop").addEventListener("click",dropDraft);$("reader-back").addEventListener("click",()=>show("library"));$("prepare-back").addEventListener("click",()=>show("library"));$("settings-back").addEventListener("click",()=>show(S.previousPage==="settings"?"library":S.previousPage));
  $("reader-mode").addEventListener("click",()=>show("prepare"));$("reader-more").addEventListener("click",()=>show("settings"));$("open-topics").addEventListener("click",topicsSheet);$("reader-review").addEventListener("click",reviewSheet);$("new-topic").addEventListener("click",()=>editTopic(null));$("prepare-preview-toggle").addEventListener("click",()=>{S.prepareExpanded=!S.prepareExpanded;renderPrepare()});$("choose-multi").addEventListener("click",()=>chooseMode("multi_topic"));$("choose-single").addEventListener("click",()=>chooseMode("single_topic"));$("choose-skip").addEventListener("click",skipSheet);$("enter-workspace").addEventListener("click",()=>{if(!S.modeConfirmed)return notify("請先選擇整理方式。",true);S.readerY=0;show("reader")});
  $("ai-copy-repo").addEventListener("click",copyRepoAiPrompt);$("ai-reload").addEventListener("click",reloadAi);$("ai-download-request").addEventListener("click",downloadAiRequest);$("ai-copy-file-prompt").addEventListener("click",()=>copyText("請照附檔開頭的說明，幫我標記附檔裡的對話，最後只輸出 outline.ai.json。","已複製給 AI 的一句話。"));$("ai-file").addEventListener("change",async e=>{const f=e.target.files?.[0];e.target.value="";if(!f)return;takeAi(await f.text(),"file")});$("ai-paste-go").addEventListener("click",()=>takeAi($("ai-paste").value,"paste"));
  $("search").addEventListener("input",e=>{S.search=e.target.value;renderLibrary()});$("sort").addEventListener("change",e=>{S.sort=e.target.value;renderLibrary()});for(const b of document.querySelectorAll("[data-filter]"))b.addEventListener("click",()=>{S.filter=b.dataset.filter;document.querySelectorAll("[data-filter]").forEach(x=>x.classList.toggle("active",x===b));renderLibrary()});for(const b of document.querySelectorAll("[data-review]"))b.addEventListener("click",()=>{S.review=b.dataset.review;document.querySelectorAll("[data-review]").forEach(x=>x.classList.toggle("active",x===b));renderReview()});for(const b of document.querySelectorAll("[data-kind]"))b.addEventListener("click",()=>{S.kind=b.dataset.kind;S.cursor=null;document.querySelectorAll("[data-kind]").forEach(x=>x.classList.toggle("active",x===b));navStatus();if(S.kind!=="all")jump(1)});
- $("load-more").addEventListener("click",()=>{S.count=Math.min(model().msgs.length,S.count+20);renderReader(true)});$("prev-item").addEventListener("click",()=>jump(-1));$("next-item").addEventListener("click",()=>jump(1));$("sheet-close").addEventListener("click",closeSheet);$("sheet-overlay").addEventListener("click",e=>{if(e.target===$("sheet-overlay"))closeSheet()});$("sheet-apply").addEventListener("click",()=>{if(S.sheetAction)S.sheetAction()});document.addEventListener("keydown",e=>{if(e.key==="Escape"&&S.sheetAction)closeSheet();if(S.page==="reader"&&!S.sheetAction&&!["INPUT","TEXTAREA","SELECT"].includes(document.activeElement?.tagName)){if(e.key.toLowerCase()==="j"){e.preventDefault();jump(1)}else if(e.key.toLowerCase()==="k"){e.preventDefault();jump(-1)}}});window.addEventListener("beforeunload",e=>{if(model()?.dirty){e.preventDefault();e.returnValue=""}});show("connect");
+ $("load-more").addEventListener("click",()=>{S.count=Math.min(model().msgs.length,S.count+20);renderReader(true)});$("prev-item").addEventListener("click",()=>jump(-1));$("next-item").addEventListener("click",()=>jump(1));$("sheet-close").addEventListener("click",closeSheet);$("sheet-overlay").addEventListener("click",e=>{if(e.target===$("sheet-overlay"))closeSheet()});$("sheet-apply").addEventListener("click",()=>{if(S.sheetAction)S.sheetAction()});document.addEventListener("keydown",e=>{if(e.key==="Escape"&&S.sheetAction)closeSheet();if(S.page==="reader"&&!S.sheetAction&&!["INPUT","TEXTAREA","SELECT"].includes(document.activeElement?.tagName)){if(e.key.toLowerCase()==="j"){e.preventDefault();jump(1)}else if(e.key.toLowerCase()==="k"){e.preventDefault();jump(-1)}}});window.addEventListener("beforeunload",e=>{if(model()?.dirty){e.preventDefault();e.returnValue=""}});
+ // 手機切到別的 App 時分頁可能被系統回收：離開畫面前立刻把草稿寫好
+ document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="hidden")writeDraft()});window.addEventListener("pagehide",writeDraft);
+ // 記住的 Token 被 GitHub 拒絕（過期或撤銷）：從這台裝置刪掉，草稿還在
+ G.onUnauthorized=()=>{if(S.usingSaved){D.forgetToken();S.usingSaved=false}};
+ show("connect");syncConnectForm();
+ if(D.hasToken())connect();
 }
 if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",initialize);else initialize();
 })();

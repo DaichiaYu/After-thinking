@@ -22,14 +22,17 @@ The GitHub Actions workflow `.github/workflows/mobile-pages.yml` validates the a
 
 A repository administrator must select **Settings → Pages → Build and deployment → Source: GitHub Actions**. This cannot be inferred from repository code alone. A successful deployment will show its actual URL under the workflow run and Pages settings. Do not assume a link is active before the workflow succeeds.
 
-The published artifact contains `index.html`, `style.css`, `app.js`, `core.js` and `github.js`. No conversation dataset, GitHub token, personal repository name or personal profile is bundled.
+The published artifact contains `index.html`, `style.css`, `app.js`, `core.js`, `github.js` and `device.js`. No conversation dataset, GitHub token, personal repository name or personal profile is bundled.
 
 ## Authentication and privacy
 
 - A public GitHub Pages site cannot securely store an OAuth client secret. The first release uses a **fine-grained personal access token** entered directly by the user into the site.
 - Limit the token to **only the selected data repository**, with **Contents: Read and write** permission. Do not grant access to all repositories.
-- The token is held in JavaScript memory for the current tab session and sent only to `https://api.github.com` using the Authorization header. It is not written into query parameters, browser localStorage, source code, or a GitHub commit.
-- Closing or refreshing the page ends this login; re-entry is expected.
+- By default the token is held in JavaScript memory for the current tab session and sent only to `https://api.github.com` using the Authorization header. It is never written into query parameters, source code, or a GitHub commit. Closing or refreshing the page ends this login.
+- **Remember this device (opt-in, off by default).** When the user ticks the box, the token is stored in that browser's `localStorage` and the next visit connects automatically. It is erased when the user reconnects with the box unticked, when GitHub rejects it (HTTP 401), or when the user chooses "disconnect and forget this device". This is the same trade-off the desktop extension already makes with `chrome.storage.local`; the strict Content Security Policy (same-origin scripts only, GitHub API as the only external connection) and a single-repository fine-grained token bound the exposure. Do not tick it on a shared device.
+- Repository name and branch are not secrets and are remembered after a successful connection.
+- The connect form uses standard `username` / `current-password` autocomplete hints so a password manager can store and fill the token instead.
+- **Unsaved-edit drafts.** Mobile browsers discard background tabs, so every unsaved edit is mirrored to a per-conversation draft in `localStorage` (the outline as it would be saved, plus the remote outline SHA it was based on). Reopening that conversation offers to continue from the draft or discard it, and warns if the remote outline has changed since. A successful save deletes the draft. Drafts never leave the device.
 - The static editor explicitly uses a Content Security Policy with same-origin scripts and only the GitHub REST API as an external connection.
 - The public page is a **publicly readable application**, but its presence does not make a user's private data repository public. However, never enter private tokens on an untrusted fork or an unfamiliar domain.
 - Future authorization with a GitHub App would require an additional trusted authorization service. A static Pages site alone is not that service.
@@ -42,7 +45,7 @@ The published artifact contains `index.html`, `style.css`, `app.js`, `core.js` a
 4. Preserves existing unrelated v6 fields (e.g. key ranges, provenance, custom fields), and keeps unresolved section markers available for manual review.
 5. Marks changes occurring during an in-flight save as unsaved so they can be saved again.
 6. A successful outline write followed by a failed index update is reported as a **partial success**, not a total save failure.
-7. Credentials and conversation data remain in volatile browser state; an unsaved-edit warning is shown before navigating away.
+7. Source conversations are never stored on the device. Unsaved outline edits are kept as a local draft (see above), and an unsaved-edit warning is still shown before navigating away.
 
 ## First-release scope and known limitations
 
@@ -58,5 +61,6 @@ This is a production-data-connected **candidate**; end-to-end testing on a separ
 - **公開網站只放程式，不放任何人的對話、倉庫預設名稱或 Token。**
 - 對話、標記資料仍在使用者自己指定的 GitHub 倉庫中，瀏覽器透過 GitHub API 直接讀寫。
 - 清單使用原始對話標題，並可原地展開／收合使用者提問；標記頁保留一個主要主題＋多個相關主題、關鍵、轉向、備註、AI 小節重點。
-- 儲存前核對來源及標記檔版本，遇到衝突不覆蓋。關閉分頁不保留 Token；私人資料不要提交到公開 AT。
+- 儲存前核對來源及標記檔版本，遇到衝突不覆蓋。私人資料不要提交到公開 AT。
+- Token 預設關閉分頁就清除；勾選「記住這台裝置」才會存在該瀏覽器，可隨時忘記。未儲存的標記會自動留草稿在本機。
 - 網站需在 AT 倉庫的 Settings → Pages → Source 選 GitHub Actions，合併及部署成功後才能正式取得網址。

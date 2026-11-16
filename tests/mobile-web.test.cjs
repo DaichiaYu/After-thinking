@@ -7,7 +7,7 @@ const vm=require("node:vm");
 
 const root=path.join(__dirname,"..");
 const get=name=>fs.readFileSync(path.join(root,"apps","mobile-web",name),"utf8");
-const js={core:get("core.js"),github:get("github.js"),app:get("app.js"),html:get("index.html")};
+const js={core:get("core.js"),github:get("github.js"),device:get("device.js"),app:get("app.js"),html:get("index.html")};
 function core(){
   const window={};
   vm.runInNewContext(js.core,{window,Date,TextEncoder,TextDecoder});
@@ -30,7 +30,7 @@ test("production interface has no built-in user repository, data or token",()=>{
   assert.doesNotMatch(js.html,/value="[^"]+\/[^"]+"[^>]*id="repo-input"/);
 });
 test("all JavaScript parses without a bundler",()=>{
-  for(const filename of ["core.js","github.js","app.js"]) assert.doesNotThrow(()=>new Function(get(filename)));
+  for(const filename of ["core.js","github.js","device.js","app.js"]) assert.doesNotThrow(()=>new Function(get(filename)));
 });
 test("mobile controls exist in HTML without duplicate IDs",()=>{
   const ids=[...js.html.matchAll(/id="([^"]+)"/g)].map(x=>x[1]);
@@ -88,7 +88,7 @@ test("plain-text numbered headings, Markdown fences and section offsets",()=>{
   assert.equal(C.sections("~~~md\n## Not a section\n~~~\n## Real\nText")[0].title,"Real");
   assert.equal(C.sections("## ##\n## Valid\nBody").length,1);
 });
-test("GitHub client refuses stale SHA and keeps auth only in memory",async()=>{
+test("GitHub client refuses stale SHA and never stores the token itself",async()=>{
   const calls=[];
   const encoder=bytes=>Buffer.from(bytes).toString("base64");
   const records={
@@ -113,6 +113,70 @@ test("GitHub client refuses stale SHA and keeps auth only in memory",async()=>{
   assert.ok(calls.every(x=>x.method==="GET"));
   assert.ok(calls.every(x=>!x.url.includes("not-a-real-secret")));
   Git.disconnect();assert.equal(Git.config(),null);
+  assert.doesNotMatch(js.github,/localStorage|sessionStorage|indexedDB/);
+});
+function fakeStorage(limit=Infinity){
+  const map=new Map();
+  return {map,get length(){return map.size},key:i=>[...map.keys()][i]??null,getItem:k=>map.has(k)?map.get(k):null,
+    setItem:(k,v)=>{if(!map.has(k)&&map.size>=limit)throw new Error("QuotaExceededError");map.set(k,String(v))},removeItem:k=>{map.delete(k)}};
+}
+function device(localStorage){
+  const window={localStorage};
+  vm.runInNewContext(js.device,{window});
+  return window.ATDevice;
+}
+test("device remembers the token only when asked and can forget it",()=>{
+  const store=fakeStorage(),D=device(store);
+  assert.equal(D.loadConnection(),null);assert.equal(D.hasToken(),false);
+  D.saveConnection("example/repository","main","not-a-real-secret",false);
+  assert.deepEqual({...D.loadConnection()},{repo:"example/repository",branch:"main",token:null});
+  assert.ok(![...store.map.values()].join("").includes("not-a-real-secret"));
+  D.saveConnection("example/repository","main","not-a-real-secret",true);
+  assert.equal(D.loadConnection().token,"not-a-real-secret");assert.equal(D.hasToken(),true);
+  // Reconnecting without "remember" erases a previously stored token.
+  D.saveConnection("example/repository","main","not-a-real-secret",false);
+  assert.equal(D.hasToken(),false);
+  D.saveConnection("example/repository","main","not-a-real-secret",true);
+  D.forgetToken();
+  assert.deepEqual({...D.loadConnection()},{repo:"example/repository",branch:"main",token:null});
+  D.saveConnection("example/repository","main","not-a-real-secret",true);
+  D.saveDraft("example/repository@main","inbox/sample/",{saved_at:"2026-01-01T00:00:00.000Z",outline:{mode:"multi_topic"}});
+  store.map.set("unrelated","kept");
+  D.forgetAll();
+  assert.equal(D.loadConnection(),null);assert.equal(D.draftCount(),0);assert.equal(store.map.get("unrelated"),"kept");
+});
+test("device works without storage and survives corrupt or full storage",()=>{
+  const none=device(undefined);
+  assert.equal(none.available(),false);assert.equal(none.saveConnection("a/b","main","x",true),false);
+  assert.equal(none.loadConnection(),null);assert.equal(none.loadDraft("s","id"),null);
+  const store=fakeStorage(),D=device(store);
+  store.map.set("at-mobile:connection","{not json");assert.equal(D.loadConnection(),null);
+  store.map.set("at-mobile:draft:s|id",JSON.stringify({saved_at:"x"}));assert.equal(D.loadDraft("s","id"),null);
+  const full=fakeStorage(2),F=device(full);
+  assert.ok(F.saveDraft("s","old",{saved_at:"2026-01-01T00:00:00.000Z",outline:{}}));
+  assert.ok(F.saveDraft("s","mid",{saved_at:"2026-01-02T00:00:00.000Z",outline:{}}));
+  assert.ok(F.saveDraft("s","new",{saved_at:"2026-01-03T00:00:00.000Z",outline:{}}));
+  assert.equal(F.loadDraft("s","old"),null);assert.ok(F.loadDraft("s","new"));
+});
+test("a draft restores unsaved marks on top of the remote outline",()=>{
+  const C=core(),msgs=messages(C),D=device(fakeStorage());
+  const m=C.makeModel(msgs,null,{folder:"inbox/sample/",title:"測試對話"});
+  C.setMode(m,"multi_topic");const id=C.addTopic(m,"第二個主題");
+  C.setPrimary(m,"sample-3",id);C.toggleKey(m,"sample-1");C.setNote(m,"sample-3","之後要回來看");
+  D.saveDraft("example/repository@main","inbox/sample/",{saved_at:new Date().toISOString(),base_sha:null,mode_confirmed:true,outline:C.makeOutline(m)});
+  const draft=D.loadDraft("example/repository@main","inbox/sample/");
+  const again=C.makeModel(messages(C),draft.outline,{folder:"inbox/sample/",title:"測試對話"});
+  assert.equal(again.sourceMismatch,false);
+  assert.equal(again.primary["sample-3"],id);assert.ok(again.keys["sample-1"]);assert.equal(again.notes["sample-3"],"之後要回來看");
+  assert.equal(D.loadDraft("example/repository@main","inbox/other/"),null);
+  D.dropDraft("example/repository@main","inbox/sample/");assert.equal(D.draftCount(),0);
+});
+test("connect form supports password managers and the remember option",()=>{
+  assert.match(js.html,/id="repo-input"[^>]*autocomplete="username"/);
+  assert.match(js.html,/id="token-input"[^>]*autocomplete="current-password"/);
+  assert.match(js.html,/id="remember-input" type="checkbox">/);
+  assert.doesNotMatch(js.html,/id="remember-input"[^>]*checked/);
+  assert.match(js.html,/src="\.\/device\.js"/);
 });
 
 test("mobile setup exposes mode choice and AI drafting controls",()=>{for(const id of ["prepare-page","choose-multi","choose-single","choose-skip","ai-copy-repo","ai-reload","ai-download-request","enter-workspace","reader-review","reader-mode"]) assert.match(js.html,new RegExp('id="'+id+'"'));});

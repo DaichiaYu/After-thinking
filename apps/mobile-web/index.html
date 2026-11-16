@@ -26,16 +26,17 @@
       <p class="intro">連接你自己選擇的 GitHub 資料倉庫，閱讀與編輯 AT 原本的標記檔。不需要安裝 Chrome 擴充功能。</p>
       <form id="connect-form" class="connect-form">
         <label for="repo-input">資料倉庫 <span class="muted">owner/repository</span></label>
-        <input id="repo-input" required autocomplete="off" spellcheck="false" autocapitalize="off" placeholder="your-account/your-conversations">
+        <input id="repo-input" name="username" required autocomplete="username" spellcheck="false" autocapitalize="off" placeholder="your-account/your-conversations">
         <label for="branch-input">分支</label>
         <input id="branch-input" required value="main" autocomplete="off" autocapitalize="off" spellcheck="false">
         <label for="token-input">Fine-grained Personal Access Token（細粒度存取憑證）</label>
-        <input id="token-input" type="password" required autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="僅限你指定的資料倉庫">
-        <p class="hint">Token 需要該資料倉庫的 Contents：Read and write。只保存在目前分頁的記憶體中，關閉或重新整理就會清除。不要將 Token 貼到公開 Issue、程式碼或網址。</p>
+        <input id="token-input" name="password" type="password" required autocomplete="current-password" autocapitalize="off" spellcheck="false" placeholder="僅限你指定的資料倉庫">
+        <label class="remember-row" for="remember-input"><input id="remember-input" type="checkbox"><span><strong>記住這台裝置</strong><small id="remember-state">下次打開不用再輸入。Token 會存在這個瀏覽器裡，共用的手機或電腦請不要勾。</small></span></label>
+        <p class="hint">Token 需要該資料倉庫的 Contents：Read and write。沒勾「記住這台裝置」時只保存在目前分頁的記憶體中，關閉或重新整理就會清除。不要將 Token 貼到公開 Issue、程式碼或網址。</p>
         <button type="submit" id="connect-button" class="primary full">連接 GitHub 並開啟對話庫 <span aria-hidden="true">→</span></button>
       </form>
       <div class="offline-option"><span>或</span><label for="local-files" class="text-action">使用本機 conversation.jsonl＋outline.json</label><input id="local-files" type="file" accept=".jsonl,.json" multiple hidden></div>
-      <details class="explain"><summary>為什麼需要 Token？</summary><p>GitHub Pages 是靜態網站，不能在公開前端安全保存 OAuth Client Secret。此版本採用只授權使用者指定倉庫的 Token；未來可以透過獨立 GitHub App 授權服務取代手動輸入。</p></details>
+      <details class="explain"><summary>為什麼需要 Token？</summary><p>勾選「記住這台裝置」後，Token 只存在這個瀏覽器的本機儲存空間，不會上傳到任何地方；隨時可以在「更多」裡忘記這台裝置。也可以改讓手機的密碼管理員記住它。</p><p>GitHub Pages 是靜態網站，不能在公開前端安全保存 OAuth Client Secret。此版本採用只授權使用者指定倉庫的 Token；未來可以透過獨立 GitHub App 授權服務取代手動輸入。</p></details>
     </section>
     <div id="workspace" hidden>
       <section id="library-page" data-page="library" hidden>
@@ -55,6 +56,10 @@
           <div class="prepare-card-main"><h2 id="prepare-title">對話</h2><p id="prepare-meta" class="small muted"></p></div>
           <span id="prepare-status" class="mini-label">未標記</span>
         </article>
+        <div id="draft-banner" class="warning draft-banner" role="status" hidden>
+          <p id="draft-text"></p>
+          <div class="ai-button-row"><button id="draft-use" class="primary" type="button">接著用草稿</button><button id="draft-drop" class="secondary" type="button">丟掉草稿</button></div>
+        </div>
         <section class="prepare-preview">
           <div class="prepare-section-head"><div><h2>對話重點預覽</h2><p class="small muted">你的提問</p></div><button id="prepare-preview-toggle" class="inline-action" type="button">看全部</button></div>
           <div id="prepare-preview-list" class="prepare-preview-list"></div>
@@ -125,7 +130,7 @@
         <p class="eyebrow">CONNECTION & STORAGE</p><h1>更多</h1>
         <div class="setting-group"><h2>連接來源</h2><p id="connection-detail"></p></div>
         <div class="setting-group"><h2>儲存與備份</h2><p id="save-detail" class="small muted"></p><button id="save-button" class="primary full">儲存到 GitHub</button><button id="download-button" class="secondary full">下載 outline.json 備份</button></div>
-        <div class="setting-group"><h2>安全與隱私</h2><p>原文及私人設定只從你選擇的資料來源載入；Token 不會被保存在網站程式、網址或本機儲存空間。請避免在共享裝置開啟私人倉庫。</p><button id="disconnect" class="secondary full">中斷連線</button></div>
+        <div class="setting-group"><h2>這台裝置</h2><p id="device-detail"></p><p class="small muted">原文及私人設定只從你選擇的資料來源載入。Token 不會出現在網站程式或網址裡；只有勾選「記住這台裝置」時才會存在這個瀏覽器。尚未儲存的標記會自動留一份草稿在這台裝置。請避免在共享裝置開啟私人倉庫。</p><button id="disconnect" class="secondary full">中斷連線並忘記這台裝置</button></div>
         <p class="small muted">此網頁是 AT 的標記工具；文章轉換屬於獨立的 display-AT 專案。</p>
       </section>
     </div>
@@ -146,6 +151,7 @@
   </div>
   <script src="./core.js" defer></script>
   <script src="./github.js" defer></script>
+  <script src="./device.js" defer></script>
   <script src="./app.js" defer></script>
 </body>
 </html>

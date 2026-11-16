@@ -17,7 +17,11 @@
 
 - AT 公開倉庫只包含通用介面、資料格式、程式邏輯及**虛構測試資料（只在獨立測試程式）**；正式網頁不內建任何示範對話。
 - 正式網頁**不預設任何人的 GitHub 帳號、私人資料倉庫、對話內容、真實標記或憑證**。
-- 使用者輸入的 Token 只保存在該瀏覽器分頁的 JavaScript 記憶體；不寫入 localStorage、sessionStorage、網址或遠端伺服器，重新整理後需要重新授權。
+- 使用者輸入的 Token 預設只保存在該瀏覽器分頁的 JavaScript 記憶體，重新整理後需要重新輸入；不會寫入網址或遠端伺服器。
+- 勾選「**記住這台裝置**」（預設不勾）後，Token 會存在該瀏覽器的 localStorage，下次打開自動連線。取消勾選再連接、Token 被 GitHub 拒絕（401），或在「更多」按「中斷連線並忘記這台裝置」時會刪除。共用裝置請不要勾。
+- 倉庫名稱與分支不是機密，連線成功後會記在該瀏覽器，方便下次少打兩欄。
+- 連線表單可讓手機的密碼管理員儲存與自動填入 Token，作為不勾選「記住」時的替代做法。
+- **未儲存的標記會自動留一份草稿在該瀏覽器**（每段對話一份）。分頁被系統回收或不小心關掉後，重新開啟該對話會詢問要接著用還是丟掉；儲存成功後草稿自動刪除。草稿只在本機，不會同步到其他裝置。
 - GitHub Pages 是公開可讀的靜態網站，因此**不能**在程式裡保存 OAuth Client Secret。若日後改成 GitHub App 登入，必須另設安全授權服務。
 - 對話透過瀏覽器直接向 GitHub REST API 讀取，頁面不會把私人原文提交到 AT 公開倉庫。
 
@@ -42,6 +46,7 @@
 ```sh
 node --check apps/mobile-web/core.js
 node --check apps/mobile-web/github.js
+node --check apps/mobile-web/device.js
 node --check apps/mobile-web/app.js
 node --test tests/mobile-web.test.cjs
 ```

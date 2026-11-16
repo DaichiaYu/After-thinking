@@ -1,5 +1,6 @@
 /* GitHub Contents REST client — no credentials, repository names or private data embedded.
-   Token is held only in this JS closure and erased on disconnect. */
+   This module holds the token only in its JS closure and erases it on disconnect.
+   Remembering it across visits is opt-in and handled separately in device.js. */
 (function (root) {
   "use strict";
   let credentials=null;
@@ -33,7 +34,10 @@
     if(!res.ok){
       const err=new Error((body?.message||"GitHub API error")+"（HTTP "+res.status+"）");
       err.status=res.status;
-      if(res.status===401)err.message="Token 已失效或不正確（401）";
+      if(res.status===401){
+        err.message="Token 已失效或不正確（401）";
+        try{root.ATGitHub.onUnauthorized?.()}catch(e){}
+      }
       if(res.status===403)err.message="沒有權限或已達 GitHub API 限制（403）";
       if(res.status===404)err.message="找不到倉庫、分支或檔案，或 Token 沒有權限讀取（404）";
       if(res.status===409||res.status===422)err.message="資料版本已變動，可能有另一個裝置更新（"+res.status+"）";
@@ -103,5 +107,5 @@
     await writeFile("inbox/index.jsonl",text,file.sha,"After-thinking mobile: refresh outline index");
     return {updated:true};
   }
-  root.ATGitHub={connect,disconnect,config,getFile,writeFile,refreshIndex,safeRepo,safePath,encode,decode};
+  root.ATGitHub={onUnauthorized:null,connect,disconnect,config,getFile,writeFile,refreshIndex,safeRepo,safePath,encode,decode};
 })(typeof window!=="undefined"?window:globalThis);

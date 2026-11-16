@@ -38,6 +38,7 @@ jobs:
           test -f apps/mobile-web/app.js
           test -f apps/mobile-web/core.js
           test -f apps/mobile-web/github.js
+          test -f apps/mobile-web/device.js
           test -f apps/mobile-web/style.css
           ! grep -R -E 'github_pat_[A-Za-z0-9_]{20,}|ghp_[A-Za-z0-9]{20,}' apps/mobile-web
 

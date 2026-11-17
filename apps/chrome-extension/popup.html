@@ -15,6 +15,11 @@
     <p>指定原始對話網址，擷取完成後上傳至你設定的 GitHub 倉庫。要保存在本機請使用下方 ZIP。</p>
     <button id="open-agent" data-at-action="open-agent-github-capture">指定對話網址 → 上傳 GitHub</button>
   </aside>
+  <section id="project-batch" hidden>
+    <p id="project-batch-text"></p>
+    <button id="open-project-batch">批量擷取這個專案的對話</button>
+    <p class="hint">會開啟批次擷取頁面，已經抓過的對話將自動跳過。</p>
+  </section>
   <p id="seen" hidden></p>
 
   <section id="result" hidden>
@@ -55,14 +60,15 @@
   <footer>
     <button id="open-tags" class="secondary">標記擷取過的對話</button>
     <p class="hint">先預覽對話、分主題或標關鍵，也可以請外部 AI 先標一版再回來確認；標記頁本身不會主動呼叫 AI。結果存成 outline.json。</p>
-    <button id="open-batch" class="secondary">批量擷取 Gemini 對話</button>
-    <p class="hint">一次把 Gemini 側邊欄裡的對話全部抓進 GitHub 的 inbox/，抓過的會自動跳過。</p>
+    <button id="open-batch" class="secondary">批量擷取（Gemini／ChatGPT 專案）</button>
+    <p class="hint">支援 Gemini 側邊欄或 ChatGPT 指定專案，一次擷取多段對話到 GitHub 的 inbox/。</p>
     <button id="diagnose" class="secondary">複製診斷報告</button>
     <p class="hint">診斷報告只包含頁面結構和字數，不包含對話內容。抓取有問題時，把它貼給開發者。</p>
     <p id="diagnose-status" class="muted" role="status"></p>
   </footer>
   <script src="github.js"></script>
   <script src="capture.js"></script>
+  <script src="chatgpt-project.js"></script>
   <script src="guide.js"></script>
   <script src="offline-bundle.js"></script>
   <script src="popup.js"></script>

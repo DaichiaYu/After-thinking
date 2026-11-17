@@ -1,16 +1,21 @@
-// After-thinking Capture — 批量擷取 Gemini 對話
-// 流程：讀側邊欄清單 → 跳過 inbox/index.jsonl 裡已經抓過的 → 一段段打開、擷取、上傳。
+// After-thinking Capture — 批量擷取對話（Gemini 側邊欄全部對話，或 ChatGPT 某個專案裡的對話）
+// 流程：讀對話清單 → 跳過 inbox/index.jsonl 裡已經抓過的 → 一段段打開、擷取、上傳。
 // 每抓完一段就提交一次（含更新後的 index），中途停止或失敗都不會丟掉已完成的部分。
 
 const INBOX = "inbox/";
 const GEMINI_HOME = "https://gemini.google.com/app";
+const CHATGPT_HOME = "https://chatgpt.com/";
+const CHATGPT_ORIGINS = ["https://chatgpt.com/*"];
 
 const $ = (id) => document.getElementById(id);
 let config = null;
 let branch = null;
 let index = [];            // inbox/index.jsonl 的每一行
 let capturedIds = new Set();
-let chats = [];            // 側邊欄讀到的對話
+let chats = [];            // 讀到的對話 { platform, id, title, url, ... }
+let source = "gemini";     // 目前選的來源：gemini | chatgpt
+let project = null;        // 選中的 ChatGPT 專案 { project_id, name, slug, project_url }
+let projects = [];         // 讀到的 ChatGPT 專案清單
 let selected = [];
 let workerTabId = null;
 let workerWindowId = null;
@@ -33,7 +38,9 @@ async function commitWithRetry(files, message, updateIndex) {
   }
 }
 
-// ── Gemini 工作視窗 ──
+const chatKey = (chat) => chat.platform + ":" + chat.id;
+
+// ── 工作視窗（Gemini 或 ChatGPT） ──
 
 function waitForLoad(tabId) {
   return new Promise((resolve, reject) => {
@@ -81,6 +88,7 @@ async function init() {
   $("open-options").addEventListener("click", () => chrome.runtime.openOptionsPage());
 
   await ensureGeminiRecorder();
+  readStartParams();
   config = await loadConfig();
   if (!config || !config.repo || !config.token) {
     $("repo-status").textContent = "還沒設定 GitHub。設定好之後重新整理這一頁。";
@@ -96,6 +104,8 @@ async function init() {
     capturedIds = new Set(index.map(captureKey));
     $("repo-status").textContent = config.repo + "（私人倉庫，分支 " + branch + "）｜已經擷取過 " + capturedIds.size + " 段對話";
     $("list").disabled = false;
+    $("load-projects").disabled = false;
+    $("list-project").disabled = !project;
   } catch (e) {
     $("repo-status").textContent = "無法使用倉庫：" + e.message;
     $("repo-status").className = "error";
@@ -109,7 +119,7 @@ function renderChats() {
   const list = $("chats");
   list.textContent = "";
   chats.forEach((chat, i) => {
-    const done = capturedIds.has("gemini:" + chat.id);
+    const done = capturedIds.has(chatKey(chat));
     const li = document.createElement("li");
     if (done) li.className = "captured";
     const label = document.createElement("label");
@@ -122,7 +132,7 @@ function renderChats() {
     title.textContent = chat.title || "（沒有標題）";
     const tag = document.createElement("span");
     tag.className = "tag";
-    tag.textContent = done ? capturedLabel("gemini:" + chat.id) : "";
+    tag.textContent = done ? capturedLabel(chatKey(chat)) : "";
     label.append(box, title, tag);
     li.appendChild(label);
     list.appendChild(li);
@@ -141,7 +151,7 @@ function capturedLabel(key) {
 }
 
 function updateSummary() {
-  const done = chats.filter((c) => capturedIds.has("gemini:" + c.id)).length;
+  const done = chats.filter((c) => capturedIds.has(chatKey(c))).length;
   const picked = selected.filter(Boolean).length;
   $("summary").textContent = "找到 " + chats.length + " 段對話：已擷取 " + done + " 段（灰色，預設不勾），這次要抓 " + picked + " 段";
   $("start").disabled = picked === 0;
@@ -149,7 +159,7 @@ function updateSummary() {
 }
 
 function selectNew() {
-  selected = chats.map((c) => !capturedIds.has("gemini:" + c.id));
+  selected = chats.map((c) => !capturedIds.has(chatKey(c)));
   renderChats();
 }
 
@@ -157,7 +167,7 @@ $("select-new").addEventListener("click", selectNew);
 $("select-none").addEventListener("click", () => { selected = chats.map(() => false); renderChats(); });
 
 chrome.runtime.onMessage.addListener((msg) => {
-  if (listing && msg && msg.type === "list-progress") $("list-status").textContent = "讀取側邊欄中…目前找到 " + msg.count + " 段";
+  if (listing && msg && msg.type === "list-progress") $("list-status").textContent = "讀取清單中…目前找到 " + msg.count + " 段";
 });
 
 $("list").addEventListener("click", async () => {
@@ -172,7 +182,7 @@ $("list").addEventListener("click", async () => {
     if (!res || !res.chats.length) {
       throw new Error("側邊欄裡找不到對話。請確認 Gemini 已登入、側邊欄有對話紀錄，再試一次。");
     }
-    chats = res.chats;
+    chats = res.chats.map((c) => ({ ...c, platform: "gemini" }));
     $("list-status").textContent = "讀完了，用了 " + res.seconds + " 秒。";
     $("list-result").hidden = false;
     selectNew();
@@ -183,9 +193,174 @@ $("list").addEventListener("click", async () => {
   $("list").disabled = false;
 });
 
+// ── 步驟 2（ChatGPT 專案）：選專案 → 讀專案裡的對話 ──
+
+function setSource(value) {
+  source = value === "chatgpt" ? "chatgpt" : "gemini";
+  document.querySelectorAll('input[name="source"]').forEach((r) => { r.checked = r.value === source; });
+  $("gemini-panel").hidden = source !== "gemini";
+  $("chatgpt-panel").hidden = source !== "chatgpt";
+}
+document.querySelectorAll('input[name="source"]').forEach((r) => r.addEventListener("change", () => setSource(r.value)));
+
+function projectLabel(p) {
+  return p ? (p.name || "（沒有名稱的專案）") + "（" + p.project_id + "）" : "";
+}
+function showProject() {
+  $("project-current").textContent = project ? "專案：" + projectLabel(project) : "還沒選專案。先按「讀取我的 ChatGPT 專案」。";
+  $("list-project").disabled = !project || !branch;
+}
+
+// 從擴充圖示點「批量擷取這個專案」進來時，網址帶著專案（A）
+function readStartParams() {
+  const params = new URLSearchParams(location.search);
+  if (params.get("source") === "chatgpt") setSource("chatgpt");
+  const parsed = params.get("project") ? ATProject.parse(params.get("project")) : null;
+  if (parsed) {
+    project = { project_id: parsed.project_id, slug: parsed.slug, project_url: parsed.project_url, name: params.get("name") || "" };
+    setSource("chatgpt");
+  }
+  showProject();
+}
+
+// chatgpt.com 不在預設權限裡，第一次用時請使用者允許（必須在按鈕點擊裡呼叫）
+async function ensureChatgptAccess() {
+  let granted = false;
+  try { granted = await chrome.permissions.request({ origins: CHATGPT_ORIGINS }); } catch (e) { granted = false; }
+  if (!granted) throw new Error("沒有取得讀取 chatgpt.com 的權限。請再按一次，在 Chrome 的詢問視窗按「允許」。");
+}
+
+function renderProjects() {
+  const sel = $("project-select");
+  sel.textContent = "";
+  const blank = document.createElement("option");
+  blank.value = "";
+  blank.textContent = "選一個專案（共 " + projects.length + " 個）";
+  sel.appendChild(blank);
+  projects.forEach((p) => {
+    const opt = document.createElement("option");
+    opt.value = p.project_id;
+    opt.textContent = projectLabel(p);
+    if (project && project.project_id === p.project_id) opt.selected = true;
+    sel.appendChild(opt);
+  });
+  sel.hidden = false;
+}
+
+$("project-select").addEventListener("change", () => {
+  project = projects.find((p) => p.project_id === $("project-select").value) || null;
+  showProject();
+});
+
+$("load-projects").addEventListener("click", async () => {
+  $("load-projects").disabled = true;
+  $("list-status").className = "muted";
+  $("list-status").textContent = "打開 ChatGPT 中…";
+  try {
+    await ensureChatgptAccess();
+    await openInWorker(CHATGPT_HOME);
+    $("list-status").textContent = "讀取專案清單中…";
+    const res = await inject(listChatgptProjects);
+    if (!res || !res.projects.length) {
+      throw new Error("找不到專案。請確認 ChatGPT 已登入、側邊欄看得到專案，再試一次。" + (res ? "（" + res.log.join(", ") + "）" : ""));
+    }
+    projects = res.projects.sort((a, b) => (a.name || "").localeCompare(b.name || "", "zh-Hant"));
+    // 從專案頁進來的：補上名稱
+    if (project) {
+      const same = projects.find((p) => p.project_id === project.project_id);
+      if (same) project = { ...same, name: same.name || project.name };
+    }
+    renderProjects();
+    showProject();
+    $("list-status").textContent = "找到 " + projects.length + " 個專案。";
+  } catch (e) {
+    $("list-status").className = "error";
+    $("list-status").textContent = "讀取專案失敗：" + e.message;
+  }
+  $("load-projects").disabled = false;
+});
+
+$("list-project").addEventListener("click", async () => {
+  if (!project) return;
+  $("list-project").disabled = true;
+  $("list-status").className = "muted";
+  $("list-status").textContent = "打開專案中…";
+  try {
+    await ensureChatgptAccess();
+    await openInWorker(project.project_url);
+    $("list-status").textContent = "讀取專案裡的對話中…";
+    listing = true;
+    const res = await inject(listChatgptProjectChats, [project.project_id]).finally(() => { listing = false; });
+    if (!res || !res.chats.length) {
+      throw new Error("這個專案裡找不到對話。請確認專案網址正確、ChatGPT 已登入。" + (res ? "（" + res.log.join(", ") + "）" : ""));
+    }
+    const proj = { project_id: project.project_id, name: project.name || "" };
+    chats = res.chats.map((c) => ({
+      ...c, platform: "chatgpt", url: ATProject.conversationUrl(project, c.id), project: proj
+    }));
+    $("list-status").textContent = "讀完了：「" + projectLabel(project) + "」有 " + chats.length + " 段對話，用了 " + res.seconds + " 秒" +
+      (res.via === "page" ? "（內部介面讀不到，改讀頁面連結；數量請自己核對一下）" : "") + "。";
+    $("list-result").hidden = false;
+    selectNew();
+  } catch (e) {
+    $("list-status").className = "error";
+    $("list-status").textContent = "讀取對話清單失敗：" + e.message;
+  }
+  $("list-project").disabled = !project;
+});
+
 // ── 步驟 3：擷取 ──
 
 async function captureOne(chat) {
+  return chat.platform === "chatgpt" ? captureChatgpt(chat) : captureGemini(chat);
+}
+
+// 共用：上傳一段擷取結果到 inbox/<月份>/<平台>-<編號>/
+async function uploadCapture(chat, page, attachmentFiles) {
+  const platform = chat.platform;
+  const folder = INBOX + (folderMonth(page.conversation_created_at) || "undated") + "/" + platform + "-" + chat.id + "/";
+  const items = page.items;
+  const entry = buildCaptureEntry(platform, chat.id, chat.title, chat.url, folder, items, page, "batch");
+  if (chat.project) entry.project = chat.project;
+  const files = [
+    { path: folder + "source/conversation.jsonl", content: buildJsonl(items) },
+    { path: folder + "source/metadata.yaml", content: buildMetadata(items.length, items.length, platform, page, "batch") },
+    ...attachmentFiles.map((f) => ({ path: folder + "source/" + f.path, base64: f.base64 }))
+  ];
+  if (!guideDone) files.push(...await repoGuideFiles(config, branch));
+  // 擷取紀錄在提交當下從最新版本讀（別的頁面可能剛寫過，例如標記頁）
+  let latest = null;
+  await commitWithRetry(files, "After-thinking inbox: " + platform + " " + chat.id + " (" + items.length + " messages)",
+    (rows) => (latest = upsertCaptureRow(rows, entry)));
+  guideDone = true;
+  index = latest || upsertCaptureRow(index, entry);
+  capturedIds.add(chatKey(chat));
+  return entry;
+}
+
+// ChatGPT：打開對話後直接向網站讀完整資料（不用捲動）；讀不到才改用捲動讀取
+async function captureChatgpt(chat) {
+  await openInWorker(chat.url);
+  let page = await inject(captureViaApi, ["chatgpt"]);
+  if (!page || !page.items || !page.items.length) {
+    const api = page && page.api;
+    const ready = await inject(waitForChatgptConversation, [chat.id]);
+    if (!ready || !ready.ok) {
+      throw new Error(ready && ready.reason === "redirected" ? "打不開這段對話（可能已刪除）" : "對話內容沒有出現");
+    }
+    page = await inject(captureConversation, ["chatgpt"]);
+    if (page) page.api = api;
+  }
+  if (!page || !page.items || !page.items.length) throw new Error("找不到訊息");
+  page.title = chat.title || page.title;
+  if (!page.conversation_created_at && chat.started_at) page.conversation_created_at = chat.started_at;
+  if (!page.conversation_updated_at && chat.updated_at) page.conversation_updated_at = chat.updated_at;
+  if (chat.project) page.project = chat.project;
+  const attachmentFiles = await finalizeCapture(workerTabId, "chatgpt", page);
+  return uploadCapture(chat, page, attachmentFiles);
+}
+
+async function captureGemini(chat) {
   await openInWorker(chat.url);
   const ready = await inject(waitForGeminiConversation, [chat.id]);
   if (!ready || !ready.ok) {
@@ -197,31 +372,15 @@ async function captureOne(chat) {
   page.url = chat.url;
   page.api = { tried: false, ok: false, steps: ["api:not_supported"] };
   const attachmentFiles = await finalizeCapture(workerTabId, "gemini", page);
-
-  // 依對話開始的月份放資料夾；找不到原始時間就放 undated/
-  const folder = INBOX + (folderMonth(page.conversation_created_at) || "undated") + "/gemini-" + chat.id + "/";
-  const items = page.items;
-  const entry = buildCaptureEntry("gemini", chat.id, chat.title, chat.url, folder, items, page, "batch");
-  const files = [
-    { path: folder + "source/conversation.jsonl", content: buildJsonl(items) },
-    { path: folder + "source/metadata.yaml", content: buildMetadata(items.length, items.length, "gemini", page, "batch") },
-    ...attachmentFiles.map((f) => ({ path: folder + "source/" + f.path, base64: f.base64 }))
-  ];
-  if (!guideDone) files.push(...await repoGuideFiles(config, branch));
-  // 擷取紀錄在提交當下從最新版本讀（別的頁面可能剛寫過，例如標記頁）
-  let latest = null;
-  await commitWithRetry(files, "After-thinking inbox: gemini " + chat.id + " (" + items.length + " messages)",
-    (rows) => (latest = upsertCaptureRow(rows, entry)));
-  guideDone = true;
-  index = latest || upsertCaptureRow(index, entry);
-  capturedIds.add("gemini:" + chat.id);
-  return entry;
+  return uploadCapture(chat, page, attachmentFiles);
 }
 
 async function runBatch(queue) {
   stopRequested = false;
   $("start").disabled = true;
   $("list").disabled = true;
+  $("load-projects").disabled = true;
+  $("list-project").disabled = true;
   $("stop").disabled = false;
   $("done").hidden = true;
   $("progress").hidden = false;
@@ -243,7 +402,8 @@ async function runBatch(queue) {
   for (let i = 0; i < queue.length; i++) {
     if (stopRequested) break;
     const chat = queue[i];
-    show(i, "正在擷取：" + (chat.title || chat.id) + "（長對話要往上載入，可能要一兩分鐘）");
+    show(i, "正在擷取：" + (chat.title || chat.id) +
+      (chat.platform === "gemini" ? "（長對話要往上載入，可能要一兩分鐘）" : ""));
     try {
       const entry = await captureOne(chat);
       ok++;
@@ -252,6 +412,8 @@ async function runBatch(queue) {
     } catch (e) {
       failures.push({ chat, reason: e.message });
     }
+    // ChatGPT 讀得很快，每段之間稍微停一下，不要連續猛打網站
+    if (chat.platform === "chatgpt" && i < queue.length - 1 && !stopRequested) await new Promise((r) => setTimeout(r, 1500));
   }
   $("bar-fill").style.width = "100%";
   show(queue.length, "");
@@ -278,6 +440,8 @@ async function runBatch(queue) {
   $("done").hidden = false;
   $("stop").disabled = true;
   $("list").disabled = false;
+  $("load-projects").disabled = false;
+  $("list-project").disabled = !project;
   if (chats.length) { selectNew(); }
 }
 

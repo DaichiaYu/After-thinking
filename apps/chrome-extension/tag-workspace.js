@@ -238,7 +238,7 @@ const ATWorkspace = (() => {
       const k=unmatchedId(entry);
       const section=el("div",{class:"unmatched-entry"});
       section.append(el("strong",{text:(entry.heading||T("ws.no_heading"))}),
-        el("p",{class:"inspector-details",text:T("ws.original_message", entry.message_id, (entry.reason||T("ws.not_confirmed")))}));
+        el("p",{class:"inspector-details",text:T("ws.original_message", entry.message_id, (entry.reason_code ? T(entry.reason_code) : (entry.reason||T("ws.not_confirmed"))))}));
       const candidates=unmatchedCandidates(entry),choice=el("select",{class:"unmatched-candidate"});
       choice.append(el("option",{value:"",text:candidates.length?T("ws.choose_a_candidate_section"):T("ws.no_section_with_the_same_heading")}));
       candidates.forEach(c=>{

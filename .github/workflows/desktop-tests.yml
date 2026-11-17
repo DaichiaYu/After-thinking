@@ -2,7 +2,7 @@ name: Desktop capture and localization tests
 
 on:
   push:
-    branches: [main, integration/i18n-safe-output-20261117]
+    branches: [main, 'integration/**']
     paths:
       - 'apps/chrome-extension/**'
       - '.github/workflows/desktop-tests.yml'
@@ -28,4 +28,4 @@ jobs:
         run: |
           find apps/chrome-extension -name '*.js' -print0 | xargs -0 -n1 node --check
       - name: Run capture, tagging, and i18n regressions
-        run: node --test apps/chrome-extension/tests/*.test.cjs
+        run: node --test apps/chrome-extension/tests/*.test.cjs apps/chrome-extension/tests/*.test.js

@@ -10,6 +10,11 @@
     <p id="platform" class="muted">正在讀取頁面…</p>
   </header>
 
+  <aside class="agent-route" data-at-role="agent-primary-route">
+    <strong>Agent：直接上傳 GitHub</strong>
+    <p>指定原始對話網址，擷取完成後上傳至你設定的 GitHub 倉庫。要保存在本機請使用下方 ZIP。</p>
+    <button id="open-agent" data-at-action="open-agent-github-capture">指定對話網址 → 上傳 GitHub</button>
+  </aside>
   <p id="seen" hidden></p>
 
   <section id="result" hidden>
@@ -40,7 +45,7 @@
     <button id="open-result" class="secondary" hidden>在 GitHub 上查看</button>
 
     <div class="pair">
-      <button id="download" class="secondary">下載離線 ZIP（含原文與附件）</button>
+      <button id="download" class="secondary" data-at-action="download-offline-zip">僅離線備份：下載 ZIP（不上傳 GitHub）</button>
       <button id="open-options" class="secondary">GitHub 設定</button>
     </div>
   </section>

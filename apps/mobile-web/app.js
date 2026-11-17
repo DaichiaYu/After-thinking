@@ -12,7 +12,7 @@ const S={page:"connect",previousPage:"connect",repo:false,local:false,rows:[],
  search:"",filter:"all",sort:"conversation",previews:{},allQuestions:{},expanded:new Set(),
  count:20,cursor:null,kind:"all",review:"all",sheetAction:null,busy:false,readerY:0,prepareExpanded:false,modeConfirmed:false,
  aiRaw:null,aiReport:null,aiFrom:null,guideText:null,
- usingSaved:false,draft:null,draftVersion:0,draftTimer:null,localHandle:null,localSource:null,localOutline:null};
+ usingSaved:false,draft:null,draftVersion:0,draftTimer:null,localHandle:null,localSource:null,localOutline:null,workbenchId:null,workbenchTab:"message",rangeFrom:null,findText:""};
 function notify(message,error=false){const e=$("notice");e.textContent=message||"";e.hidden=!message;e.classList.toggle("error",error);}
 function change(){
  $("bottom-nav").hidden=true;$("sync-state").textContent=S.model?.dirty?"尚未儲存":S.local?"本機":S.repo?"已連線":"未連線";$("quick-save").hidden=!S.model||!S.model.dirty||S.page==="reader";
@@ -129,7 +129,7 @@ async function openLocalFolder(restore=false){
   const msgs=C.parseJsonl(source);if(!msgs.length)throw Error("資料夾中沒有可用的對話訊息。");
   S.local=true;S.repo=false;S.localHandle=handle;S.localSource=source;S.localOutline=outlineRaw;
   S.model=C.makeModel(msgs,doc,{folder:"",title:handle.name,revision:doc?.source?.source_revision||1});
-  S.row=null;S.folder="";S.sourceSha=null;S.outlineSha=null;S.count=20;S.expanded.clear();S.cursor=null;S.modeConfirmed=!!doc?.mode;
+  S.row=null;S.folder="";S.sourceSha=null;S.outlineSha=null;S.count=20;S.expanded.clear();S.cursor=null;S.workbenchId=null;S.rangeFrom=null;S.modeConfirmed=!!doc?.mode;
   S.aiRaw=null;S.aiReport=null;S.aiFrom=null;S.prepareExpanded=false;findDraft();
   show(S.draft?"prepare":S.modeConfirmed?"reader":"prepare");notify("已連接本機資料夾："+handle.name+"。儲存時會直接更新 outline.json。");
  }catch(err){if(err.name!=="AbortError")notify("無法開啟資料夾："+err.message,true)}
@@ -146,7 +146,7 @@ async function loadLocal(e){
   G.disconnect();S.repo=false;S.local=true;S.rows=[];
   S.localHandle=null;S.localSource=null;S.localOutline=null;
   S.model=C.makeModel(msgs,doc,{folder:"",title:conv.name,revision:doc?.source?.source_revision||1});
-  S.row=null;S.folder="";S.sourceSha=null;S.outlineSha=null;S.count=20;S.expanded.clear();S.cursor=null;S.modeConfirmed=!!doc?.mode;
+  S.row=null;S.folder="";S.sourceSha=null;S.outlineSha=null;S.count=20;S.expanded.clear();S.cursor=null;S.workbenchId=null;S.rangeFrom=null;S.modeConfirmed=!!doc?.mode;
   S.aiRaw=null;S.aiReport=null;S.aiFrom=null;S.prepareExpanded=false;findDraft();show(S.draft?"prepare":S.modeConfirmed?"reader":"prepare");notify("本機模式：儲存時會下載 outline.json，不會寫入 GitHub。");
  }catch(err){notify("無法載入本機檔案："+err.message,true)}
 }
@@ -216,7 +216,7 @@ function renderLibrary(){
 async function openConversation(row){
  if(S.model?.dirty&&!confirm("上一段對話還有未儲存的修改。確定要離開？"))return;notify("讀取原文與標記中…");
  try{const folder=C.normalizeFolder(row.folder),source=await G.getFile(folder+"source/conversation.jsonl"),outline=await G.getFile(folder+"outline.json",{optional:true});let doc=null;if(outline){try{doc=JSON.parse(outline.text)}catch(err){throw Error("標記 JSON 損壞，為避免覆蓋，已停止載入")}}
-  const msgs=C.parseJsonl(source.text);S.model=C.makeModel(msgs,doc,{folder,title:row.title||folder,revision:doc?.source?.source_revision||row.source_revision||1});S.row=row;S.folder=folder;S.outlineSha=outline?.sha||null;S.sourceSha=source.sha;S.count=20;S.cursor=null;S.kind="all";S.expanded.clear();S.readerY=0;S.prepareExpanded=false;S.modeConfirmed=!!doc?.mode;S.aiRaw=null;S.aiReport=null;S.aiFrom=null;
+  const msgs=C.parseJsonl(source.text);S.model=C.makeModel(msgs,doc,{folder,title:row.title||folder,revision:doc?.source?.source_revision||row.source_revision||1});S.row=row;S.folder=folder;S.outlineSha=outline?.sha||null;S.sourceSha=source.sha;S.count=20;S.cursor=null;S.workbenchId=null;S.rangeFrom=null;S.kind="all";S.expanded.clear();S.readerY=0;S.prepareExpanded=false;S.modeConfirmed=!!doc?.mode;S.aiRaw=null;S.aiReport=null;S.aiFrom=null;
   try{const ai=await G.getFile(folder+"outline.ai.json",{optional:true});if(ai)takeAi(ai.text,"repo",true)}catch(e){}findDraft();show(S.draft?"prepare":S.modeConfirmed?"reader":"prepare");notify(S.model.sourceMismatch?"原文指紋不一致：此對話禁止直接寫回，請先核對。":"",S.model.sourceMismatch);
  }catch(err){notify("無法開啟對話："+err.message,true)}
 }
@@ -232,15 +232,22 @@ function repoAiPrompt(){const m=model(),cfg=G.config(),mine=m.msgs.filter(x=>x.s
 async function copyRepoAiPrompt(){if(!S.repo)return notify("這個方式需要先連接 GitHub。",true);$("ai-copy-repo").disabled=true;$("ai-repo-state").textContent="正在確認 AI 標記規則…";try{const managed=await ensureAiGuide();await copyText(repoAiPrompt(),"已複製給 AI 的 GitHub 指令。");$("ai-repo-state").textContent=managed?"規則已確認，可以把指令貼給 AI。":"倉庫已有自訂 guides/outline-ai.md，沒有覆蓋它；指令仍會指向該檔案。"}catch(err){notify("準備 AI 指令失敗："+err.message,true);$("ai-repo-state").textContent=err.message}finally{$("ai-copy-repo").disabled=false}}
 async function aiRequestText(){const m=model(),mine=m.msgs.filter(x=>x.speaker!=="assistant").length,lines=["這個檔案前半是說明，後半是完整的對話原文。看完後請只輸出一個 outline.ai.json：","請把 JSON 放在程式碼區塊裡，或直接給我一個名為 outline.ai.json 的檔案。","","這段對話共 "+m.msgs.length+" 則，其中我的訊息 "+mine+" 則（speaker 是 author 的是我，assistant 是 AI）。","source_fingerprint 照抄："+C.sourceFingerprint(m.msgs)+"　message_count 照抄："+m.msgs.length,"",stripRepoOnly(await outlineGuide(),false),"","## 對話原文","","標題："+(m.title||""),"每則開頭是 message_id、顯示編號和說話的人；回覆時一律用 message_id。",""];m.msgs.forEach((msg,i)=>{lines.push("### "+msg.id+"｜"+String(i+1).padStart(3,"0")+"｜"+(msg.speaker==="author"?"我（author）":msg.speaker==="assistant"?"AI（assistant）":"外部（external）"),"",msg.content||"（只有附件）","")});return lines.join("\n")}
 async function downloadAiRequest(){try{downloadText("after-thinking-ai-request.md",await aiRequestText());notify("已下載給 AI 的預標記請求檔。")}catch(err){notify(err.message,true)}}
-function takeAi(raw,from,quiet=false){S.aiRaw=raw;S.aiFrom=from;try{S.aiReport=C.checkSuggestion(model(),C.parseSuggestionText(raw))}catch(err){S.aiReport={errors:[err.message],warnings:[],unknown:[],missing:[],stale:false,plan:null}}if(!quiet)renderPrepare()}
+function takeAi(raw,from,quiet=false){S.aiRaw=raw;S.aiFrom=from;try{S.aiReport=C.checkSuggestion(model(),C.parseSuggestionText(raw))}catch(err){S.aiReport={errors:[err.message],warnings:[],unknown:[],missing:[],stale:false,plan:null}}if(!quiet)renderPrepare();if(S.page==="reader")renderWorkBench()}
 async function reloadAi(){if(!S.repo)return notify("這個方式需要 GitHub。",true);$("ai-reload").disabled=true;try{const file=await G.getFile(S.folder+"outline.ai.json",{optional:true});if(!file){notify("倉庫裡還沒有 outline.ai.json。",true);return}takeAi(file.text,"repo");notify("已讀取最新的 AI 建議。")}catch(err){notify("讀不到 AI 建議："+err.message,true)}finally{$("ai-reload").disabled=false}}
-function applyAi(){if(!S.aiReport?.plan)return;if(S.aiReport.stale&&!confirm("AI 建議對應的原文版本可能不同。仍要套用並逐項核對嗎？"))return;const m=model(),hasExisting=!!m.base||Object.keys(m.keys).length||Object.keys(m.turns).length||Object.keys(m.notes).length||Object.keys(m.primary).length>0;if(hasExisting&&!confirm("套用 AI 建議會取代目前的主題、關鍵與轉向；備註和 AI 小節重點會保留。確定套用？"))return;try{C.applySuggestion(m,S.aiRaw,S.aiReport);S.modeConfirmed=true;renderPrepare();change();notify("已套用 AI 建議；進入工作台後可以逐項確認或修改。")}catch(err){notify(err.message,true)}}
+function applyAi(){if(!S.aiReport?.plan)return;if(S.aiReport.stale&&!confirm("AI 建議對應的原文版本可能不同。仍要套用並逐項核對嗎？"))return;const m=model(),hasExisting=!!m.base||Object.keys(m.keys).length||Object.keys(m.turns).length||Object.keys(m.notes).length||Object.keys(m.primary).length>0;if(hasExisting&&!confirm("套用 AI 建議會取代目前的主題、關鍵與轉向；備註和 AI 小節重點會保留。確定套用？"))return;try{C.applySuggestion(m,S.aiRaw,S.aiReport);S.modeConfirmed=true;if(S.page==="reader")renderReader(true);else renderPrepare();change();notify("已套用 AI 建議；進入工作台後可以逐項確認或修改。")}catch(err){notify(err.message,true)}}
 function renderAiSummary(){const box=$("ai-suggestion-summary"),rep=S.aiReport;$("ai-panel-state").textContent=rep?.plan?(rep.stale?"原文可能不同":"已有建議"):"";if(!rep){box.hidden=true;box.replaceChildren();return}box.hidden=false;box.replaceChildren();const errors=rep.errors||[],plan=rep.plan;if(errors.length){box.append(node("strong","error-text","AI 建議讀取失敗"),node("p","small",errors.join("；")));return}box.append(node("strong","",plan.mode==="multi_topic"?"AI 判斷：聊了好幾件事":"AI 判斷：一直在聊同一件事"),node("p","small muted",(plan.mode==="multi_topic"?"主題 "+plan.topics.length+" 個 · ":"")+"關鍵 "+plan.keys.length+" · 轉向 "+plan.turns.length+" · 關鍵段落 "+plan.ranges.length+(rep.missing.length?" · 漏分 "+rep.missing.length:"")+(rep.stale?" · 原文版本可能不同":"")));if(rep.warnings?.length)box.append(node("p","small warning-text",rep.warnings.join("；")));box.append(btn(rep.stale?"仍然套用並核對":"套用 AI 建議",applyAi,"primary full"))}
 function renderPrepare(){const m=model();if(!m)return;$("prepare-title").textContent=m.title;$("prepare-meta").textContent=[S.row?.platform,fmt(S.row?.started_at||S.row?.captured_at),m.msgs.length+" 則訊息"].filter(Boolean).join(" · ");$("prepare-status").textContent=m.base?"已有標記":"未標記";const questions=m.msgs.map((x,i)=>({x,i})).filter(z=>z.x.speaker!=="assistant").map(z=>({i:z.i,text:z.x.content})),list=$("prepare-preview-list");list.replaceChildren();const shown=S.prepareExpanded?questions:(questions.length<=4?questions:[...questions.slice(0,3),questions[questions.length-1]]);shown.forEach(q=>list.append(question(q)));if(!S.prepareExpanded&&questions.length>4)list.append(node("p","question-more","⋯ 共 "+questions.length+" 則提問（顯示前 3 則與最後 1 則）"));$("prepare-preview-toggle").textContent=S.prepareExpanded?"收起":"看全部";for(const [id,mode] of [["choose-multi","multi_topic"],["choose-single","single_topic"]])$(id).classList.toggle("selected",S.modeConfirmed&&m.mode===mode);$("choose-skip").classList.toggle("selected",status(S.row||{}).status==="skip");renderDraftBanner();$("enter-workspace").disabled=!S.modeConfirmed||m.sourceMismatch||!!S.draft;$("ai-repo-way").hidden=!S.repo;renderAiSummary();change()}
 function chooseMode(mode){try{C.setMode(model(),mode);S.modeConfirmed=true;renderPrepare();change()}catch(err){notify(err.message,true)}}
 function skipSheet(){if(!S.repo||!S.row)return notify("本機模式不能寫入「不用整理」狀態。",true);const wrap=node("div"),reasons=[["chat","閒聊"],["duplicate","重複了"],["no_info","沒什麼資訊"],["other","其他"]];wrap.append(node("p","sheet-label","為什麼不用整理？"));const radios=[];for(const [value,labelText] of reasons){const label=node("label","sheet-radio"),input=document.createElement("input");input.type="radio";input.name="skip-reason";input.value=value;input.checked=value==="chat";radios.push(input);label.append(input,node("span","",labelText));wrap.append(label)}const note=document.createElement("textarea");note.rows=3;note.placeholder="補充說明（可以不寫）";wrap.append(node("p","sheet-label","補充"),note);sheet("這篇不用整理",wrap,async()=>{const reason=radios.find(x=>x.checked)?.value||"chat";$("sheet-apply").disabled=true;try{const latest=await G.getFile("inbox/labels.json",{optional:true}),data=latest?JSON.parse(latest.text):{format:"after-thinking/conversation-labels",format_version:1,labels:[],conversations:{}};if(!data.labels)data.labels=[];if(!data.conversations)data.conversations={};const prev=data.conversations[S.row.folder]||{},next={...prev,status:"skip",skip_reason:reason,skip_note:note.value.trim(),updated_at:new Date().toISOString()};if(!next.skip_note)delete next.skip_note;data.conversations[S.row.folder]=next;const saved=await G.writeFile("inbox/labels.json",JSON.stringify(data,null,2)+"\n",latest?.sha||null,"After-thinking mobile: mark conversation as skip");S.labels=data;S.labelsSha=saved.sha;closeSheet();show("library");notify("已標成不用整理。")}catch(err){notify("儲存不用整理狀態失敗："+err.message,true);$("sheet-apply").disabled=false}},"標成不用整理")}
 
 function model(){return S.model}
+const wide=()=>!!window.matchMedia?.("(min-width:1100px)").matches;
+function focusMessage(i){
+ const m=model();if(!m||i<0||i>=m.msgs.length)return;
+ S.count=Math.max(S.count,i+3);S.cursor=i;S.workbenchId=m.msgs[i].id;renderReader(true);
+ requestAnimationFrame(()=>$("msg-"+i)?.scrollIntoView({behavior:"smooth",block:"center"}));
+}
+
 function currentTopic(id){return model().topics.find(t=>t.id===id)?.name||id}
 function renderReader(keep=false){
  const m=model();if(!m)return;
@@ -255,7 +262,7 @@ function renderReader(keep=false){
  m.msgs.slice(0,S.count).forEach((msg,i)=>root.append(messageRow(msg,i)));
  $("load-more").hidden=S.count>=m.msgs.length;
  $("load-more").textContent="繼續載入後 "+Math.min(20,m.msgs.length-S.count)+" 則";
- navStatus();renderDesktopRail();change();
+ navStatus();renderDesktopRail();renderWorkBench();change();
  if(keep)window.scrollTo(0,y);
 }
 function renderDesktopRail(){
@@ -283,6 +290,7 @@ function renderDesktopRail(){
 }
 function messageRow(msg,i){
  const m=model(),entry=node("article","message "+(msg.speaker==="assistant"?"ai":"user"));
+ if(S.workbenchId===msg.id)entry.classList.add("desktop-selected");
  entry.id="msg-"+i;const header=node("div","message-meta");
  header.append(node("strong","",String(i+1).padStart(3,"0")+" · "+(msg.speaker==="assistant"?"AI":msg.speaker==="author"?"我":"外部")));
  const marks=node("div");
@@ -315,10 +323,13 @@ function messageRow(msg,i){
  actions.append(btn(m.keys[msg.id]?"★ 關鍵":"☆ 關鍵",()=>messageInspector(msg,"mark"),m.keys[msg.id]?"selected":""));
  if(msg.speaker!=="assistant")actions.append(btn(m.turns[msg.id]?"↗ 轉向 ✓":"↗ 轉向",()=>messageInspector(msg,"mark"),m.turns[msg.id]?"selected":""));
  actions.append(btn(m.notes[msg.id]?"▤ 備註 ✓":"▤ 備註",()=>messageInspector(msg,"note"),m.notes[msg.id]?"selected":""));
+ actions.append(btn("檢查",()=>{S.workbenchId=msg.id;S.workbenchTab="message";renderReader(true)},"desktop-action"));
+ actions.append(btn(m.keys[msg.id]?"★ 取消關鍵":"☆ 標記關鍵",()=>{if(m.sourceMismatch)return notify("請先核對來源版本",true);C.toggleKey(m,msg.id);S.workbenchId=msg.id;renderReader(true)},"desktop-action"));
+ if(msg.speaker!=="assistant")actions.append(btn(m.turns[msg.id]?"↗ 取消轉向":"↗ 標記轉向",()=>{if(m.sourceMismatch)return notify("請先核對來源版本",true);C.toggleTurn(m,msg.id);S.workbenchId=msg.id;renderReader(true)},"desktop-action"));
  entry.append(actions);return entry;
 }
 function navTargetsFor(kind){
- const m=model();if(!m)return[];if(kind==="all")return m.msgs.map((_,i)=>i);const ids=new Set();if(kind==="pending")for(const x of C.pending(m))ids.add(x.id);if(kind==="key"){for(const id of Object.keys(m.keys))ids.add(id);for(const [id,items]of Object.entries(m.sectionMarks))if(items.length)ids.add(id);for(const x of m.base?.key_ranges||[])ids.add(x.from_message_id)}if(kind==="turn")for(const id of Object.keys(m.turns))ids.add(id);return m.msgs.map((v,i)=>ids.has(v.id)?i:-1).filter(i=>i>=0);
+ const m=model();if(!m)return[];if(kind==="all")return m.msgs.map((_,i)=>i);const ids=new Set();if(kind==="pending")for(const x of C.pending(m))ids.add(x.id);if(kind==="key"){for(const id of Object.keys(m.keys))ids.add(id);for(const [id,items]of Object.entries(m.sectionMarks))if(items.length)ids.add(id);for(const x of m.keyRanges||[])ids.add(x.from_message_id)}if(kind==="turn")for(const id of Object.keys(m.turns))ids.add(id);return m.msgs.map((v,i)=>ids.has(v.id)?i:-1).filter(i=>i>=0);
 }
 function navTargets(){return navTargetsFor(S.kind)}
 function navStatus(){
@@ -339,6 +350,7 @@ function sheet(title,content,fn,label="套用標記"){
 }
 function closeSheet(){S.sheetAction=null;$("sheet-overlay").hidden=true;document.body.style.overflow=""}
 function messageInspector(msg,active="topic"){
+ if(wide()){S.workbenchId=msg.id;S.workbenchTab="message";renderReader(true);return}
  const m=model(),i=m.msgs.findIndex(x=>x.id===msg.id),wrap=node("div","message-inspector");wrap.append(node("p","inspector-snippet",plain(msg.content).slice(0,120)+(plain(msg.content).length>120?"…":"")));const tabs=node("div","sheet-tabs"),panes={},tabSpec=[["topic","主題"],["mark","標記"],["note","備註"]],switchTab=name=>{for(const [key] of tabSpec){tabs.querySelector('[data-sheet-tab="'+key+'"]').classList.toggle("active",key===name);panes[key].hidden=key!==name}};for(const [key,label] of tabSpec){const b=btn(label,()=>switchTab(key));b.dataset.sheetTab=key;tabs.append(b)}wrap.append(tabs);
  const topicPane=panes.topic=node("div","sheet-pane");topicPane.append(node("p","sheet-label","主要主題（選 1 個）"));const radios=[],checks=[],main=m.primary[msg.id]||"";for(const t of [{id:"",name:"未分類"},...m.topics]){const label=node("label","sheet-radio"),input=document.createElement("input");input.type="radio";input.name="main-topic";input.value=t.id;input.checked=t.id===main;radios.push(input);label.append(input,node("span","",t.id?t.id+" · "+t.name:t.name));topicPane.append(label)}if(m.mode==="multi_topic"){topicPane.append(node("p","sheet-label","相關主題（可多選）"));for(const t of m.topics){const label=node("label","sheet-check"),input=document.createElement("input");input.type="checkbox";input.value=t.id;input.checked=(m.related[msg.id]||[]).includes(t.id);checks.push(input);label.append(input,node("span","",t.id+" · "+t.name));topicPane.append(label)}}else topicPane.append(node("p","sheet-help","單一主題模式下，整段對話都屬於同一個主題。"));
  const markPane=panes.mark=node("div","sheet-pane"),keyLabel=node("label","sheet-check"),keyInput=document.createElement("input");keyInput.type="checkbox";keyInput.checked=!!m.keys[msg.id];keyLabel.append(keyInput,node("span","",msg.speaker==="assistant"?"這則 AI 回覆是關鍵":"這則訊息是關鍵"));markPane.append(keyLabel);let turnInput=null;if(msg.speaker!=="assistant"){const turnLabel=node("label","sheet-check");turnInput=document.createElement("input");turnInput.type="checkbox";turnInput.checked=!!m.turns[msg.id];turnLabel.append(turnInput,node("span","","這裡是討論轉向"));markPane.append(turnLabel)}const notePane=panes.note=node("div","sheet-pane"),area=document.createElement("textarea");area.rows=6;area.value=m.notes[msg.id]||"";area.placeholder="為何重要？還有哪些補充脈絡？";notePane.append(area);wrap.append(topicPane,markPane,notePane);switchTab(active);
@@ -355,7 +367,7 @@ function editTopic(topic){
  sheet(topic?"編輯主題":"新增主題",wrap,()=>{
   if(topic){topic.name=name.value.trim()||topic.name;topic.note=note.value;topic.name_origin="user";model().dirty=true;model().editVersion=(model().editVersion||0)+1}
   else{const id=C.addTopic(model(),name.value);model().topics.find(x=>x.id===id).note=note.value}
-  closeSheet();renderTopics();change();
+  closeSheet();if(S.page==="reader")renderReader(true);else renderTopics();change();
  },"儲存主題");
 }
 function renderTopics(){
@@ -452,7 +464,7 @@ async function save(){
 }
 function leave(){
  writeDraft();
- G.disconnect();S.repo=false;S.local=false;S.localHandle=null;S.localSource=null;S.localOutline=null;S.model=null;S.row=null;S.rows=[];S.expanded.clear();S.previews={};S.allQuestions={};S.aiRaw=null;S.aiReport=null;S.aiFrom=null;S.readerY=0;S.modeConfirmed=false;S.usingSaved=false;S.draft=null;
+ G.disconnect();S.repo=false;S.local=false;S.localHandle=null;S.localSource=null;S.localOutline=null;S.model=null;S.row=null;S.rows=[];S.expanded.clear();S.previews={};S.allQuestions={};S.aiRaw=null;S.aiReport=null;S.aiFrom=null;S.readerY=0;S.workbenchId=null;S.rangeFrom=null;S.modeConfirmed=false;S.usingSaved=false;S.draft=null;
  $("token-input").value="";notify("");
 }
 // 切換倉庫：回到連線頁，這台裝置記住的設定和草稿都留著
@@ -480,6 +492,9 @@ function initialize(){
  $("reader-mode").addEventListener("click",()=>show("prepare"));$("reader-more").addEventListener("click",()=>show("settings"));$("open-topics").addEventListener("click",topicsSheet);$("reader-review").addEventListener("click",reviewSheet);$("new-topic").addEventListener("click",()=>editTopic(null));$("prepare-preview-toggle").addEventListener("click",()=>{S.prepareExpanded=!S.prepareExpanded;renderPrepare()});$("choose-multi").addEventListener("click",()=>chooseMode("multi_topic"));$("choose-single").addEventListener("click",()=>chooseMode("single_topic"));$("choose-skip").addEventListener("click",skipSheet);$("enter-workspace").addEventListener("click",()=>{if(!S.modeConfirmed)return notify("請先選擇整理方式。",true);S.readerY=0;show("reader")});
  $("ai-copy-repo").addEventListener("click",copyRepoAiPrompt);$("ai-reload").addEventListener("click",reloadAi);$("ai-download-request").addEventListener("click",downloadAiRequest);$("ai-copy-file-prompt").addEventListener("click",()=>copyText("請照附檔開頭的說明，幫我標記附檔裡的對話，最後只輸出 outline.ai.json。","已複製給 AI 的一句話。"));$("ai-file").addEventListener("change",async e=>{const f=e.target.files?.[0];e.target.value="";if(!f)return;takeAi(await f.text(),"file")});$("ai-paste-go").addEventListener("click",()=>takeAi($("ai-paste").value,"paste"));
  $("search").addEventListener("input",e=>{S.search=e.target.value;renderLibrary()});$("sort").addEventListener("change",e=>{S.sort=e.target.value;renderLibrary()});for(const b of document.querySelectorAll("[data-filter]"))b.addEventListener("click",()=>{S.filter=b.dataset.filter;document.querySelectorAll("[data-filter]").forEach(x=>x.classList.toggle("active",x===b));renderLibrary()});for(const b of document.querySelectorAll("[data-review]"))b.addEventListener("click",()=>{S.review=b.dataset.review;document.querySelectorAll("[data-review]").forEach(x=>x.classList.toggle("active",x===b));renderReview()});for(const b of document.querySelectorAll("[data-kind]"))b.addEventListener("click",()=>{S.kind=b.dataset.kind;S.cursor=null;document.querySelectorAll("[data-kind]").forEach(x=>x.classList.toggle("active",x===b));navStatus();if(S.kind!=="all")jump(1)});
+ $("desktop-add-topic").addEventListener("click",()=>editTopic(null));
+ $("desktop-find").addEventListener("input",e=>{S.findText=e.target.value;renderWorkbenchSearch()});
+ for(const b of document.querySelectorAll("[data-inspector-view]"))b.addEventListener("click",()=>{S.workbenchTab=b.dataset.inspectorView;renderWorkBench()});
  $("load-more").addEventListener("click",()=>{S.count=Math.min(model().msgs.length,S.count+20);renderReader(true)});$("prev-item").addEventListener("click",()=>jump(-1));$("next-item").addEventListener("click",()=>jump(1));$("sheet-close").addEventListener("click",closeSheet);$("sheet-overlay").addEventListener("click",e=>{if(e.target===$("sheet-overlay"))closeSheet()});$("sheet-apply").addEventListener("click",()=>{if(S.sheetAction)S.sheetAction()});document.addEventListener("keydown",e=>{if(e.key==="Escape"&&S.sheetAction)closeSheet();if(S.page==="reader"&&!S.sheetAction&&!["INPUT","TEXTAREA","SELECT"].includes(document.activeElement?.tagName)){if(e.key.toLowerCase()==="j"){e.preventDefault();jump(1)}else if(e.key.toLowerCase()==="k"){e.preventDefault();jump(-1)}}});window.addEventListener("beforeunload",e=>{if(model()?.dirty){e.preventDefault();e.returnValue=""}});
  // 手機切到別的 App 時分頁可能被系統回收：離開畫面前立刻把草稿寫好
  document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="hidden")writeDraft()});window.addEventListener("pagehide",writeDraft);

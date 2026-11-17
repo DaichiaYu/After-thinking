@@ -1,0 +1,31 @@
+name: Desktop capture and localization tests
+
+on:
+  push:
+    branches: [main, integration/i18n-safe-output-20261117]
+    paths:
+      - 'apps/chrome-extension/**'
+      - '.github/workflows/desktop-tests.yml'
+  pull_request:
+    paths:
+      - 'apps/chrome-extension/**'
+      - '.github/workflows/desktop-tests.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  desktop-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check JavaScript syntax
+        shell: bash
+        run: |
+          find apps/chrome-extension -name '*.js' -print0 | xargs -0 -n1 node --check
+      - name: Run capture, tagging, and i18n regressions
+        run: node --test apps/chrome-extension/tests/*.test.cjs

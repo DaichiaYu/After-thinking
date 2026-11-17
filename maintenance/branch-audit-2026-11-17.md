@@ -74,3 +74,13 @@ The old branch also clarifies installation from the repository's `apps/chrome-ex
 6. Apply the useful v0.8 README factual corrections without reviving its older product descriptions.
 
 **Historical classification is informational:** it is not a recommendation to delete branch refs. Re-run comparisons after any merge because ahead/behind counts are relative to the audit snapshot.
+
+## Integration update — 2026-11-17
+
+All three primary candidate workstreams were reconciled against the current main and merged:
+
+- PR #8 (desktop localization and stable storage): `77b6d6ec63cfd06c847bfcc31d3cc76393619cfb`; Node tests passed. Also corrected local-vs-central ZIP header validation exposed by the existing corruption test.
+- PR #9 (Agent private-URL capture): `3106257289bac973a8a5615f3cfc2cbaf254dbdd`; brought forward without replacing newer popup/tagging functions.
+- PR #10 (ChatGPT Project batch): `6e5a119e6b3cac542789d7b515e4d5f9c51dc859`; integrated Project-only functionality after Agent, keeping Gemini batch.
+
+These are **code integration results**, not evidence of full authenticated Chrome end-to-end testing. The original experiment branches and earlier Git comparison counts above remain as historical snapshots. Popup, batch, settings, Agent and mobile interface localization is still incomplete; this is the next separate follow-up.

@@ -433,6 +433,8 @@ async function startConversation(outline) {
 
   $("picker").hidden = true;
   $("top-actions").hidden = false;
+  $("copy-folder-path").hidden = ctx.kind !== "repo";
+  $("copy-folder-link").hidden = ctx.kind !== "repo";
   $("save").textContent = ctx.kind === "repo" ? T("tag.save_to_github") : ctx.kind === "zip" ? T("tag.download_tagged_zip") : T("tag.download_outline_json");
   showMain();
   // 請 AI 先標一版：長對話、還沒標過的，預設打開
@@ -1355,6 +1357,18 @@ $("view-time").addEventListener("click", () => { UI.view = "time"; render(); });
 $("view-topic").addEventListener("click", () => { UI.view = "topic"; render(); });
 $("flow-name").addEventListener("input", (e) => { S.single.name = e.target.value; changed(false); });
 $("flow-note").addEventListener("input", (e) => { S.single.note = e.target.value; changed(false); });
+function currentGitHubFolderLink(){
+  if(!ctx||ctx.kind!=="repo"||!config?.repo)return null;
+  return "https://github.com/"+config.repo+"/tree/"+encodeURIComponent(branch)+"/"+ctx.folder.split("/").filter(Boolean).map(encodeURIComponent).join("/");
+}
+async function copyCurrentLocation(link){
+  if(!ctx||ctx.kind!=="repo")return;
+  const value=link?currentGitHubFolderLink():config.repo+" (branch: "+branch+")\n"+ctx.folder;
+  try{await navigator.clipboard.writeText(value);showStatus(T("tag.copied"))}
+  catch(e){showStatus(T("tag.could_not_copy",e.message),true)}
+}
+$("copy-folder-path").addEventListener("click",()=>copyCurrentLocation(false));
+$("copy-folder-link").addEventListener("click",()=>copyCurrentLocation(true));
 $("save").addEventListener("click", save);
 $("copy-output").addEventListener("click", async () => {
   try { await navigator.clipboard.writeText(outputText()); showStatus(T("tag.copied")); }

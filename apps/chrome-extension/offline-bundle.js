@@ -120,7 +120,7 @@ const ATBundle = (() => {
       const start = localOffset + 30 + localNameLen + localExtraLen;
       // Verify both ZIP headers refer to the same entry. Otherwise a corrupt or
       // malicious archive can pass the data CRC with a mutated local filename.
-      const centralName = bytes.subarray(at - (46 + nameLen + extraLen + commentLen) + 46, at - (46 + extraLen + commentLen));
+      const centralName = bytes.subarray(at - (46 + nameLen + extraLen + commentLen) + 46, at - (extraLen + commentLen));
       const localName = bytes.subarray(localOffset + 30, localOffset + 30 + localNameLen);
       if (localNameLen !== nameLen || start > bytes.length ||
           view.getUint16(localOffset + 8, true) !== method ||

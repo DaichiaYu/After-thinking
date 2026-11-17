@@ -6,12 +6,12 @@
 
 const LIST_Q_SHOW = 50;   // 清單裡的問題超過這個字數先收起來
 const SORTS = {
-  conv: { label: "對話時間", key: (r) => r.started_at || r.captured_at, group: "month" },
-  capture: { label: "擷取時間", key: (r) => r.captured_at, group: "day" },
-  tagged: { label: "最後標記時間", key: (r) => r.outline_updated_at, group: "day", none: "還沒標記" },
-  labels: { label: "標籤順序", key: (r) => r.captured_at, group: "label" }
+  conv: { label: T("list.conversation_time"), key: (r) => r.started_at || r.captured_at, group: "month" },
+  capture: { label: T("list.capture_time"), key: (r) => r.captured_at, group: "day" },
+  tagged: { label: T("list.last_tagged"), key: (r) => r.outline_updated_at, group: "day", none: T("list.not_tagged_yet") },
+  labels: { label: T("list.label_order"), key: (r) => r.captured_at, group: "label" }
 };
-const STATUS_FILTERS = [["all", "全部"], ["todo", "未處理"], ["done", "已整理"], ["skip", "不用整理"], ["untagged", "還沒標記"]];
+const STATUS_FILTERS = [["all", T("tag.all")], ["todo", T("list.to_do")], ["done", T("list.done")], ["skip", T("list.skip")], ["untagged", T("list.not_tagged_yet")]];
 
 const L = {
   items: [],
@@ -25,20 +25,21 @@ const L = {
 
 const PLATFORM_NAME = { chatgpt: "ChatGPT", claude: "Claude", gemini: "Gemini", grok: "Grok" };
 const padN = (i, total) => String(i + 1).padStart(Math.max(3, String(total || 0).length), "0");
-const WEEK = "日一二三四五六";
+const WEEK = T("list.weekdays").split("|");
+const MONTH = T("list.months").split("|");
 
 function dayLabel(iso) {
   const d = new Date(iso);
-  if (isNaN(d)) return "沒有時間";
+  if (isNaN(d)) return T("list.no_time");
   const today = new Date(); today.setHours(0, 0, 0, 0);
   const day = new Date(d); day.setHours(0, 0, 0, 0);
   const diff = Math.round((today - day) / 86400000);
-  const base = (d.getFullYear() !== today.getFullYear() ? d.getFullYear() + " 年 " : "") + (d.getMonth() + 1) + " 月 " + d.getDate() + " 日（週" + WEEK[d.getDay()] + "）";
-  return diff === 0 ? "今天 · " + base : diff === 1 ? "昨天 · " + base : base;
+  const base = T(d.getFullYear() !== today.getFullYear() ? "list.date_other_year" : "list.date_this_year", MONTH[d.getMonth()], d.getDate(), WEEK[d.getDay()], d.getFullYear());
+  return diff === 0 ? T("list.today", base) : diff === 1 ? T("list.yesterday", base) : base;
 }
 function monthLabel(iso) {
   const d = new Date(iso);
-  return isNaN(d) ? "沒有時間" : d.getFullYear() + " 年 " + (d.getMonth() + 1) + " 月";
+  return isNaN(d) ? T("list.no_time") : T("list.date_year_month", d.getFullYear(), MONTH[d.getMonth()]);
 }
 
 function loadPref() {
@@ -50,9 +51,9 @@ function savePref() { try { localStorage.setItem("listPref", JSON.stringify(L.pr
 
 async function showPicker() {
   $("picker").hidden = false;
-  $("crumb").textContent = "對話庫";
-  $("title").textContent = "對話庫";
-  $("meta").textContent = "選擇一段對話，快速預覽內容並進入標記工作台。";
+  $("crumb").textContent = T("list.library");
+  $("title").textContent = T("list.library");
+  $("meta").textContent = T("list.pick_a_conversation_to_preview_it");
   $("origin-line").hidden = true;
   $("top-actions").hidden = true;
   $("file").addEventListener("change", async (e) => {
@@ -60,10 +61,10 @@ async function showPicker() {
     try { await loadFromFiles(e.target.files); } catch (err) { showError(err.message); }
   });
   if (!config || !config.repo || !config.token) {
-    $("repo-line").textContent = "還沒設定 GitHub，所以列不出擷取過的對話。可以從電腦開啟下載的檔案。";
+    $("repo-line").textContent = T("list.github_is_not_set_up_yet");
     return;
   }
-  $("repo-line").textContent = "讀取 " + config.repo + " 的擷取紀錄中…";
+  $("repo-line").textContent = T("list.loading_capture_records_from", config.repo);
   try {
     const check = await checkRepo(config);
     if (!check.ok) throw new Error(check.message);
@@ -72,7 +73,7 @@ async function showPicker() {
     labelStore = makeLabelsStore(config, branch, labels);
     labelStore.onState = (text, bad) => {
       const s = $("labels-state");
-      s.textContent = text === "已儲存" ? "狀態和標籤已儲存" : text;
+      s.textContent = text === T("list.saved") ? T("list.status_and_labels_saved") : text;
       s.classList.toggle("bad", !!bad);
     };
     const byFolder = new Map();
@@ -84,7 +85,7 @@ async function showPicker() {
     setupListTools();
     renderListPage();
   } catch (e) {
-    $("repo-line").textContent = "讀不到倉庫：" + e.message;
+    $("repo-line").textContent = T("list.could_not_read_the_repository", e.message);
   }
 }
 
@@ -129,14 +130,14 @@ function groups(items) {
     Array.from(byRank.keys()).sort((a, b) => a - b).forEach((k) => {
       const list = byRank.get(k).sort((a, b) => String(b.captured_at || "").localeCompare(String(a.captured_at || "")));
       const l = order[k];
-      out.push({ label: l ? l.name : "沒有標籤", color: l ? l.color : null, items: list });
+      out.push({ label: l ? l.name : T("list.no_label"), color: l ? l.color : null, items: list });
     });
     return out;
   }
   const keyed = items.map((r) => ({ r, t: s.key(r) || null }));
   keyed.sort((a, b) => (!a.t && !b.t ? 0 : !a.t ? 1 : !b.t ? -1 : String(b.t).localeCompare(String(a.t))));
   keyed.forEach(({ r, t }) => {
-    const label = !t ? (s.none || "沒有時間") : s.group === "month" ? monthLabel(t) : dayLabel(t);
+    const label = !t ? (s.none || T("list.no_time")) : s.group === "month" ? monthLabel(t) : dayLabel(t);
     const last = out[out.length - 1];
     if (last && last.label === label) last.items.push(r); else out.push({ label, items: [r] });
   });
@@ -148,10 +149,7 @@ function renderListPage() {
   const tagged = all.filter((r) => r.outline_updated_at).length;
   const skip = all.filter((r) => statusOf(r) === "skip").length;
   const done = all.filter((r) => statusOf(r) === "done").length;
-  $("repo-line").textContent = config.repo + " · " + all.length + " 段對話" +
-    (tagged ? " · " + tagged + " 段有標記" : "") +
-    (done ? " · " + done + " 段已整理" : "") +
-    (skip ? " · " + skip + " 段不用整理" : "");
+  $("repo-line").textContent = T("list.group_summary", config.repo, all.length, (tagged ? T("list.tagged", tagged) : ""), (done ? T("list.done_2", done) : ""), (skip ? T("list.skipped", skip) : ""));
   renderFilters();
   renderLabelManager();
   renderBackfill();
@@ -159,13 +157,13 @@ function renderListPage() {
   box.textContent = "";
   const shown = all.filter(matches);
   if (!shown.length) {
-    box.append(el("p", { class: "empty", text: all.length ? "沒有符合的對話" : "還沒有擷取過的對話" }));
+    box.append(el("p", { class: "empty", text: all.length ? T("list.no_matching_conversations") : T("list.no_captured_conversations_yet") }));
     return;
   }
   groups(shown).forEach((g) => {
     const c = g.color !== null && g.color !== undefined ? LABEL_COLORS[g.color % LABEL_COLORS.length] : null;
     box.append(el("h3", { class: "c-group", style: c ? { borderLeftColor: c.line } : {} },
-      g.label, el("span", { class: "hint", text: "　" + g.items.length + " 段" })));
+      g.label, el("span", { class: "hint", text: T("list.group_count", g.items.length) })));
     g.items.forEach((r) => box.append(convRow(r)));
   });
 }
@@ -194,8 +192,8 @@ function renderFilters() {
   const labels = labelStore.data.labels;
   L.pref.labels = L.pref.labels.filter((id) => id === "_none" || labels.some((l) => l.id === id));
   if (!labels.length) return;
-  lb.append(el("span", { class: "hint filter-label", text: "標籤" }));
-  labels.concat([{ id: "_none", name: "沒有標籤", color: null }]).forEach((l) => {
+  lb.append(el("span", { class: "hint filter-label", text: T("list.labels") }));
+  labels.concat([{ id: "_none", name: T("list.no_label"), color: null }]).forEach((l) => {
     const on = L.pref.labels.includes(l.id);
     const c = l.color === null ? { bg: "#EEF0F3", fg: "#4A515C", line: "#C9CED6" } : LABEL_COLORS[l.color % LABEL_COLORS.length];
     const b = el("button", { class: "label-chip btn", "aria-pressed": String(on),
@@ -222,7 +220,7 @@ function convRow(r) {
   });
   const d = r.started_at || r.captured_at;
   const chips = el("span", { class: "c-chips" },
-    r.outline_updated_at ? el("span", { class: "done", text: "已標記" }) : null,
+    r.outline_updated_at ? el("span", { class: "done", text: T("list.tagged_2") }) : null,
     st.status !== "todo" ? el("span", { class: "status-chip s-" + st.status,
       text: STATUS_TEXT[st.status] + (st.status === "skip" && st.skip_reason ? "：" + (SKIP_REASONS[st.skip_reason] || st.skip_reason) : "") }) : null,
     (st.labels || []).map((id) => {
@@ -239,7 +237,7 @@ function convRow(r) {
   };
   const chevron = el("button", {
     class: "c-toggle",
-    "aria-label": (open ? "收起 " : "展開 ") + (r.title || "這段對話"),
+    "aria-label": (open ? T("list.collapse") : T("list.expand")) + (r.title || T("list.this_conversation")),
     "aria-expanded": String(open),
     text: open ? "⌄" : "›"
   });
@@ -255,8 +253,8 @@ function convRow(r) {
   const meta = el("div", { class: "c-meta" },
     [PLATFORM_NAME[r.platform] || r.platform,
       d ? new Date(d).toLocaleDateString() : "",
-      total ? total + " 則訊息" : "",
-      r.author_messages ? r.author_messages + " 個提問" : ""].filter(Boolean).join(" · "));
+      total ? T("list.n_messages", total) : "",
+      r.author_messages ? T("list.n_questions", r.author_messages) : ""].filter(Boolean).join(" · "));
 
   const summary = el("div", { class: "c-summary" },
     chevron,
@@ -268,8 +266,8 @@ function convRow(r) {
   if (open) {
     const preview = el("section", { class: "c-preview-pane" },
       el("div", { class: "c-pane-head" },
-        el("strong", { text: "對話重點預覽" }),
-        el("span", { class: "hint", text: "　你的提問" })),
+        el("strong", { text: T("list.conversation_preview") }),
+        el("span", { class: "hint", text: T("list.your_questions") })),
       questionsBlock(r)
     );
 
@@ -277,7 +275,7 @@ function convRow(r) {
       el("a", {
         class: "c-start btn-link",
         href: "tag.html?folder=" + encodeURIComponent(r.folder),
-        text: "開始標記 →"
+        text: T("list.start_tagging")
       })
     );
     const okUrl = r.url && /^https:\/\//.test(r.url);
@@ -286,7 +284,7 @@ function convRow(r) {
       href: r.url,
       target: "_blank",
       rel: "noopener",
-      text: "打開原對話 ↗"
+      text: T("list.open_original_conversation")
     }));
 
     const side = el("aside", { class: "c-side-pane" }, actions, editorBlock(r));
@@ -302,7 +300,7 @@ function qItem(r, q, total) {
   const li = el("li", null, el("span", { class: "mono q-num", text: padN(q.i, total) }),
     el("span", { class: "q-text", text: long && !open ? q.text.slice(0, LIST_Q_SHOW) + "…" : q.text }));
   if (long) {
-    const b = el("button", { class: "q-more", text: open ? "收起" : "展開" });
+    const b = el("button", { class: "q-more", text: open ? T("tag.collapse") : T("list.expand_2") });
     b.addEventListener("click", () => { L.qExp[k] = !open; rerender(r); });
     li.append(b);
   }
@@ -328,18 +326,18 @@ function questionsBlock(r) {
     const pq = r.preview_questions;
     const headN = Math.min(PREVIEW_HEAD, pq.length);
     pq.forEach((q, k) => {
-      if (k === headN && nQ > pq.length) ol.append(el("li", { class: "q-gap", text: "… 中間還有 " + (nQ - pq.length) + " 個問題 …" }));
+      if (k === headN && nQ > pq.length) ol.append(el("li", { class: "q-gap", text: T("list.more_in_between", (nQ - pq.length)) }));
       ol.append(qItem(r, q, total));
     });
   } else {
-    box.append(el("span", { class: "hint", text: "這段擷取得比較早，還沒有問題預覽。" }));
+    box.append(el("span", { class: "hint", text: T("list.this_was_captured_earlier_and_has") }));
   }
   if (ol.childNodes.length) box.append(ol);
   const shownAll = L.showAll[r.folder] && Array.isArray(full);
   const needAll = !r.preview_questions || nQ > (r.preview_questions || []).length;
   if (shownAll || needAll) {
-    const label = full === "loading" ? "讀取中…" : full instanceof Error ? "讀不到原文：" + full.message + "（再試一次）" :
-      shownAll ? "只看開頭和結尾" : "看全部 " + (nQ || "") + " 個問題";
+    const label = full === "loading" ? T("att.loading") : full instanceof Error ? T("list.could_not_read_the_source_try", full.message) :
+      shownAll ? T("list.show_only_the_beginning_and_end") : T("list.show_all_questions", (nQ || ""));
     const b = el("button", { class: "link-btn q-all", text: label });
     b.disabled = full === "loading";
     b.addEventListener("click", async () => {
@@ -358,10 +356,10 @@ async function loadAllQuestions(r) {
   rerender(r);
   try {
     const raw = await readRawFile(config, branch, r.folder + "source/conversation.jsonl");
-    if (raw === null) throw new Error("找不到 conversation.jsonl");
+    if (raw === null) throw new Error(T("list.conversation_jsonl_not_found"));
     const ms = parseJsonl(raw);
     L.allQs[r.folder] = ms.map((m, i) => ({ m, i })).filter((x) => x.m.speaker === "author")
-      .map((x) => ({ i: x.i, text: (x.m.content || "").replace(/\s+/g, " ").trim() || "（只有附件）" }));
+      .map((x) => ({ i: x.i, text: (x.m.content || "").replace(/\s+/g, " ").trim() || T("tag.attachment_only") }));
     if (!r.messages) r.messages = ms.length;
   } catch (e) {
     L.allQs[r.folder] = e;
@@ -372,7 +370,7 @@ async function loadAllQuestions(r) {
 function editorBlock(r) {
   const st = labelStore.get(r.folder);
   const box = el("div", { class: "c-editor" });
-  const seg = el("div", { class: "seg small-seg", role: "group", "aria-label": "處理狀態" });
+  const seg = el("div", { class: "seg small-seg", role: "group", "aria-label": T("list.status") });
   Object.entries(STATUS_TEXT).forEach(([k, label]) => {
     const b = el("button", { "aria-pressed": String(st.status === k), text: label });
     b.addEventListener("click", () => {
@@ -381,7 +379,7 @@ function editorBlock(r) {
     });
     seg.append(b);
   });
-  box.append(el("div", { class: "ed-row" }, el("span", { class: "ed-label", text: "狀態" }), seg));
+  box.append(el("div", { class: "ed-row" }, el("span", { class: "ed-label", text: T("list.status_2") }), seg));
   if (st.status === "skip") {
     const reasons = el("div", { class: "row wrap-row" });
     Object.entries(SKIP_REASONS).forEach(([k, label]) => {
@@ -389,14 +387,14 @@ function editorBlock(r) {
       b.addEventListener("click", () => { labelStore.set(r.folder, { skip_reason: k }); rerender(r); });
       reasons.append(b);
     });
-    const why = el("input", { type: "text", value: st.skip_note || "", placeholder: "補充說明（可以不寫）", "aria-label": "不用整理的補充說明" });
+    const why = el("input", { type: "text", value: st.skip_note || "", placeholder: T("list.details_optional"), "aria-label": T("list.details_for_skip") });
     why.addEventListener("input", () => labelStore.set(r.folder, { skip_note: why.value }));
     reasons.append(why);
-    box.append(el("div", { class: "ed-row" }, el("span", { class: "ed-label", text: "理由" }), reasons));
+    box.append(el("div", { class: "ed-row" }, el("span", { class: "ed-label", text: T("list.reason") }), reasons));
   }
   const labels = labelStore.data.labels;
   const lrow = el("div", { class: "row wrap-row" });
-  if (!labels.length) lrow.append(el("span", { class: "hint", text: "還沒有標籤。在上方「管理標籤」新增，例如「先整理」或專案名稱。" }));
+  if (!labels.length) lrow.append(el("span", { class: "hint", text: T("list.no_labels_yet_add_one_under") }));
   labels.forEach((l) => {
     const on = (st.labels || []).includes(l.id);
     const c = LABEL_COLORS[l.color % LABEL_COLORS.length];
@@ -409,10 +407,10 @@ function editorBlock(r) {
     });
     lrow.append(b);
   });
-  box.append(el("div", { class: "ed-row" }, el("span", { class: "ed-label", text: "標籤" }), lrow));
-  const note = el("input", { type: "text", value: st.note || "", placeholder: "例如：已經整理到 Stage 2、跟論文第三章有關", "aria-label": "這段對話的備註" });
+  box.append(el("div", { class: "ed-row" }, el("span", { class: "ed-label", text: T("list.labels") }), lrow));
+  const note = el("input", { type: "text", value: st.note || "", placeholder: T("list.e_g_organized_up_to_stage"), "aria-label": T("list.note_on_this_conversation") });
   note.addEventListener("input", () => labelStore.set(r.folder, { note: note.value }));
-  box.append(el("div", { class: "ed-row" }, el("span", { class: "ed-label", text: "備註" }), note));
+  box.append(el("div", { class: "ed-row" }, el("span", { class: "ed-label", text: T("tag.note_2") }), note));
   return box;
 }
 
@@ -421,10 +419,7 @@ function renderCounts() {
   const skip = all.filter((r) => statusOf(r) === "skip").length;
   const done = all.filter((r) => statusOf(r) === "done").length;
   const tagged = all.filter((r) => r.outline_updated_at).length;
-  $("repo-line").textContent = config.repo + " · " + all.length + " 段對話" +
-    (tagged ? " · " + tagged + " 段有標記" : "") +
-    (done ? " · " + done + " 段已整理" : "") +
-    (skip ? " · " + skip + " 段不用整理" : "");
+  $("repo-line").textContent = T("list.group_summary", config.repo, all.length, (tagged ? T("list.tagged", tagged) : ""), (done ? T("list.done_2", done) : ""), (skip ? T("list.skipped", skip) : ""));
   renderFilters();
 }
 
@@ -438,20 +433,20 @@ function renderLabelManager() {
   const commit = () => { labelStore.setLabels(labels); renderListPage(); };
   labels.forEach((l, k) => {
     const c = LABEL_COLORS[l.color % LABEL_COLORS.length];
-    const sw = el("button", { class: "swatch", style: { background: c.bg, borderColor: c.line }, title: "換顏色", "aria-label": "換 " + l.name + " 的顏色" });
+    const sw = el("button", { class: "swatch", style: { background: c.bg, borderColor: c.line }, title: T("list.change_color"), "aria-label": T("list.change_the_color_of", l.name) });
     sw.addEventListener("click", () => { l.color = (l.color + 1) % LABEL_COLORS.length; commit(); });
-    const name = el("input", { type: "text", value: l.name, "aria-label": "標籤名稱" });
+    const name = el("input", { type: "text", value: l.name, "aria-label": T("list.label_name") });
     name.addEventListener("change", () => { l.name = name.value.trim() || l.name; commit(); });
-    const up = el("button", { class: "icon-btn", "aria-label": "往上移", text: "↑" });
+    const up = el("button", { class: "icon-btn", "aria-label": T("list.move_up"), text: "↑" });
     up.disabled = k === 0;
     up.addEventListener("click", () => { labels.splice(k - 1, 0, labels.splice(k, 1)[0]); commit(); });
-    const down = el("button", { class: "icon-btn", "aria-label": "往下移", text: "↓" });
+    const down = el("button", { class: "icon-btn", "aria-label": T("list.move_down"), text: "↓" });
     down.disabled = k === labels.length - 1;
     down.addEventListener("click", () => { labels.splice(k + 1, 0, labels.splice(k, 1)[0]); commit(); });
-    const del = el("button", { class: "icon-btn", "aria-label": "刪除標籤 " + l.name, text: "×" });
+    const del = el("button", { class: "icon-btn", "aria-label": T("list.delete_label", l.name), text: "×" });
     del.addEventListener("click", () => {
       const n = used(l.id);
-      if (n && !confirm("有 " + n + " 段對話用了「" + l.name + "」。刪掉後這些對話會拿掉這個標籤，確定嗎？")) return;
+      if (n && !confirm(T("list.deleting_it_removes_this_label_from", n, l.name))) return;
       labels.splice(k, 1);
       Object.keys(labelStore.data.conversations).forEach((f) => {
         const cur = labelStore.data.conversations[f].labels || [];
@@ -459,10 +454,10 @@ function renderLabelManager() {
       });
       commit();
     });
-    box.append(el("div", { class: "lm-row" }, sw, name, el("span", { class: "hint", text: used(l.id) + " 段" }), up, down, del));
+    box.append(el("div", { class: "lm-row" }, sw, name, el("span", { class: "hint", text: T("list.label_use_count", used(l.id)) }), up, down, del));
   });
-  const input = el("input", { type: "text", placeholder: "新標籤，例如：先整理、論文、Monica", "aria-label": "新標籤名稱" });
-  const add = el("button", { class: "secondary small", text: "＋ 新增" });
+  const input = el("input", { type: "text", class: "lm-new", placeholder: T("list.new_label_e_g_do_first"), "aria-label": T("list.new_label_name") });
+  const add = el("button", { class: "secondary small", text: T("list.add") });
   const doAdd = () => {
     const nm = input.value.trim();
     if (!nm) return;
@@ -470,7 +465,7 @@ function renderLabelManager() {
     do { id = "l" + Math.random().toString(36).slice(2, 7); } while (labels.some((x) => x.id === id));
     labels.push({ id, name: nm, color: labels.length % LABEL_COLORS.length });
     commit();
-    setTimeout(() => { const n = document.querySelector("#label-edit input[placeholder^='新標籤']"); if (n) n.focus(); }, 0);
+    setTimeout(() => { const n = document.querySelector("#label-edit input.lm-new"); if (n) n.focus(); }, 0);
   };
   add.addEventListener("click", doAdd);
   input.addEventListener("keydown", (e) => { if (e.key === "Enter") doAdd(); });
@@ -485,9 +480,9 @@ function renderBackfill() {
   box.hidden = !missing.length;
   if (!missing.length) return;
   box.textContent = "";
-  const b = el("button", { class: "small", text: "補上預覽" });
+  const b = el("button", { class: "small", text: T("list.add_previews") });
   b.addEventListener("click", () => backfill(missing, b));
-  box.append(el("span", { text: missing.length + " 段比較早擷取的對話還沒有問題預覽。補上要讀每段原文，一段約一秒。 " }), b);
+  box.append(el("span", { text: T("list.earlier_no_question_preview_yet_adding", missing.length) }), b);
 }
 
 async function backfill(missing, btn) {
@@ -505,18 +500,18 @@ async function backfill(missing, btn) {
         got[r.folder] = Object.assign(previewQuestions(items), { author_messages: items.filter((m) => m.speaker === "author").length });
       } catch (e) { failed++; }
       done++;
-      btn.textContent = "讀取中 " + done + "／" + missing.length;
+      btn.textContent = T("list.loading", done, missing.length);
     }
   };
   await Promise.all([work(), work(), work(), work()]);
-  btn.textContent = "寫回擷取紀錄中…";
+  btn.textContent = T("list.writing_back_to_capture_records");
   try {
     await commitFiles(config, branch, [], "After-thinking: add question previews to capture log", (rows) =>
       rows.map((r) => (got[r.folder] && !r.preview_questions ? Object.assign({}, r, got[r.folder]) : r)));
     L.items.forEach((r) => { if (got[r.folder]) Object.assign(r, got[r.folder]); });
-    showStatus("補上了 " + Object.keys(got).length + " 段的預覽" + (failed ? "，" + failed + " 段讀不到原文" : ""), true, !!failed);
+    showStatus(T("list.added_previews_for", Object.keys(got).length, (failed ? T("list.could_not_be_read", failed) : "")), true, !!failed);
   } catch (e) {
-    showStatus("寫回擷取紀錄失敗：" + e.message, true, true);
+    showStatus(T("list.failed_to_write_back_to_capture", e.message), true, true);
   }
   renderListPage();
 }

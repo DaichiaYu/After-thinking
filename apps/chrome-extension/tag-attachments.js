@@ -19,8 +19,8 @@ const ATAttachments = (() => {
     return path;
   }
   function kindOf(att) {
-    if (att.kind === "image" || att.kind === "generated_image") return "圖片";
-    return "檔案";
+    if (att.kind === "image" || att.kind === "generated_image") return T("att.image");
+    return T("att.file");
   }
   function labelOf(att, index) {
     return att.name || (pathFor(att) ? pathFor(att).split("/").pop() : kindOf(att) + " " + (index + 1));
@@ -54,14 +54,14 @@ const ATAttachments = (() => {
   }
   function decodeBase64(base64, maxBytes) {
     const clean = String(base64 || "").replace(/\s+/g, "");
-    if (clean.length > Math.ceil(maxBytes / 3) * 4 + 16) throw new Error("附件超過預覽大小限制");
+    if (clean.length > Math.ceil(maxBytes / 3) * 4 + 16) throw new Error(T("att.attachment_exceeds_the_preview_size_limit"));
     const output = new Uint8Array(Math.floor(clean.length * 3 / 4));
     let at = 0;
     // atob() on multi-megabyte files can stall the UI; decode in bounded chunks.
     for (let k = 0; k < clean.length; k += 65536) {
       const part = atob(clean.slice(k, k + 65536));
       for (let n = 0; n < part.length; n++) output[at++] = part.charCodeAt(n);
-      if (at > maxBytes) throw new Error("附件超過預覽大小限制");
+      if (at > maxBytes) throw new Error(T("att.attachment_exceeds_the_preview_size_limit"));
     }
     return output.slice(0, at);
   }
@@ -71,40 +71,40 @@ const ATAttachments = (() => {
     const headers = { Authorization: "Bearer " + config.token, Accept: "application/vnd.github+json",
       "X-GitHub-Api-Version": "2022-11-28" };
     const response = await fetch(url, { headers, cache: "no-store" });
-    if (response.status === 404) throw new Error("GitHub 中找不到附件原檔");
-    if (!response.ok) throw new Error("GitHub 附件讀取失敗（HTTP " + response.status + "）");
+    if (response.status === 404) throw new Error(T("att.original_attachment_file_not_found_on"));
+    if (!response.ok) throw new Error(T("att.could_not_read_attachment_from_github", response.status));
     const entry = await response.json();
-    if (entry.type !== "file") throw new Error("附件路徑不是檔案");
-    if (entry.size > MAX_BYTES) throw new Error("附件超過 25 MB 的檢視限制");
+    if (entry.type !== "file") throw new Error(T("att.attachment_path_is_not_a_file"));
+    if (entry.size > MAX_BYTES) throw new Error(T("att.attachment_exceeds_the_25_mb_viewing"));
     if (entry.encoding === "base64" && entry.content) return decodeBase64(entry.content, MAX_BYTES);
-    if (!/^[0-9a-f]{40}$/.test(entry.sha || "")) throw new Error("GitHub 未提供可讀取的附件內容");
+    if (!/^[0-9a-f]{40}$/.test(entry.sha || "")) throw new Error(T("att.github_did_not_return_readable_attachment"));
     // Contents API does not inline base64 for larger objects; request blob by SHA.
     const blob = await fetch("https://api.github.com/repos/" + config.repo + "/git/blobs/" + entry.sha,
       { headers, cache: "no-store" });
-    if (!blob.ok) throw new Error("GitHub 附件內容讀取失敗（HTTP " + blob.status + "）");
+    if (!blob.ok) throw new Error(T("att.could_not_read_attachment_content_from", blob.status));
     const data = await blob.json();
-    if (data.encoding !== "base64") throw new Error("GitHub 回傳的附件編碼不支援");
+    if (data.encoding !== "base64") throw new Error(T("att.attachment_encoding_returned_by_github_is"));
     return decodeBase64(data.content, MAX_BYTES);
   }
   async function getBytes(att) {
     ensureContext();
     const path = pathFor(att);
-    if (!path) throw new Error("這筆紀錄沒有可用的附件原檔");
+    if (!path) throw new Error(T("att.this_record_has_no_original_attachment"));
     if (!promises.has(path)) {
       const promise = (async () => {
         let bytes;
         if (ctx.kind === "zip") {
           bytes = ctx.bundleEntries.get(ctx.bundlePrefix + "source/" + path);
-          if (!bytes) throw new Error("ZIP 中找不到這份附件（可能未包含原檔）");
+          if (!bytes) throw new Error(T("att.attachment_not_found_in_the_zip"));
         } else if (ctx.kind === "repo") {
           bytes = await fromGithub(path);
         } else {
           const file = ctx.looseAttachments?.get(path.split("/").pop());
-          if (!file) throw new Error("未提供附件原檔。請改用完整 ZIP 或一併選取附件檔");
-          if (file.size > MAX_BYTES) throw new Error("附件超過 25 MB 的檢視限制");
+          if (!file) throw new Error(T("att.original_attachment_file_not_provided_use"));
+          if (file.size > MAX_BYTES) throw new Error(T("att.attachment_exceeds_the_25_mb_viewing"));
           bytes = new Uint8Array(await file.arrayBuffer());
         }
-        if (bytes.length > MAX_BYTES) throw new Error("附件超過 25 MB 的檢視限制");
+        if (bytes.length > MAX_BYTES) throw new Error(T("att.attachment_exceeds_the_25_mb_viewing"));
         return bytes;
       })().catch(err => { promises.delete(path); throw err; });
       promises.set(path, promise);
@@ -115,7 +115,7 @@ const ATAttachments = (() => {
     const current = ctx;
     const path = pathFor(att);
     const bytes = await getBytes(att);
-    if (ctx !== current) throw new Error("對話已切換，請重新開啟附件");
+    if (ctx !== current) throw new Error(T("att.the_conversation_was_switched_open_the"));
     if (!urls.has(path)) urls.set(path, URL.createObjectURL(new Blob([bytes], { type: typeOf(att, bytes) })));
     return { url: urls.get(path), bytes, type: typeOf(att, bytes) };
   }
@@ -124,7 +124,7 @@ const ATAttachments = (() => {
     a.href = url;
     const sourceName = labelOf(att, 0);
     const actualName = att.content_note === "extracted_text"
-      ? sourceName.replace(/\.[^.]+$/, "") + "-擷取文字.txt"
+      ? T("att.extracted_text_txt", sourceName.replace(/\.[^.]+$/, ""))
       : sourceName;
     a.download = actualName.replace(/[\\/]/g, "_").replace(/[^\w.\- \u4e00-\u9fff\u3040-\u30ff]/g, "_");
     document.body.append(a); a.click(); a.remove();
@@ -143,17 +143,17 @@ const ATAttachments = (() => {
       content.append(img);
     } else if (resource.type === "application/pdf") {
       const iframe = dom("iframe","attachment-pdf");
-      iframe.title = "PDF 預覽"; iframe.src = resource.url;
-      content.append(iframe,dom("p","attachment-hint","PDF 無法顯示時，請按下載後以本機閱讀器開啟。"));
+      iframe.title = T("att.pdf_preview"); iframe.src = resource.url;
+      content.append(iframe,dom("p","attachment-hint",T("att.if_the_pdf_does_not_display")));
     } else if (resource.type === "text/plain" && resource.bytes.length <= MAX_TEXT_PREVIEW) {
       try {
         const text = new TextDecoder("utf-8", { fatal: true }).decode(resource.bytes);
         content.append(dom("pre","attachment-text-preview",text));
       } catch (e) {
-        content.append(dom("p","attachment-hint","原檔不是有效的 UTF-8 文字，請下載查看。"));
+        content.append(dom("p","attachment-hint",T("att.the_original_file_is_not_valid")));
       }
     } else {
-      content.append(dom("p","attachment-hint","此格式尚無內建預覽（例如 Word、Excel 或其他二進位檔）。可以下載原檔，用對應程式開啟。"));
+      content.append(dom("p","attachment-hint",T("att.no_built_in_preview_for_this")));
     }
     save.onclick = () => download(att, resource.url);
     if (!dialog.open) dialog.showModal();
@@ -169,24 +169,24 @@ const ATAttachments = (() => {
     const heading = dom("div","attachment-card-info");
     const label = labelOf(att,index),path = pathFor(att);
     heading.append(dom("span","attachment-file-name",label));
-    heading.append(dom("span","attachment-file-kind",kindOf(att) + (att.content_note === "extracted_text" ? " · 僅保存平台提供的擷取文字" : "")));
+    heading.append(dom("span","attachment-file-kind",kindOf(att) + (att.content_note === "extracted_text" ? T("att.only_the_extracted_text_provided_by") : "")));
     card.append(heading);
     const actions = dom("div","attachment-card-actions");
     const status = dom("span","attachment-card-status");
     const knownMissing = !path || (ctx.kind === "zip" && !ctx.bundleEntries.has(ctx.bundlePrefix + "source/" + path));
     if (knownMissing) {
-      status.textContent = "未取得原檔" + (att.missing ? "（" + att.missing + "）" : "") + "，無法預覽或下載";
+      status.textContent = T("att.original_file_not_available_cannot_preview", (att.missing ? "（" + att.missing + "）" : ""));
       card.classList.add("attachment-missing");
       actions.append(status);
     } else {
-      const preview = button("預覽",async()=>{
-        preview.disabled = true; status.textContent = "讀取中…";
+      const preview = button(T("att.preview"),async()=>{
+        preview.disabled = true; status.textContent = T("att.loading");
         try { showModal(att,await openResource(att)); status.textContent = ""; }
         catch(e) { status.textContent = e.message; }
         preview.disabled = false;
       });
-      const save = button("下載",async()=>{
-        save.disabled = true; status.textContent = "準備中…";
+      const save = button(T("att.download"),async()=>{
+        save.disabled = true; status.textContent = T("att.preparing");
         try { const r = await openResource(att); download(att,r.url); status.textContent = ""; }
         catch(e) { status.textContent = e.message; }
         save.disabled = false;
@@ -194,7 +194,7 @@ const ATAttachments = (() => {
       actions.append(preview,save,status);
       const media = dom("div","attachment-image-wrap");
       const image = dom("img","attachment-thumbnail");
-      image.alt = "附件圖片：" + label; image.loading = "lazy";
+      image.alt = T("att.attached_image", label); image.loading = "lazy";
       media.append(image);
       let loaded = false;
       const loadThumbnail = async()=>{
@@ -229,8 +229,8 @@ const ATAttachments = (() => {
       const body = row.querySelector(".body"), actions = body?.querySelector(".actions");
       if (!body || !actions) return;
       const group = dom("section","message-attachments");
-      group.setAttribute("aria-label","訊息附件");
-      group.append(dom("div","attachment-section-title","附件 · " + msgs[i].attachments.length));
+      group.setAttribute("aria-label",T("att.message_attachments"));
+      group.append(dom("div","attachment-section-title",T("att.attachment", msgs[i].attachments.length)));
       msgs[i].attachments.forEach((a,n)=>group.append(renderCard(a,n)));
       actions.before(group);
     });

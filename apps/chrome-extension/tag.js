@@ -117,7 +117,7 @@ const hintReasons = (i) => [matchesTurnWords(i) ? "keyword" : null, aiAckAfter(i
 // 轉向分兩種：使用者確認過的（算使用者的判斷），和程式依關鍵字提示、還沒確認的
 const turnConfirmed = (i) => !!S.turnsConfirmed[msgs[i].id];
 const turnHint = (i) => hintReasons(i).length > 0 && !S.turnsDismissed[msgs[i].id] && !turnConfirmed(i);
-const HINT_TEXT = { keyword: "你的用詞", ai_response: "AI 的回應像在修正方向" };
+const HINT_TEXT = { keyword: T("tag.your_wording"), ai_response: T("tag.the_ai_s_reply_reads_like") };
 
 // ── AI 建議的來源紀錄 ──
 const ORIGIN_OUT = { ai: "ai_unreviewed", ai_confirmed: "ai_confirmed" };
@@ -149,7 +149,7 @@ function fingerprint(m) {
 }
 const sourceFingerprint = () => fingerprint({ speaker: "all", content: msgs.map(fingerprint).join("|") });
 const anchors = () => msgs.map((_, i) => i).filter(isAnchor);
-const who = (m) => (m.speaker === "author" ? "你" : m.speaker === "assistant" ? "AI" : "外部");
+const who = (m) => (m.speaker === "author" ? T("tag.you") : m.speaker === "assistant" ? "AI" : T("tag.external"));
 
 function el(tag, attrs, ...kids) {
   const node = document.createElement(tag);
@@ -177,7 +177,7 @@ function ranges(idxs) {
     out.push(a === b ? pad(a) : pad(a) + "–" + pad(b));
     a = x; b = x;
   }
-  return out.join("、");
+  return out.join(T("common.list_sep"));
 }
 
 function gapLabel(i) {
@@ -186,7 +186,7 @@ function gapLabel(i) {
   if (isNaN(a) || isNaN(b)) return null;
   const h = (b - a) / 3600000;
   if (h < GAP_HOURS) return null;
-  return h >= 24 ? "隔了 " + Math.round(h / 24) + " 天" : "隔了 " + Math.round(h) + " 小時";
+  return h >= 24 ? T("tag.later", Math.round(h / 24)) : T("tag.later_2", Math.round(h));
 }
 
 function showError(text) { const e = $("error"); e.textContent = text; e.hidden = false; }
@@ -204,7 +204,7 @@ function showStatus(text, keep, warn) {
 
 function parseJsonl(text) {
   const rows = text.split("\n").filter((l) => l.trim()).map((l, n) => {
-    try { return JSON.parse(l); } catch (e) { throw new Error("conversation.jsonl 第 " + (n + 1) + " 行不是正確的 JSON"); }
+    try { return JSON.parse(l); } catch (e) { throw new Error(T("tag.line_of_conversation_jsonl_is_not", (n + 1))); }
   });
   rows.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
   return rows.map((r, n) => ({
@@ -352,7 +352,7 @@ function applyOutline(o) {
 
 function defaultState() {
   S.mode = null;
-  S.topics = [{ id: "A", name: "主題 A", note: "" }];
+  S.topics = [{ id: "A", name: T("tag.topic_a"), note: "" }];
   S.tags = {}; S.keys = {}; S.turnsConfirmed = {}; S.turnsDismissed = {}; S.notes = {}; S.keyRanges = []; S.also = {};
   S.origin = { tags: {}, names: {}, keys: {}, ranges: {}, turns: {} };
   S.aiReasons = { keys: {}, ranges: {}, turns: {} };
@@ -369,12 +369,9 @@ function reportResolve(stats) {
   if (!stats.sourceChanged && !lost && !moved) return;
   let text;
   if (!stats.checked) {
-    text = "這份標記是舊格式，沒有內容指紋，而原文的訊息數已經不一樣了。標記可能指到錯的訊息，請逐一核對後再儲存。";
+    text = T("tag.these_tags_are_in_an_old");
   } else {
-    text = "原文在上次標記之後變過（例如重新擷取）。" +
-      (moved ? moved + " 則依內容或平台的訊息編號對回來了（畫面上標「原文變過，請確認」）。" : "") +
-      (lost ? lost + " 個標記在新的原文裡找不到同樣的內容，已略過。" : "") +
-      (!moved && !lost ? "所有標記都還對得上。" : "請檢查後再儲存。");
+    text = T("tag.the_source_changed_after_the_last", (moved ? T("tag.matched_back_by_content_or_by", moved) : ""), (lost ? T("tag.no_matching_content_in_the_new", lost) : ""), (!moved && !lost ? T("tag.all_tags_still_match") : T("tag.please_check_before_saving")));
   }
   showStatus(text, true, true);
   if (moved || lost || !stats.checked) { dirty = true; editVersion++; }
@@ -388,20 +385,20 @@ async function startConversation(outline) {
   let resolved = null;
   if (outline) { resolved = applyOutline(outline); savedAt = outline.updated_at || null; }
   if (!S.single.name) S.single.name = ctx.title || "";
-  if (!S.topics.length) S.topics = [{ id: "A", name: "主題 A", note: "" }];
+  if (!S.topics.length) S.topics = [{ id: "A", name: T("tag.topic_a"), note: "" }];
 
-  document.title = (ctx.title || "標記對話") + "｜After-thinking";
-  $("title").textContent = ctx.title || "（沒有標題）";
-  $("crumb").textContent = ctx.kind === "repo" ? ctx.folder : "從電腦開啟：" + ctx.fileName;
+  document.title = (ctx.title || T("tag.tag_conversation")) + "｜After-thinking";
+  $("title").textContent = ctx.title || T("tag.no_title");
+  $("crumb").textContent = ctx.kind === "repo" ? ctx.folder : T("tag.opened_from_this_computer", ctx.fileName);
   const nUser = msgs.filter((m) => m.speaker === "author").length;
   const nGaps = msgs.filter((_, i) => gapLabel(i)).length;
   const nTurns = msgs.filter((_, i) => hintReasons(i).length).length;
   $("meta").textContent = [
     ({ chatgpt: "ChatGPT", claude: "Claude", gemini: "Gemini", grok: "Grok" }[ctx.platform] || ctx.platform || ""),
-    msgs.length + " 則（你 " + nUser + " 則、AI " + (msgs.length - nUser) + " 則）",
-    nGaps ? "隔過 " + nGaps + " 次" : "",
-    nTurns ? "程式找到 " + nTurns + " 處可能轉向" : "",
-    savedAt ? "上次儲存 " + new Date(savedAt).toLocaleString() : ""
+    T("tag.messages_you_ai", msgs.length, nUser, (msgs.length - nUser)),
+    nGaps ? T("tag.long", nGaps) : "",
+    nTurns ? T("tag.possible_detected", nTurns) : "",
+    savedAt ? T("tag.last_saved", new Date(savedAt).toLocaleString()) : ""
   ].filter(Boolean).join(" · ");
   $("mode-stats").textContent = $("meta").textContent;
   // 回到原本的對話
@@ -417,7 +414,7 @@ async function startConversation(outline) {
     const got = await chrome.storage.local.get(draftKey());
     const draft = got[draftKey()];
     if (draft && draft.outline && (!savedAt || draft.outline.updated_at > savedAt)) {
-      $("draft-text").textContent = "有一份 " + new Date(draft.outline.updated_at).toLocaleString() + " 還沒儲存的草稿。";
+      $("draft-text").textContent = T("tag.there_is_an_unsaved_draft_from", new Date(draft.outline.updated_at).toLocaleString());
       $("draft-banner").hidden = false;
       $("use-draft").onclick = () => {
         defaultState();
@@ -436,7 +433,7 @@ async function startConversation(outline) {
 
   $("picker").hidden = true;
   $("top-actions").hidden = false;
-  $("save").textContent = ctx.kind === "repo" ? "儲存到 GitHub" : ctx.kind === "zip" ? "下載已標記 ZIP" : "下載 outline.json";
+  $("save").textContent = ctx.kind === "repo" ? T("tag.save_to_github") : ctx.kind === "zip" ? T("tag.download_tagged_zip") : T("tag.download_outline_json");
   showMain();
   // 請 AI 先標一版：長對話、還沒標過的，預設打開
   renderAiPanel();
@@ -446,7 +443,7 @@ async function startConversation(outline) {
 }
 
 async function loadFromRepo(folder) {
-  if (/^[/.]/.test(folder) || !folder.endsWith("/") || folder.includes("..") || folder.includes("\\")) throw new Error("資料夾路徑不正確：" + folder);
+  if (/^[/.]/.test(folder) || !folder.endsWith("/") || folder.includes("..") || folder.includes("\\")) throw new Error(T("tag.invalid_folder_path", folder));
   const check = await checkRepo(config);
   if (!check.ok) throw new Error(check.message);
   branch = check.branch;
@@ -459,11 +456,11 @@ async function loadFromRepo(folder) {
   ]);
   if (labels) {
     labelStore = makeLabelsStore(config, branch, labels);
-    labelStore.onState = (text, bad) => { if (bad) showStatus("清單狀態" + text, true, true); };
+    labelStore.onState = (text, bad) => { if (bad) showStatus(T("tag.list_status", text), true, true); };
   }
-  if (conv === null) throw new Error("在 " + folder + " 找不到 source/conversation.jsonl");
+  if (conv === null) throw new Error(T("tag.source_conversation_jsonl_not_found_in", folder));
   msgs = parseJsonl(conv);
-  if (!msgs.length) throw new Error("這份對話是空的");
+  if (!msgs.length) throw new Error(T("tag.this_conversation_is_empty"));
   const row = index.filter((r) => r.folder === folder).pop();
   const metaStr = (key) => {
     const m = meta && meta.match(new RegExp("^\\s*" + key + ":\\s*(.+)$", "m"));
@@ -479,7 +476,7 @@ async function loadFromRepo(folder) {
   };
   let outline = null;
   if (outlineRaw) {
-    try { outline = JSON.parse(outlineRaw); } catch (e) { showStatus("outline.json 讀不懂，先當作沒有標記。儲存時會覆蓋它。", true); }
+    try { outline = JSON.parse(outlineRaw); } catch (e) { showStatus(T("tag.outline_json_could_not_be_read"), true); }
   }
   await startConversation(outline);
 }
@@ -490,21 +487,21 @@ async function loadFromFiles(files) {
   const zipCandidates = [];
   for (const f of list) {
     if (await ATBundle.looksLikeZip(f)) zipCandidates.push(f);
-    else if (/\.zip$/i.test(f.name)) throw new Error(f.name + " 副檔名是 ZIP，但內容不是可辨識的 ZIP 壓縮檔");
+    else if (/\.zip$/i.test(f.name)) throw new Error(T("tag.has_a_zip_extension_but_its", f.name));
   }
-  if (zipCandidates.length > 1) throw new Error("一次只能載入一份 ZIP 資料包，請重新選取");
+  if (zipCandidates.length > 1) throw new Error(T("tag.only_one_zip_bundle_can_be"));
   const zip = zipCandidates[0];
   if (zip) {
     const entries = await ATBundle.unpack(zip);
     const candidates = [...entries.keys()].filter(p => /(^|\/)source\/conversation\.jsonl$/.test(p));
-    if (candidates.length !== 1) throw new Error("ZIP 必須含有且只能有一份 source/conversation.jsonl");
+    if (candidates.length !== 1) throw new Error(T("tag.the_zip_must_contain_exactly_one"));
     const path = candidates[0], prefix = path.slice(0, - "source/conversation.jsonl".length);
     const text = ATBundle.decode(entries.get(path));
     msgs = parseJsonl(text);
-    if (!msgs.length) throw new Error("ZIP 中的對話是空的");
+    if (!msgs.length) throw new Error(T("tag.the_conversation_in_the_zip_is"));
     let outline = null, aiRaw = null;
     const outlinePath = prefix + "outline.json", aiPath = prefix + "outline.ai.json";
-    if (entries.has(outlinePath)) { try { outline = JSON.parse(ATBundle.decode(entries.get(outlinePath))); } catch (e) { throw new Error("ZIP 的 outline.json 格式錯誤：" + e.message); } }
+    if (entries.has(outlinePath)) { try { outline = JSON.parse(ATBundle.decode(entries.get(outlinePath))); } catch (e) { throw new Error(T("tag.outline_json_in_the_zip_is", e.message)); } }
     if (entries.has(aiPath)) aiRaw = ATBundle.decode(entries.get(aiPath));
     const meta = entries.has(prefix + "source/metadata.yaml") ? ATBundle.decode(entries.get(prefix + "source/metadata.yaml")) : "";
     const field = name => { const m = meta.match(new RegExp("^\\s*" + name + ":\\s*(.+)$", "m")); if (!m) return null; try { return JSON.parse(m[1]); } catch (e) { return m[1].trim(); } };
@@ -516,9 +513,9 @@ async function loadFromFiles(files) {
     return;
   }
   const conv = list.find(f => /\.jsonl$/i.test(f.name));
-  if (!conv) throw new Error("請選 AT ZIP 或 conversation.jsonl（舊版）。其他 JSON 檔不是原始對話。");
+  if (!conv) throw new Error(T("tag.choose_an_at_zip_or_a"));
   msgs = parseJsonl(await conv.text());
-  if (!msgs.length) throw new Error("這份對話是空的");
+  if (!msgs.length) throw new Error(T("tag.this_conversation_is_empty"));
   let outline = null, aiRaw = null;
   for (const f of list.filter(x => x !== conv && /\.json$/i.test(x.name))) {
     const text = await f.text(); let obj;
@@ -550,8 +547,8 @@ function changed(full) {
 
 function updateTop() {
   $("mode-label").textContent = "";
-  if (dirty) $("mode-label").append(el("span", { class: "dirty-dot", "aria-hidden": "true" }), "還沒儲存　");
-  if (S.mode) $("mode-label").append("整理方式：", el("strong", { text: S.mode === "multi" ? "聊了好幾件事" : "一直在聊同一件事" }));
+  if (dirty) $("mode-label").append(el("span", { class: "dirty-dot", "aria-hidden": "true" }), T("tag.unsaved"));
+  if (S.mode) $("mode-label").append(T("tag.mode"), el("strong", { text: S.mode === "multi" ? T("tag.several_topics") : T("tag.one_continuous_topic") }));
   $("change-mode").hidden = !S.mode;
 }
 
@@ -559,7 +556,9 @@ window.addEventListener("beforeunload", (e) => { if (dirty) { e.preventDefault()
 
 // ── 輸出 ──
 
-function outputText() {
+// The summary is saved into outline.json, so it is always built in the stored language (ATI18n.STORED_LANG).
+function outputText() { return outputTextBody(); }
+function outputTextBody() {
   const lines = [];
   if (S.mode === "multi") {
     S.topics.forEach((t) => {
@@ -567,34 +566,33 @@ function outputText() {
       if (idx.length) lines.push(t.id + " " + t.name + (t.note ? "（" + t.note + "）" : "") + "：" + ranges(idx));
     });
     const un = msgs.map((_, i) => i).filter((i) => !tagOf(i));
-    if (un.length) lines.push("還沒標：" + ranges(un));
+    if (un.length) lines.push(T("tag.untagged", ranges(un)));
     S.topics.forEach((t) => {
       const idx = msgs.map((_, i) => i).filter((i) => alsoOf(i).includes(t.id));
-      if (idx.length) lines.push("也跟 " + t.id + " " + t.name + " 有關（主要在別的主題）：" + ranges(idx));
+      if (idx.length) lines.push(T("tag.also_related_to_mainly_in_another", t.id, t.name, ranges(idx)));
     });
     const own = msgs.map((_, i) => i).filter(ownTag);
-    if (own.length) lines.push("AI 回覆另外分類：" + own.map((i) => { const t = topicById(tagOf(i)); return pad(i) + "→" + (t ? t.id : "還沒標"); }).join("、"));
+    if (own.length) lines.push(T("tag.ai_replies_tagged_separately", own.map((i) => { const t = topicById(tagOf(i)); return pad(i) + "→" + (t ? t.id : T("tag.untagged_2")); }).join(T("common.list_sep"))));
   } else {
-    lines.push("主題：" + (S.single.name || "（未命名）") + (S.single.note ? "（" + S.single.note + "）" : "") + "：" + ranges(msgs.map((_, i) => i)));
+    lines.push(T("tag.topic", (S.single.name || T("tag.untitled")), (S.single.note ? "（" + S.single.note + "）" : ""), ranges(msgs.map((_, i) => i))));
   }
   // 關鍵兩種模式都可以標；多主題時沒標就不寫
   rangeIdx().forEach(([a, b]) => {
     const part = msgs.slice(a, b + 1);
-    lines.push("關鍵段落：" + (a === b ? pad(a) : pad(a) + "–" + pad(b)) + "（你說的 " + part.filter((m) => m.speaker !== "assistant").length +
-      " 則、AI 說的 " + part.filter((m) => m.speaker === "assistant").length + " 則）");
+    lines.push(T("tag.key_range_by_you_by_ai", (a === b ? pad(a) : pad(a) + "–" + pad(b)), part.filter((m) => m.speaker !== "assistant").length, part.filter((m) => m.speaker === "assistant").length));
   });
   const keyList = (ai) => msgs.map((_, i) => i).filter((i) => S.keys[msgs[i].id] && (msgs[i].speaker === "assistant") === ai).map(pad);
   const uk = keyList(false), ak = keyList(true);
-  if (S.mode !== "multi" || uk.length) lines.push("你說的關鍵：" + (uk.length ? uk.join("、") : "無"));
-  if (S.mode !== "multi" || ak.length) lines.push("AI 說的關鍵：" + (ak.length ? ak.join("、") : "無"));
+  if (S.mode !== "multi" || uk.length) lines.push(T("tag.your_keys", (uk.length ? uk.join(T("common.list_sep")) : T("tag.none"))));
+  if (S.mode !== "multi" || ak.length) lines.push(T("tag.ai_keys", (ak.length ? ak.join(T("common.list_sep")) : T("tag.none"))));
   const confirmed = msgs.map((_, i) => i).filter(turnConfirmed);
   const hints = msgs.map((_, i) => i).filter(turnHint);
-  if (confirmed.length) lines.push("轉向（你確認的）：" + confirmed.map(pad).join("、"));
-  if (hints.length) lines.push("可能轉向（程式提示，你還沒確認）：" + hints.map(pad).join("、"));
+  if (confirmed.length) lines.push(T("tag.turns_confirmed_by_you", confirmed.map(pad).join(T("common.list_sep"))));
+  if (hints.length) lines.push(T("tag.possible_turns_program_hints_not_yet", hints.map(pad).join(T("common.list_sep"))));
   const notes = msgs.map((_, i) => i).filter((i) => S.notes[msgs[i].id]);
-  if (notes.length) lines.push("備註：\n" + notes.map((i) => "  " + pad(i) + " " + S.notes[msgs[i].id]).join("\n"));
+  if (notes.length) lines.push(T("tag.notes", notes.map((i) => "  " + pad(i) + " " + S.notes[msgs[i].id]).join("\n")));
   const p = aiPendingCounts();
-  if (p.total) lines.push("AI 建議、你沒有動的（預設當作同意）：" + p.parts.join("、"));
+  if (p.total) lines.push(T("tag.ai_suggestions_you_left_unchanged_treated", p.parts.join(T("common.list_sep"))));
   return lines.join("\n");
 }
 
@@ -604,11 +602,11 @@ function aiPendingCounts() {
   const tagMsgs = msgs.filter((_, i) => tagOf(i) && aiPending("tags", tagKey(i))).length;
   const c = { tags: tagMsgs, names: n("names"), keys: n("keys"), ranges: n("ranges"), turns: n("turns") };
   const parts = [];
-  if (c.names) parts.push("主題 " + c.names + " 個");
-  if (c.tags) parts.push("主題分配 " + c.tags + " 則");
-  if (c.keys) parts.push("關鍵 " + c.keys + " 則");
-  if (c.ranges) parts.push("關鍵段落 " + c.ranges + " 段");
-  if (c.turns) parts.push("轉向 " + c.turns + " 處");
+  if (c.names) parts.push(T("tag.n_topics", c.names));
+  if (c.tags) parts.push(T("tag.topic_2", c.tags));
+  if (c.keys) parts.push(T("tag.n_keys", c.keys));
+  if (c.ranges) parts.push(T("tag.key", c.ranges));
+  if (c.turns) parts.push(T("tag.n_turns", c.turns));
   return { c, parts, total: c.names + c.tags + c.keys + c.ranges + c.turns };
 }
 
@@ -639,7 +637,7 @@ function buildOutline() {
       message_fingerprints: msgs.map((m) => (m.pid ? [m.id, fingerprint(m), m.pid] : [m.id, fingerprint(m)]))
     },
     mode: S.mode === "multi" ? "multi_topic" : S.mode === "flow" ? "single_topic" : null,
-    numbering: "顯示編號 = 依 order 排序後的位置（001 是第一則）；這個檔案裡一律用 message_id",
+    numbering: ATI18n.stored(() => T("tag.display_number_position_after_sorting_by")),
     // 主題分配的來源：沒列在 ai_*_messages 裡的，都是使用者自己標的
     topics: S.topics.map((t) => {
       const mine = all.filter((i) => tagOf(i) === t.id);
@@ -676,7 +674,8 @@ function buildOutline() {
         seen_messages: all.filter((i) => S.aiSeen[msgs[i].id]).map((i) => msgs[i].id)
       })
       : null,
-    summary: outputText()
+    // Canonical persisted summary is independent of the editor language.
+    summary: ATI18n.stored(outputText)
   };
 }
 
@@ -690,7 +689,7 @@ async function save() {
   const content = JSON.stringify(outline, null, 2) + "\n";
   try {
     if (ctx.kind === "repo") {
-      showStatus("儲存中…", true);
+      showStatus(T("tag.saving"), true);
       const files = [{ path: ctx.folder + OUTLINE_FILE, content }];
       // 根目錄指引檔說明了 outline.json，舊版的順便更新
       try { files.push(...await repoGuideFiles(config, branch)); } catch (e) { /* 指引檔失敗不影響儲存 */ }
@@ -701,25 +700,25 @@ async function save() {
           return rows.map((r) => (r.folder === ctx.folder
             ? Object.assign({}, r, { outline_updated_at: outline.updated_at, outline_mode: outline.mode }) : r));
         });
-      showStatus("已儲存到 " + config.repo + " 的 " + ctx.folder + OUTLINE_FILE);
+      showStatus(T("tag.saved_to_in", config.repo, ctx.folder, OUTLINE_FILE));
     } else if (ctx.kind === "zip") {
       const entries = [...ctx.bundleEntries].filter(([name]) => name !== ctx.bundlePrefix + "outline.json").map(([path, data]) => ({ path, data }));
       entries.push({ path: ctx.bundlePrefix + "outline.json", data: content });
       const blob = ATBundle.pack(entries);
-      const name = ctx.fileName.replace(/\.zip$/i, "").replace(/-已標記$/i, "") + "-已標記.zip";
+      const name = T("tag.tagged_zip", ctx.fileName.replace(/\.zip$/i, "").replace(/-(已標記|tagged)$/i, ""));
       const url = URL.createObjectURL(blob);
       const a = el("a", { href: url, download: name });
       document.body.append(a); a.click(); a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 60000);
       ctx.bundleEntries = new Map(entries.map(item => [item.path, typeof item.data === "string" ? new TextEncoder().encode(item.data) : item.data]));
       ctx.fileName = name;
-      showStatus("已下載包含 outline.json 的完整 ZIP。下次直接選新 ZIP，即可接著標記。");
+      showStatus(T("tag.downloaded_a_complete_zip_that_includes"));
     } else {
       const url = URL.createObjectURL(new Blob([content], { type: "application/json" }));
       const a = el("a", { href: url, download: OUTLINE_FILE });
       document.body.append(a); a.click(); a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 60000);
-      showStatus("已下載 outline.json。下次請和 conversation.jsonl 一起選取。");
+      showStatus(T("tag.downloaded_outline_json_next_time_select"));
     }
     savedAt = outline.updated_at;
     if (editVersion === version) {
@@ -728,11 +727,11 @@ async function save() {
       try { await chrome.storage.local.remove(draftKey()); } catch (e) {}
       if (S.mode) renderList();
     } else {
-      showStatus("已儲存按下儲存時的版本；儲存途中你又改了東西，那部分還沒存，請再按一次儲存。", true, true);
+      showStatus(T("tag.saved_the_version_from_when_you"), true, true);
     }
     updateTop();
   } catch (e) {
-    showStatus("儲存失敗：" + e.message + "（標記還在這一頁，也存成草稿了，可以再試一次）", true, true);
+    showStatus(T("tag.save_failed_your_tags_are_still", e.message), true, true);
   }
   btn.disabled = false;
 }
@@ -763,26 +762,26 @@ function renderPreview() {
     // 和上一個問題之間隔很久，畫分隔線（看的是兩個問題之間有沒有一段很長的空白）
     const prevQ = k ? qs[k - 1] : -1;
     for (let j = prevQ + 1; j <= i; j++) { const g = j ? gapLabel(j) : null; if (g) { list.append(el("li", { class: "gap-line", text: g })); break; } }
-    const text = (msgs[i].content || "").replace(/\s+/g, " ").trim() || "（只有附件）";
+    const text = (msgs[i].content || "").replace(/\s+/g, " ").trim() || T("tag.attachment_only");
     const long = text.length > QUESTION_PREVIEW;
     if (long) longCount++;
     const open = !!UI.previewExp[i];
     const replies = (k + 1 < qs.length ? qs[k + 1] : msgs.length) - i - 1;
-    const li = el("li", { class: "pq" + (hintReasons(i).length ? " hinted" : ""), title: hintReasons(i).length ? "程式提示：這裡可能轉向" : null },
+    const li = el("li", { class: "pq" + (hintReasons(i).length ? " hinted" : ""), title: hintReasons(i).length ? T("tag.program_hint_possible_turn_here") : null },
       el("span", { class: "num", text: pad(i) }),
       el("span", { class: "pq-text", text: long && !open ? text.slice(0, QUESTION_PREVIEW) + "…" : text }),
-      long ? el("button", { class: "pq-more", text: open ? "收起" : "展開（" + text.length + " 字）" }) : null,
-      replies > 1 ? el("span", { class: "pq-meta", text: "AI 回了 " + replies + " 則" }) : null);
+      long ? el("button", { class: "pq-more", text: open ? T("tag.collapse") : T("tag.expand_characters", text.length) }) : null,
+      replies > 1 ? el("span", { class: "pq-meta", text: T("tag.ai_replied", replies) }) : null);
     const more = li.querySelector(".pq-more");
     if (more) more.addEventListener("click", () => { UI.previewExp[i] = !open; renderPreview(); });
     list.append(li);
   });
-  if (!qs.length) list.append(el("li", { class: "empty-note", text: "這段對話裡沒有你的發言" }));
-  $("preview-count").textContent = "你問過 " + qs.length + " 個問題" + (longCount ? "，" + longCount + " 個比較長的先收起來了" : "");
+  if (!qs.length) list.append(el("li", { class: "empty-note", text: T("tag.you_have_no_messages_in_this") }));
+  $("preview-count").textContent = T("tag.you_asked", qs.length, (longCount ? T("tag.longer_collapsed", longCount) : ""));
   const longIdx = qs.filter((i) => (msgs[i].content || "").replace(/\s+/g, " ").trim().length > QUESTION_PREVIEW);
   const allOpen = longIdx.length > 0 && longIdx.every((i) => UI.previewExp[i]);
   $("preview-expand").hidden = !longCount;
-  $("preview-expand").textContent = allOpen ? "全部收起" : "全部展開";
+  $("preview-expand").textContent = allOpen ? T("tag.collapse_all") : T("tag.expand_all");
   $("preview-expand").onclick = () => { longIdx.forEach((i) => { UI.previewExp[i] = !allOpen; }); renderPreview(); };
   // 這篇標成不用整理過
   const st = labelStore && ctx.kind === "repo" ? labelStore.get(ctx.folder) : null;
@@ -790,9 +789,9 @@ function renderPreview() {
   banner.textContent = "";
   banner.hidden = !(st && st.status === "skip");
   if (st && st.status === "skip") {
-    const back = el("button", { class: "secondary small", text: "改回未處理" });
+    const back = el("button", { class: "secondary small", text: T("tag.set_back_to_to_do") });
     back.addEventListener("click", async () => { labelStore.set(ctx.folder, { status: "todo" }); await labelStore.save(); renderLabelLine(); renderPreview(); });
-    banner.append("這篇已經標成不用整理（" + (SKIP_REASONS[st.skip_reason] || "沒寫理由") + (st.skip_note ? "：" + st.skip_note : "") + "）。 ", back);
+    banner.append(T("tag.this_conversation_is_marked_skip", (SKIP_REASONS[st.skip_reason] || T("tag.no_reason_given")), (st.skip_note ? "：" + st.skip_note : "")), back);
   }
   if (typeof previewAiLine === "function") previewAiLine();
 }
@@ -823,7 +822,7 @@ function openSkipForm() {
     form.hidden = true;
     renderLabelLine();
     renderPreview();
-    showStatus("已標成不用整理。清單上會顯示這個狀態，之後想整理再改回來就好。");
+    showStatus(T("tag.marked_as_skip_the_list_will"));
   };
 }
 
@@ -841,7 +840,7 @@ function renderLabelLine() {
       const c = LABEL_COLORS[l.color % LABEL_COLORS.length];
       line.append(el("span", { class: "label-chip", style: { background: c.bg, color: c.fg, borderColor: c.line }, text: l.name }));
     });
-    if (st.note) line.append(el("span", { class: "hint", text: "備註：" + st.note }));
+    if (st.note) line.append(el("span", { class: "hint", text: T("tag.note", st.note) }));
   }
   $("origin-line").hidden = !hasUrl && !line.childNodes.length;
 }
@@ -863,11 +862,11 @@ function renderTopics() {
   S.topics.forEach((t) => {
     const p = pal(t.id);
     const count = msgs.filter((_, i) => tagOf(i) === t.id).length;
-    const name = el("input", { type: "text", value: t.name, "aria-label": "主題 " + t.id + " 名稱", class: "strong", "data-topic-name": t.id });
+    const name = el("input", { type: "text", value: t.name, "aria-label": T("tag.name_of_topic", t.id), class: "strong", "data-topic-name": t.id });
     name.addEventListener("input", () => { t.name = name.value; topicEdited(t); });
-    const note = el("input", { type: "text", value: t.note, "aria-label": "主題 " + t.id + " 補充說明", placeholder: "補充說明，例如：主要在講習性", "data-topic-note": t.id });
+    const note = el("input", { type: "text", value: t.note, "aria-label": T("tag.description_of_topic", t.id), placeholder: T("tag.description_e_g_mostly_about_habits"), "data-topic-note": t.id });
     note.addEventListener("input", () => { t.note = note.value; topicEdited(t); });
-    const del = el("button", { class: "icon-btn", "aria-label": "刪除主題 " + t.id, title: "刪除主題", text: "×" });
+    const del = el("button", { class: "icon-btn", "aria-label": T("tag.delete_topic", t.id), title: T("tag.delete_topic_2"), text: "×" });
     del.addEventListener("click", () => {
       const n = Object.values(S.tags).filter((v) => v === t.id).length;
       S.topics = S.topics.filter((x) => x !== t);
@@ -875,8 +874,8 @@ function renderTopics() {
       Object.keys(S.tags).forEach((k) => { if (S.tags[k] === t.id) { touchAi("tags", k, "removed", t.id); delete S.tags[k]; } });
       Object.keys(S.also).forEach((k) => { S.also[k] = S.also[k].filter((x) => x !== t.id); if (!S.also[k].length) delete S.also[k]; });
       touchAi("names", t.id, "removed", t.name);
-      if (!S.topics.length) S.topics = [{ id: nextTopicId(), name: "新主題", note: "" }];
-      showStatus("已刪除主題 " + t.id + (n ? "，原本的 " + n + " 句變成還沒標" : ""));
+      if (!S.topics.length) S.topics = [{ id: nextTopicId(), name: T("tag.new_topic"), note: "" }];
+      showStatus(T("tag.deleted_topic", t.id, (n ? T("tag.its_now_untagged", n) : "")));
       changed(true);
     });
     const nameSugg = aiPending("names", t.id);
@@ -884,17 +883,17 @@ function renderTopics() {
       el("div", { class: "row" },
         el("span", { class: "topic-id", style: { background: p.bg, color: p.fg }, text: t.id }),
         name,
-        el("span", { class: "topic-count", text: count + " 則" }),
+        el("span", { class: "topic-count", text: T("tag.n_messages", count) }),
         del),
       note,
-      nameSugg ? el("div", { class: "ai-note" }, "AI 建議的主題，改名稱或說明就算確認", okButton("names", t.id, "主題")) : null));
+      nameSugg ? el("div", { class: "ai-note" }, T("tag.topic_suggested_by_ai_editing_its"), okButton("names", t.id, T("tag.topic_3"))) : null));
   });
-  const add = el("button", { class: "add-topic", text: "＋ 新增主題" });
+  const add = el("button", { class: "add-topic", text: T("tag.add_topic") });
   add.addEventListener("click", () => { addTopic(); changed(true); });
   box.append(add);
   const left = anchors().filter((i) => !tagOf(i)).length;
   const pill = $("left");
-  pill.textContent = left ? "還有 " + left + " 句沒標" : "全部標完了";
+  pill.textContent = left ? T("tag.still_untagged", left) : T("tag.everything_is_tagged");
   pill.style.background = left ? "var(--warn-bg)" : "var(--ok-bg)";
   pill.style.color = left ? "var(--warn-fg)" : "var(--ok-fg)";
   $("view-time").setAttribute("aria-pressed", String(UI.view === "time"));
@@ -917,8 +916,8 @@ function topicEdited(t) {
 function nextTopicId() { return TOPIC_IDS.find((x) => !S.topics.some((t) => t.id === x)); }
 function addTopic() {
   const id = nextTopicId();
-  if (!id) { showStatus("主題最多 26 個"); return null; }
-  S.topics.push({ id, name: "新主題", note: "" });
+  if (!id) { showStatus(T("tag.you_can_have_at_most_26")); return null; }
+  S.topics.push({ id, name: T("tag.new_topic"), note: "" });
   return id;
 }
 
@@ -928,10 +927,10 @@ function renderFlowPanel() {
   const uk = msgs.filter((m) => S.keys[m.id] && m.speaker !== "assistant").length;
   const ak = msgs.filter((m) => S.keys[m.id] && m.speaker === "assistant").length;
   const nr = rangeIdx().length;
-  $("key-count").textContent = (nr ? "關鍵段落 " + nr + " 段、" : "") + "你說的關鍵 " + uk + " 處、AI 說的關鍵 " + ak + " 處";
+  $("key-count").textContent = T("tag.of_your_keys_ai_keys", (nr ? T("tag.key_2", nr) : ""), uk, ak);
   const box = $("filters");
   box.textContent = "";
-  [["all", "全部"], ["key", "只看關鍵"], ["user", "你說的關鍵"], ["ai", "AI 說的關鍵"]].forEach(([k, label]) => {
+  [["all", T("tag.all")], ["key", T("tag.keys_only")], ["user", T("tag.your_keys_2")], ["ai", T("tag.ai_keys_2")]].forEach(([k, label]) => {
     const b = el("button", { text: label, "aria-pressed": String(UI.filter === k) });
     b.addEventListener("click", () => { UI.filter = k; render(); });
     box.append(b);
@@ -944,27 +943,27 @@ function renderSelbar() {
   bar.hidden = !show;
   if (!show) return;
   bar.textContent = "";
-  bar.append(el("span", { class: "count", text: "已選 " + UI.sel.size + " 句" }));
-  const kr = el("button", { class: "key-range-btn", text: "★ 整段標成關鍵" });
+  bar.append(el("span", { class: "count", text: T("tag.selected", UI.sel.size) }));
+  const kr = el("button", { class: "key-range-btn", text: T("tag.mark_selection_as_a_key_range") });
   kr.addEventListener("click", addKeyRange);
   bar.append(kr);
   if (S.mode !== "multi") {
-    const un0 = el("button", { class: "link", text: "取消選取" });
+    const un0 = el("button", { class: "link", text: T("tag.clear_selection") });
     un0.addEventListener("click", () => { UI.sel.clear(); UI.last = null; render(); });
     bar.append(un0);
     return;
   }
   S.topics.forEach((t) => {
     const p = pal(t.id);
-    const b = el("button", { style: { background: p.bg, color: p.fg }, text: "標成 " + t.id + " " + t.name });
+    const b = el("button", { style: { background: p.bg, color: p.fg }, text: T("tag.tag_as", t.id, t.name) });
     b.addEventListener("click", () => assign(Array.from(UI.sel), t.id));
     bar.append(b);
   });
-  const nb = el("button", { class: "ghost", text: "＋ 新主題" });
+  const nb = el("button", { class: "ghost", text: T("tag.new_topic_2") });
   nb.addEventListener("click", () => { const id = addTopic(); if (id) assign(Array.from(UI.sel), id); });
-  const clear = el("button", { class: "ghost", text: "清除標籤" });
+  const clear = el("button", { class: "ghost", text: T("tag.clear_tag") });
   clear.addEventListener("click", () => assign(Array.from(UI.sel), null));
-  const un = el("button", { class: "link", text: "取消選取" });
+  const un = el("button", { class: "link", text: T("tag.clear_selection") });
   un.addEventListener("click", () => { UI.sel.clear(); UI.last = null; render(); });
   bar.append(nb, clear, un);
 }
@@ -1024,9 +1023,9 @@ function rowsToShow() {
       all.filter((i) => tagOf(i) === key || also.has(i)).forEach((i) => {
         if (prev !== null && i !== prev + 1) {
           const between = all.slice(prev + 1, i);
-          const names = Array.from(new Set(between.map((j) => { const t = topicById(tagOf(j)); return t ? t.id + " " + t.name : "還沒標"; })));
+          const names = Array.from(new Set(between.map((j) => { const t = topicById(tagOf(j)); return t ? t.id + " " + t.name : T("tag.untagged_2"); })));
           const label = between.length === 1 ? pad(prev + 1) : pad(prev + 1) + "–" + pad(i - 1);
-          out.push({ kind: "skip", label: "中間跳過 " + label + "（" + names.join("、") + "）" });
+          out.push({ kind: "skip", label: T("tag.skipped", label, names.join(T("common.list_sep"))) });
         }
         out.push({ kind: "msg", i, alsoIn: also.has(i) ? key : null });
         prev = i;
@@ -1043,13 +1042,13 @@ function rowsToShow() {
     let prev = -1;
     all.forEach((i) => {
       if (!pass(i)) return;
-      if (UI.filter !== "all" && i !== prev + 1) out.push({ kind: "skip", label: "中間 " + (i - prev - 1) + " 則沒顯示" });
+      if (UI.filter !== "all" && i !== prev + 1) out.push({ kind: "skip", label: T("tag.in_between_not_shown", (i - prev - 1)) });
       const g = UI.filter === "all" ? gapLabel(i) : null;
       if (g) out.push({ kind: "gap", label: g });
       out.push({ kind: "msg", i });
       prev = i;
     });
-    if (!out.length) out.push({ kind: "empty", text: "還沒有標成關鍵的內容" });
+    if (!out.length) out.push({ kind: "empty", text: T("tag.nothing_is_marked_as_key_yet") });
   }
   return out;
 }
@@ -1062,7 +1061,7 @@ function renderList() {
   rowsToShow().forEach((r) => {
     if (r.kind === "gap") frag.append(el("div", { class: "gap-line", text: r.label }));
     else if (r.kind === "skip") frag.append(el("div", { class: "skip", text: r.label }));
-    else if (r.kind === "empty") frag.append(el("div", { class: "empty-note", text: r.text || "還沒有對話標成這個主題" }));
+    else if (r.kind === "empty") frag.append(el("div", { class: "empty-note", text: r.text || T("tag.no_messages_are_tagged_with_this") }));
     else if (r.kind === "head") frag.append(groupHead(r));
     else frag.append(msgRow(r.i, r.alsoIn));
   });
@@ -1088,7 +1087,7 @@ function watchSeen(list) {
 
 // AI 建議沒動的項目旁邊的「✓」：按了就算確認
 function okButton(kind, key, label) {
-  const b = el("button", { class: "ok-btn", "aria-label": "確認 AI 建議的" + label, title: "確認這個 AI 建議", text: "✓" });
+  const b = el("button", { class: "ok-btn", "aria-label": T("tag.confirm_the_ai_suggested", label), title: T("tag.confirm_this_ai_suggestion"), text: "✓" });
   b.addEventListener("click", (e) => { e.stopPropagation(); confirmAi(kind, key); });
   return b;
 }
@@ -1098,15 +1097,15 @@ function groupHead(r) {
   const head = el("div", { class: "group-head", style: { borderBottomColor: p.stripe } });
   if (r.key) {
     const t = topicById(r.key);
-    const name = el("input", { type: "text", class: "g-name", value: t.name, "aria-label": "主題 " + t.id + " 名稱", "data-topic-name": t.id });
+    const name = el("input", { type: "text", class: "g-name", value: t.name, "aria-label": T("tag.name_of_topic", t.id), "data-topic-name": t.id });
     name.addEventListener("input", () => { t.name = name.value; topicEdited(t); });
-    const note = el("input", { type: "text", class: "g-note", value: t.note, placeholder: "＋補充說明", "aria-label": "主題 " + t.id + " 補充說明", "data-topic-note": t.id });
+    const note = el("input", { type: "text", class: "g-note", value: t.note, placeholder: T("tag.description"), "aria-label": T("tag.description_of_topic", t.id), "data-topic-note": t.id });
     note.addEventListener("input", () => { t.note = note.value; topicEdited(t); });
     head.append(el("span", { class: "topic-id", style: { background: p.bg, color: p.fg }, text: t.id }), name, note);
   } else {
-    head.append(el("h3", { text: "還沒標" }));
+    head.append(el("h3", { text: T("tag.untagged_2") }));
   }
-  head.append(el("span", { class: "ranges", text: ranges(r.idx) + (r.also ? "　＋也相關 " + r.also + " 則" : "") }));
+  head.append(el("span", { class: "ranges", text: ranges(r.idx) + (r.also ? T("tag.also_related", r.also) : "") }));
   return head;
 }
 
@@ -1115,7 +1114,7 @@ function alsoChips(i, line) {
   alsoOf(i).forEach((x) => {
     const xp = pal(x);
     const t = topicById(x);
-    line.append(el("span", { class: "also-chip", style: { color: xp.fg, borderColor: xp.stripe }, title: "也跟 " + x + " " + t.name + " 有關",
+    line.append(el("span", { class: "also-chip", style: { color: xp.fg, borderColor: xp.stripe }, title: T("tag.also_related_to", x, t.name),
       "data-chip-also": x, text: "＋" + x + " " + t.name }));
   });
 }
@@ -1140,7 +1139,7 @@ function msgRow(i, alsoIn) {
 
   // 編號：你的發言都可以點來選取（分主題、整段標成關鍵用）
   if (anchor) {
-    const b = el("button", { class: "num", text: pad(i), "aria-pressed": String(selected), "aria-label": "選取 " + pad(i) });
+    const b = el("button", { class: "num", text: pad(i), "aria-pressed": String(selected), "aria-label": T("tag.select", pad(i)) });
     b.addEventListener("click", (e) => pick(i, e));
     row.append(b);
   } else {
@@ -1154,17 +1153,17 @@ function msgRow(i, alsoIn) {
     const sugg = aiPending("tags", m.id);
     const chip = el("button", { class: "chip" + (sugg ? " ai-sugg" : ""), "aria-expanded": String(UI.picker === i),
       style: { background: p.bg, color: p.fg, borderColor: t ? p.stripe : "#C9CED6" },
-      title: originOf("tags", m.id) === "ai_confirmed" ? "AI 建議，你確認過" : "",
-      "data-chip-topic": tid || "", text: (sugg ? "建議 · " : "") + (t ? t.id + " " + t.name : "還沒標") + " ▾" });
+      title: originOf("tags", m.id) === "ai_confirmed" ? T("tag.ai_suggestion_confirmed_by_you") : "",
+      "data-chip-topic": tid || "", text: (sugg ? T("tag.suggested") : "") + (t ? t.id + " " + t.name : T("tag.untagged_2")) + " ▾" });
     chip.addEventListener("click", () => { UI.picker = UI.picker === i ? null : i; renderList(); });
     line1.append(chip);
-    if (sugg) line1.append(okButton("tags", m.id, "主題"));
+    if (sugg) line1.append(okButton("tags", m.id, T("tag.topic_3")));
     alsoChips(i, line1);
-    if (own) line1.append(el("span", { class: "follow", text: "另外分類" }));
+    if (own) line1.append(el("span", { class: "follow", text: T("tag.separate_topic") }));
   } else if (multi) {
-    line1.append(el("span", { class: "follow", text: "跟著 " + pad(anchorOf[i]) }));
+    line1.append(el("span", { class: "follow", text: T("tag.follows", pad(anchorOf[i])) }));
     alsoChips(i, line1);
-    const split = el("button", { class: "chip quiet", "aria-expanded": String(UI.picker === i), text: "另外分類 ▾" });
+    const split = el("button", { class: "chip quiet", "aria-expanded": String(UI.picker === i), text: T("tag.separate_topic_2") });
     split.addEventListener("click", () => { UI.picker = UI.picker === i ? null : i; renderList(); });
     line1.append(split);
   }
@@ -1173,18 +1172,18 @@ function msgRow(i, alsoIn) {
   const keySugg = key && aiPending("keys", m.id);
   const kb = el("button", { class: "chip" + (multi && !key ? " quiet" : "") + (keySugg ? " ai-sugg" : ""), "aria-pressed": String(key),
     style: key ? { background: on.bg, color: on.fg, borderColor: on.bg } : {},
-    text: key ? (keySugg ? "建議 · " : "") + (ai ? "★ AI 說的關鍵" : "★ 你說的關鍵") : "☆ 標為關鍵",
-    title: "關鍵：這句的內容重要，整理時會優先讀" });
+    text: key ? (keySugg ? T("tag.suggested") : "") + (ai ? T("tag.ai_key") : T("tag.your_key")) : T("tag.mark_as_key"),
+    title: T("tag.key_this_message_matters_and_will") });
   kb.addEventListener("click", () => {
     if (key) { touchAi("keys", m.id, "removed", true); delete S.keys[m.id]; } else S.keys[m.id] = true;
     if (!multi) renderFlowPanel();
     changed(true);
   });
   line1.append(kb);
-  if (keySugg) line1.append(okButton("keys", m.id, "關鍵"));
+  if (keySugg) line1.append(okButton("keys", m.id, T("tag.key_3")));
   // 轉向：程式提示要使用者確認才算數
   if (turnConfirmed(i)) {
-    const x = el("button", { "aria-label": "移除 " + pad(i) + " 的轉向", text: "×" });
+    const x = el("button", { "aria-label": T("tag.remove_the_turn_at", pad(i)), text: "×" });
     x.addEventListener("click", () => {
       touchAi("turns", m.id, "removed", true);
       delete S.turnsConfirmed[m.id];
@@ -1192,23 +1191,23 @@ function msgRow(i, alsoIn) {
       changed(true);
     });
     if (aiPending("turns", m.id)) {
-      const ok = el("button", { class: "confirm", text: "確認" });
+      const ok = el("button", { class: "confirm", text: T("tag.confirm") });
       ok.addEventListener("click", () => confirmAi("turns", m.id));
-      line1.append(el("span", { class: "turn ai-sugg" }, "轉向（AI 建議）", ok, x));
+      line1.append(el("span", { class: "turn ai-sugg" }, T("tag.turn_ai_suggestion"), ok, x));
     } else {
-      line1.append(el("span", { class: "turn", title: originOf("turns", m.id) === "ai_confirmed" ? "AI 建議，你確認過" : "" }, "轉向", x));
+      line1.append(el("span", { class: "turn", title: originOf("turns", m.id) === "ai_confirmed" ? T("tag.ai_suggestion_confirmed_by_you") : "" }, T("tag.turn"), x));
     }
   } else if (turnHint(i)) {
-    const ok = el("button", { class: "confirm", text: "確認" });
+    const ok = el("button", { class: "confirm", text: T("tag.confirm") });
     ok.addEventListener("click", () => { S.turnsConfirmed[m.id] = true; changed(true); });
-    const x = el("button", { "aria-label": "這不是轉向，移除 " + pad(i) + " 的提示", text: "×" });
+    const x = el("button", { "aria-label": T("tag.not_a_turn_remove_the_hint", pad(i)), text: "×" });
     x.addEventListener("click", () => { S.turnsDismissed[m.id] = true; changed(true); });
-    line1.append(el("span", { class: "turn hint" }, "可能轉向？（程式提示：" + hintReasons(i).map((r) => HINT_TEXT[r]).join("、") + "）", ok, x));
+    line1.append(el("span", { class: "turn hint" }, T("tag.possible_turn_program_hint", hintReasons(i).map((r) => HINT_TEXT[r]).join(T("common.list_sep"))), ok, x));
   }
-  if (UI.moved.has(i)) line1.append(el("span", { class: "moved", text: "原文變過，請確認" }));
+  if (UI.moved.has(i)) line1.append(el("span", { class: "moved", text: T("tag.source_changed_please_confirm") }));
   // 關鍵段落：在段落的第一則標出範圍，可以整段移除
   if (range && range[0] === i) {
-    const x = el("button", { "aria-label": "移除關鍵段落 " + pad(range[0]) + "–" + pad(range[1]), text: "×" });
+    const x = el("button", { "aria-label": T("tag.remove_key_range", pad(range[0]), pad(range[1])), text: "×" });
     x.addEventListener("click", () => {
       touchAi("ranges", msgs[range[0]].id, "removed", [msgs[range[0]].id, msgs[range[1]].id]);
       S.keyRanges = S.keyRanges.filter((r) => r.from !== msgs[range[0]].id);
@@ -1217,21 +1216,21 @@ function msgRow(i, alsoIn) {
     const rid = msgs[range[0]].id;
     const rs = aiPending("ranges", rid);
     line1.append(el("span", { class: "range-chip" + (rs ? " ai-sugg" : "") },
-      (rs ? "建議 · " : "") + "★ 關鍵段落 " + (range[0] === range[1] ? pad(range[0]) : pad(range[0]) + "–" + pad(range[1])),
-      rs ? okButton("ranges", rid, "關鍵段落") : null, x));
+      T("tag.key_range", (rs ? T("tag.suggested") : ""), (range[0] === range[1] ? pad(range[0]) : pad(range[0]) + "–" + pad(range[1]))),
+      rs ? okButton("ranges", rid, T("tag.key_range_2")) : null, x));
   }
   body.append(line1);
   // AI 給的理由（還在、而且是這一則的）
   const why = [];
-  if (turnConfirmed(i) && S.origin.turns[m.id] && S.aiReasons.turns[m.id]) why.push("轉向：" + S.aiReasons.turns[m.id]);
-  if (key && S.origin.keys[m.id] && S.aiReasons.keys[m.id]) why.push("關鍵：" + S.aiReasons.keys[m.id]);
-  if (range && range[0] === i && S.origin.ranges[m.id] && S.aiReasons.ranges[m.id]) why.push("關鍵段落：" + S.aiReasons.ranges[m.id]);
-  if (why.length) body.append(el("div", { class: "ai-reason", text: "AI 的理由｜" + why.join("　") }));
+  if (turnConfirmed(i) && S.origin.turns[m.id] && S.aiReasons.turns[m.id]) why.push(T("tag.turn_2", S.aiReasons.turns[m.id]));
+  if (key && S.origin.keys[m.id] && S.aiReasons.keys[m.id]) why.push(T("tag.key_4", S.aiReasons.keys[m.id]));
+  if (range && range[0] === i && S.origin.ranges[m.id] && S.aiReasons.ranges[m.id]) why.push(T("tag.key_range_3", S.aiReasons.ranges[m.id]));
+  if (why.length) body.append(el("div", { class: "ai-reason", text: T("tag.ai_s_reason", why.join("　")) }));
 
   // 主題選單
   if (multi && UI.picker === i) {
     const targets = anchor && selected && UI.sel.size > 1 ? Array.from(UI.sel) : [i];
-    const box = el("div", { class: "picker" }, el("span", { class: "hint", text: targets.length > 1 ? "套用到已選的 " + targets.length + " 句" : "改成" }));
+    const box = el("div", { class: "picker" }, el("span", { class: "hint", text: targets.length > 1 ? T("tag.apply_to_the_selected", targets.length) : T("tag.change_to") }));
     S.topics.forEach((x) => {
       const xp = pal(x.id);
       const cur = x.id === tid;
@@ -1239,16 +1238,16 @@ function msgRow(i, alsoIn) {
       b.addEventListener("click", () => assign(targets, x.id));
       box.append(b);
     });
-    const none = el("button", { style: { background: "#fff", color: "#4A515C", borderColor: "#C9CED6" }, text: "還沒標" });
+    const none = el("button", { style: { background: "#fff", color: "#4A515C", borderColor: "#C9CED6" }, text: T("tag.untagged_2") });
     none.addEventListener("click", () => assign(targets, null));
-    const nb = el("button", { style: { background: "#fff", color: "#1B1F24", borderColor: "#1B1F24" }, text: "＋ 新主題" });
+    const nb = el("button", { style: { background: "#fff", color: "#1B1F24", borderColor: "#1B1F24" }, text: T("tag.new_topic_2") });
     nb.addEventListener("click", () => { const id = addTopic(); if (id) assign(targets, id); });
     box.append(none, nb);
     // 也跟別的主題有關（主要主題不變）：AI 整理時照主要主題分組，讀到這些主題時也會參考這一則
     const others = S.topics.filter((x) => x.id !== tid);
     if (tid && others.length && (anchor || own)) {
       const k = tagKey(i);
-      const alsoBox = el("div", { class: "also-pick" }, el("span", { class: "hint", text: "也跟這些主題有關" + (targets.length > 1 ? "（只改這一句）" : "") + "：" }));
+      const alsoBox = el("div", { class: "also-pick" }, el("span", { class: "hint", text: T("tag.also_related_to_these_topics", (targets.length > 1 ? T("tag.this_message_only") : "")) }));
       others.forEach((x) => {
         const xp = pal(x.id);
         const on = alsoOf(i).includes(x.id);
@@ -1265,7 +1264,7 @@ function msgRow(i, alsoIn) {
       box.append(alsoBox);
     }
     if (own) {
-      const back = el("button", { style: { background: "#fff", color: "#3D4450", borderColor: "#C9CED6" }, text: "改回跟著 " + pad(anchorOf[i]) });
+      const back = el("button", { style: { background: "#fff", color: "#3D4450", borderColor: "#C9CED6" }, text: T("tag.follow_again", pad(anchorOf[i])) });
       back.addEventListener("click", () => { touchAi("tags", m.id, "removed", S.tags[m.id] || null); delete S.tags[m.id]; UI.picker = null; changed(true); });
       box.append(back);
     }
@@ -1274,7 +1273,7 @@ function msgRow(i, alsoIn) {
 
   // 內容：AI 回覆先顯示 200 字，使用者的長文件也摺疊
   const limit = ai ? AI_PREVIEW : USER_PREVIEW;
-  const text = m.content || "（只有附件）";
+  const text = m.content || T("tag.attachment_only");
   const long = text.length > limit;
   const open = !!UI.exp[i];
   body.append(el("div", { class: "text", text: long && !open ? text.slice(0, limit) + "…" : text }));
@@ -1283,36 +1282,36 @@ function msgRow(i, alsoIn) {
   const note = S.notes[m.id] || "";
   const noteBox = UI.noteOpen[i] || note !== "";
   if (noteBox) {
-    const input = el("input", { type: "text", id: "note-" + i, value: note, placeholder: "寫下這句為什麼重要，或補充背景" });
+    const input = el("input", { type: "text", id: "note-" + i, value: note, placeholder: T("tag.why_this_message_matters_or_some") });
     input.addEventListener("input", () => {
       if (input.value) S.notes[m.id] = input.value; else delete S.notes[m.id];
       changed(false);
     });
-    const x = el("button", { class: "icon-btn", "aria-label": "刪除 " + pad(i) + " 的備註", text: "×" });
+    const x = el("button", { class: "icon-btn", "aria-label": T("tag.delete_the_note_on", pad(i)), text: "×" });
     x.addEventListener("click", () => { delete S.notes[m.id]; delete UI.noteOpen[i]; changed(true); });
-    body.append(el("div", { class: "note" }, el("label", { for: "note-" + i, text: "備註" }), input, x));
+    body.append(el("div", { class: "note" }, el("label", { for: "note-" + i, text: T("tag.note_2") }), input, x));
     if (UI.noteOpen[i] === "focus") { UI.noteOpen[i] = true; setTimeout(() => input.focus(), 0); }
   }
 
   const actions = el("div", { class: "actions" });
   if (long) {
-    const b = el("button", { class: "expand", text: open ? "收起" : "展開全文（共 " + text.length + " 字）" });
+    const b = el("button", { class: "expand", text: open ? T("tag.collapse") : T("tag.show_full_text_characters", text.length) });
     b.addEventListener("click", () => { UI.exp[i] = !open; renderList(); });
     actions.append(b);
   }
   if (!noteBox) {
-    const b = el("button", { text: "＋備註" });
+    const b = el("button", { text: T("tag.note_3") });
     b.addEventListener("click", () => { UI.noteOpen[i] = "focus"; renderList(); });
     actions.append(b);
   }
   // 已經選了一些句子時，其他句子可以「選到這裡」（不用記 Shift）
   if (anchor && !selected && UI.sel.size && UI.last !== null && UI.last !== i) {
-    const b = el("button", { class: "select-to", text: "選到這裡（從 " + pad(UI.last) + "）" });
+    const b = el("button", { class: "select-to", text: T("tag.select_up_to_here_from", pad(UI.last)) });
     b.addEventListener("click", () => pick(i, null, true));
     actions.append(b);
   }
   if (!ai && !turnConfirmed(i) && !turnHint(i)) {
-    const b = el("button", { text: "＋標轉向", title: "方向從這裡改了：這句本身不一定重要，但前後要分開理解，前面的結論可能不算數" });
+    const b = el("button", { text: T("tag.mark_turn"), title: T("tag.the_direction_changed_here_this_message") });
     b.addEventListener("click", () => { S.turnsConfirmed[m.id] = true; delete S.turnsDismissed[m.id]; changed(true); });
     actions.append(b);
   }
@@ -1358,8 +1357,8 @@ $("flow-name").addEventListener("input", (e) => { S.single.name = e.target.value
 $("flow-note").addEventListener("input", (e) => { S.single.note = e.target.value; changed(false); });
 $("save").addEventListener("click", save);
 $("copy-output").addEventListener("click", async () => {
-  try { await navigator.clipboard.writeText(outputText()); showStatus("已複製"); }
-  catch (e) { showStatus("無法複製：" + e.message); }
+  try { await navigator.clipboard.writeText(outputText()); showStatus(T("tag.copied")); }
+  catch (e) { showStatus(T("tag.could_not_copy", e.message)); }
 });
 document.addEventListener("keydown", (e) => {
   if ((e.metaKey || e.ctrlKey) && e.key === "s" && ctx) { e.preventDefault(); save(); }
@@ -1369,7 +1368,7 @@ async function init() {
   config = await loadConfig();
   const folder = new URLSearchParams(location.search).get("folder");
   if (!folder) { await showPicker(); return; }
-  if (!config || !config.repo || !config.token) { showError("還沒設定 GitHub，無法讀取倉庫裡的對話。"); await showPicker(); return; }
+  if (!config || !config.repo || !config.token) { showError(T("tag.github_is_not_set_up_yet")); await showPicker(); return; }
   try { await loadFromRepo(folder); }
   catch (e) { showError(e.message); }
 }

@@ -27,7 +27,7 @@ const ATWorkspace = (() => {
   }
   function picker(i){
     const t=tagOf(i),div=el("div",{class:"picker workspace-topic-picker"});
-    div.append(el("div",{class:"inspector-label",text:"主要主題（單選）"}));
+    div.append(el("div",{class:"inspector-label",text:T("ws.main_topic_pick_one")}));
     const choices=el("div",{class:"workspace-pick-choices"});
     S.topics.forEach(v=>{
       const p=pal(v.id),b=elBtn((t===v.id?"✓ ":"")+v.id+" "+v.name,()=>{
@@ -36,23 +36,23 @@ const ATWorkspace = (() => {
       b.style.background=t===v.id?p.bg:"#fff";b.style.color=p.fg;b.style.borderColor=p.stripe;
       choices.append(b);
     });
-    choices.append(elBtn("未分類",()=>{
+    choices.append(elBtn(T("ws.unassigned"),()=>{
       assign([i],null);UI.workspaceFocus=i;UI.workspaceOpenTopic=msgs[i].id;rerender();
     },"secondary"));
-    div.append(choices,el("div",{class:"inspector-label",text:"也與這些主題有關（複選）"}));
+    div.append(choices,el("div",{class:"inspector-label",text:T("ws.also_related_to_these_topics_pick")}));
     const related=el("div",{class:"workspace-pick-choices"});
     S.topics.filter(x=>x.id!==t).forEach(v=>{
       const yes=alsoOf(i).includes(v.id);
       related.append(elBtn((yes?"✓ ":"＋")+v.id+" "+v.name,()=>relation(i,v.id,!yes),yes?"related-picked":"secondary"));
     });
     div.append(related);
-    if(!isAnchor(i)&&ownTag(i))div.append(elBtn("改回跟隨上一則提問",()=>{
+    if(!isAnchor(i)&&ownTag(i))div.append(elBtn(T("ws.follow_the_previous_question_again"),()=>{
       delete S.tags[msgs[i].id];delete S.also[msgs[i].id];changed(true);
     },"workspace-link"));
-    div.append(elBtn("＋ 新增主題",()=>{
+    div.append(elBtn(T("tag.add_topic"),()=>{
       const id=addTopic();if(id){assign([i],id);UI.workspaceOpenTopic=msgs[i].id;UI.workspaceFocus=i;rerender();}
     },"workspace-link"));
-    div.append(el("p",{class:"hint",text:"一個主要主題，可附加多個相關主題。原文不會重複複製。"}));
+    div.append(el("p",{class:"hint",text:T("ws.one_main_topic_plus_any_number")}));
     return div;
   }
   function sectionOutline(i,content){
@@ -69,13 +69,13 @@ const ATWorkspace = (() => {
         if(open)expanded.delete(s.start);else expanded.add(s.start);
         rerender();scrollToMessage(i);
       },"section-toggle"));
-      const star=elBtn(marked?"★ 已標重點":"☆ 標重點",()=>ATSections.toggle(i,s),"section-key");
+      const star=elBtn(marked?T("ws.highlighted"):T("ws.highlight"),()=>ATSections.toggle(i,s),"section-key");
       star.setAttribute("aria-pressed",String(marked));
       line.append(star);section.append(line);
-      if(open)section.append(el("div",{class:"section-content",text:s.body||"（這個標題下沒有內文）"}));
+      if(open)section.append(el("div",{class:"section-content",text:s.body||T("ws.no_text_under_this_heading")}));
       root.append(section);
     });
-    root.append(elBtn("展開全文",()=>{
+    root.append(elBtn(T("ws.show_full_text"),()=>{
       UI.workspaceFull.add(mid);rerender();scrollToMessage(i);
     },"section-mode"));
     return root;
@@ -98,7 +98,7 @@ const ATWorkspace = (() => {
         text.before(sectionOutline(i,m.content));
       }else{
         text.hidden=false;text.textContent=m.content;
-        text.after(elBtn("切回章節概覽",()=>{
+        text.after(elBtn(T("ws.back_to_section_overview"),()=>{
           UI.workspaceFull.delete(mid);rerender();scrollToMessage(i);
         },"section-mode"));
       }
@@ -107,12 +107,12 @@ const ATWorkspace = (() => {
       // headings. Never strand these behind the 200-character preview.
       if(UI.workspaceFull.has(mid)){
         text.textContent=m.content;
-        text.after(elBtn("收起全文",()=>{
+        text.after(elBtn(T("ws.hide_full_text"),()=>{
           UI.workspaceFull.delete(mid);rerender();scrollToMessage(i);
         },"section-mode"));
       }else{
         text.textContent=m.content.slice(0,AI_PREVIEW)+"…";
-        text.after(elBtn("展開全文（共 "+m.content.length+" 字）",()=>{
+        text.after(elBtn(T("tag.show_full_text_characters", m.content.length),()=>{
           UI.workspaceFull.add(mid);rerender();scrollToMessage(i);
         },"section-mode"));
       }
@@ -123,33 +123,33 @@ const ATWorkspace = (() => {
     const selectButtons=Array.from(actions.children).filter(x=>x.classList.contains("select-to"));
     actions.replaceChildren();
     const main=topicById(tagOf(i)),also=alsoOf(i);
-    if(S.mode==="multi")actions.append(elBtn("標記主題"+(main?" · "+main.id:"")+(also.length?" ＋"+also.join("、"):""),()=>{
+    if(S.mode==="multi")actions.append(elBtn(T("ws.tag_topic", (main?" · "+main.id:""), (also.length?" ＋"+also.join(T("common.list_sep")):"")),()=>{
       UI.workspaceOpenTopic=UI.workspaceOpenTopic===mid?null:mid;focus(i);rerender();
     },"topic-action"));
     const key=!!S.keys[mid];
-    actions.append(elBtn(key?"★ 整則關鍵":"☆ 整則關鍵",()=>{
+    actions.append(elBtn(key?T("ws.whole_message_is_key"):T("ws.whole_message_is_key_2"),()=>{
       if(key){touchAi("keys",mid,"removed",true);delete S.keys[mid];}else S.keys[mid]=true;
       UI.workspaceFocus=i;changed(true);
     },key?"is-on":""));
     if(!ai){
       const hasTurn=turnConfirmed(i);
-      actions.append(elBtn(hasTurn?"↗ 已標轉向":turnHint(i)?"↗ 可能轉向":"↗ 轉向",()=>{
+      actions.append(elBtn(hasTurn?T("ws.turn_marked"):turnHint(i)?T("ws.possible_turn"):T("ws.turn"),()=>{
         if(hasTurn){touchAi("turns",mid,"removed",true);delete S.turnsConfirmed[mid];S.turnsDismissed[mid]=true;}
         else{S.turnsConfirmed[mid]=true;delete S.turnsDismissed[mid];}
         UI.workspaceFocus=i;changed(true);
       },hasTurn?"is-on":""));
     }
-    actions.append(elBtn(S.notes[mid]?"備註 ✓":"＋ 備註",()=>{
+    actions.append(elBtn(S.notes[mid]?T("ws.note"):T("ws.note_2"),()=>{
       UI.workspaceOpenNote=UI.workspaceOpenNote===mid?null:mid;focus(i);rerender();
     }));
     selectButtons.forEach(b=>actions.append(b));
     if(UI.workspaceOpenTopic===mid&&S.mode==="multi")actions.after(picker(i));
     if(UI.workspaceOpenNote===mid){
       const div=el("div",{class:"workspace-note"});
-      const textarea=el("textarea",{rows:2,placeholder:"寫下這則訊息重要的原因或補充背景"});
+      const textarea=el("textarea",{rows:2,placeholder:T("ws.why_this_message_matters_or_some")});
       textarea.value=S.notes[mid]||"";
       textarea.addEventListener("input",()=>{if(textarea.value)S.notes[mid]=textarea.value;else delete S.notes[mid];changed(false);});
-      div.append(textarea,elBtn("收起",()=>{UI.workspaceOpenNote=null;rerender();},"workspace-link"));
+      div.append(textarea,elBtn(T("tag.collapse"),()=>{UI.workspaceOpenNote=null;rerender();},"workspace-link"));
       actions.after(div);
     }
   }
@@ -163,7 +163,7 @@ const ATWorkspace = (() => {
     const items=Array.from($("topics").querySelectorAll(".topic"));
     S.topics.forEach((t,n)=>{
       const item=items[n];if(!item)return;
-      const b=elBtn("定位",()=>{
+      const b=elBtn(T("ws.locate"),()=>{
         UI.view="topic";render();
         const target=Array.from(document.querySelectorAll(".group-head")).find(x=>x.querySelector('input[data-topic-name="'+CSS.escape(t.id)+'"]'));
         if(target)target.scrollIntoView({block:"start",behavior:"smooth"});
@@ -215,8 +215,8 @@ const ATWorkspace = (() => {
     banner.hidden=count===0;
     banner.replaceChildren();
     if(!count)return;
-    const note=el("span",{text:"有 "+count+" 個 AI 小節重點無法安全對應原文，需檢查後才能確定標記是否正確。"});
-    const button=elBtn("在右側檢查",()=>{
+    const note=el("span",{text:T("ws.ai_section_could_not_be_safely", count)});
+    const button=elBtn(T("ws.check_on_the_right"),()=>{
       ensureInspectorVisible();
       UI.workspaceShowUnmatched=true;
       renderWorkspaceInspector();
@@ -231,19 +231,19 @@ const ATWorkspace = (() => {
     const details=el("details",{id:"unmatched-review",class:"unmatched-review"});
     details.open=UI.workspaceShowUnmatched!==false;
     details.addEventListener("toggle",()=>{UI.workspaceShowUnmatched=details.open;});
-    details.append(el("summary",{text:"待核對的小節重點 · "+entries.length+" 項"}));
-    const caption=el("p",{class:"inspector-details",text:"原文可能已更新。下方只提供候選小節，必須由你確認才會重新標記；若無合適候選，可保留待日後處理。"});
+    details.append(el("summary",{text:T("ws.section_highlights_to_verify", entries.length)}));
+    const caption=el("p",{class:"inspector-details",text:T("ws.the_source_may_have_been_updated")});
     details.append(caption);
     entries.forEach((entry,index)=>{
       const k=unmatchedId(entry);
       const section=el("div",{class:"unmatched-entry"});
-      section.append(el("strong",{text:(entry.heading||"（無標題）")}),
-        el("p",{class:"inspector-details",text:"原訊息 "+entry.message_id+" · "+(entry.reason||"尚未確認")}));
+      section.append(el("strong",{text:(entry.heading||T("ws.no_heading"))}),
+        el("p",{class:"inspector-details",text:T("ws.original_message", entry.message_id, (entry.reason_code ? T(entry.reason_code) : (entry.reason||T("ws.not_confirmed"))))}));
       const candidates=unmatchedCandidates(entry),choice=el("select",{class:"unmatched-candidate"});
-      choice.append(el("option",{value:"",text:candidates.length?"選擇候選小節":"沒有可辨識的同名／同內容小節"}));
+      choice.append(el("option",{value:"",text:candidates.length?T("ws.choose_a_candidate_section"):T("ws.no_section_with_the_same_heading")}));
       candidates.forEach(c=>{
         const key=c.i+"|"+c.section.start;
-        const kind=c.sameHash?"原文一致":"需人工核對";
+        const kind=c.sameHash?T("ws.source_matches"):T("ws.needs_manual_check");
         const snippet=c.section.body.replace(/\s+/g," ").slice(0,32);
         choice.append(el("option",{value:key,text:pad(c.i)+" · "+c.section.title+" · "+kind+(snippet?" · "+snippet:"")}));
       });
@@ -254,7 +254,7 @@ const ATWorkspace = (() => {
       });
       section.append(choice);
       const actions=el("div",{class:"inspector-actions"});
-      actions.append(elBtn("查看候選",()=>{
+      actions.append(elBtn(T("ws.view_candidates"),()=>{
         const [i,start]=String(choice.value).split("|").map(Number);
         if(!choice.value||!Number.isInteger(i)||!Number.isInteger(start))return;
         const section=ATSections.parse(msgs[i]?.content).find(s=>s.start===start);
@@ -265,13 +265,13 @@ const ATWorkspace = (() => {
         rerender();
         scrollToMessage(i);
       },"secondary"));
-      actions.append(elBtn("確認重新標記",()=>{
+      actions.append(elBtn(T("ws.confirm_re_tagging"),()=>{
         const [i,start]=String(choice.value).split("|").map(Number);
         if(!choice.value||!Number.isInteger(i)||!Number.isInteger(start))return;
         const candidate=ATSections.parse(msgs[i]?.content).find(s=>s.start===start);
         if(!candidate)return;
         if(candidate.fingerprint!==entry.section_fingerprint &&
-          !confirm("這個小節的內容指紋與原標記不同。要把它當作原先標記的重點嗎？"))return;
+          !confirm(T("ws.this_section_s_content_fingerprint_differs")))return;
         const mid=msgs[i].id;
         if(!ATSections.marked(i,candidate)){
           (S.sectionKeys[mid] ||= []).push({heading:candidate.title,level:candidate.level,
@@ -280,14 +280,14 @@ const ATWorkspace = (() => {
         S.unmatchedSections.splice(index,1);
         UI.workspaceFocus=i;
         changed(true);
-        showStatus("已人工確認小節「"+candidate.title+"」的對應。");
+        showStatus(T("ws.section_was_matched_by_manual_confirmation", candidate.title));
       },"secondary"));
-      if(!candidates.length)section.append(el("p",{class:"inspector-details",text:"目前沒有符合的候選；可先保留，等待原文恢復或重新擷取。"}));
-      actions.append(elBtn("捨棄舊標記",()=>{
-        if(!confirm("確定要捨棄「"+(entry.heading||"未命名小節")+"」的舊標記？這項操作會寫入下一次儲存的草稿。"))return;
+      if(!candidates.length)section.append(el("p",{class:"inspector-details",text:T("ws.no_matching_candidate_right_now_you")}));
+      actions.append(elBtn(T("ws.discard_old_tag"),()=>{
+        if(!confirm(T("ws.discard_the_old_tag_on_this", (entry.heading||T("ws.untitled_section")))))return;
         S.unmatchedSections.splice(index,1);
         changed(true);
-        showStatus("已捨棄舊的小節標記。");
+        showStatus(T("ws.old_section_tag_discarded"));
       },"workspace-link"));
       section.append(actions);
       details.append(section);
@@ -302,28 +302,28 @@ const ATWorkspace = (() => {
     const i=UI.workspaceFocus;
     if(i===null||i===undefined||!msgs[i]){
       const n=Object.values(S.sectionKeys).reduce((a,x)=>a+x.length,0);
-      box.append(el("p",{class:"inspector-details",text:"選取中央任一訊息，這裡會顯示標記和 AI 建議的詳細內容。"}));
-      box.append(el("p",{class:"inspector-details",text:"目前有 "+Object.keys(S.keys).length+" 則整則關鍵、"+n+" 個 AI 小節重點。"}));
+      box.append(el("p",{class:"inspector-details",text:T("ws.select_any_message_in_the_middle")}));
+      box.append(el("p",{class:"inspector-details",text:T("ws.currently_whole_message_and_ai_section", Object.keys(S.keys).length, n)}));
       return;
     }
     const m=msgs[i],mid=m.id,main=tagOf(i);
-    box.append(el("p",{class:"inspector-details",text:pad(i)+" · "+(m.speaker==="assistant"?"AI 回覆":"我的提問")}));
+    box.append(el("p",{class:"inspector-details",text:pad(i)+" · "+(m.speaker==="assistant"?T("ws.ai_reply"):T("ws.my_question"))}));
     if(S.mode==="multi"){
       const select=el("select");
-      select.append(el("option",{value:"",text:"未分類"}));
+      select.append(el("option",{value:"",text:T("ws.unassigned")}));
       S.topics.forEach(t=>select.append(el("option",{value:t.id,text:t.id+" · "+t.name})));
       select.value=main||"";
       select.addEventListener("change",()=>{assign([i],select.value||null);UI.workspaceFocus=i;});
-      box.append(inspectorField("主要主題",select));
+      box.append(inspectorField(T("ws.main_topic"),select));
       const rel=el("div");
       S.topics.filter(t=>t.id!==main).forEach(t=>rel.append(cb(t.id+" · "+t.name,alsoOf(i).includes(t.id),on=>relation(i,t.id,on))));
-      box.append(inspectorField("其他相關主題",rel));
+      box.append(inspectorField(T("ws.other_related_topics"),rel));
     }
     box.append(el("div",{class:"inspector-separator"}));
-    box.append(cb("整則標為關鍵",!!S.keys[mid],yes=>{
+    box.append(cb(T("ws.mark_whole_message_as_key"),!!S.keys[mid],yes=>{
       if(yes)S.keys[mid]=true;else{touchAi("keys",mid,"removed",true);delete S.keys[mid];}changed(true);
     }));
-    if(m.speaker!=="assistant")box.append(cb("標記討論轉向",turnConfirmed(i),yes=>{
+    if(m.speaker!=="assistant")box.append(cb(T("ws.mark_a_turn_in_the_discussion"),turnConfirmed(i),yes=>{
       if(yes){S.turnsConfirmed[mid]=true;delete S.turnsDismissed[mid];}
       else{delete S.turnsConfirmed[mid];S.turnsDismissed[mid]=true;}changed(true);
     }));
@@ -332,26 +332,26 @@ const ATWorkspace = (() => {
       if(sections.length){
         const list=el("div");
         sections.forEach(s=>list.append(cb(s.title,ATSections.marked(i,s),()=>ATSections.toggle(i,s))));
-        box.append(inspectorField("Markdown 小節重點",list));
+        box.append(inspectorField(T("ws.markdown_section_highlights"),list));
       }
     }
-    const ta=el("textarea",{rows:3,placeholder:"標記原因、補充背景…"});
+    const ta=el("textarea",{rows:3,placeholder:T("ws.reason_for_tagging_background")});
     ta.value=S.notes[mid]||"";
     ta.addEventListener("input",()=>{if(ta.value)S.notes[mid]=ta.value;else delete S.notes[mid];changed(false);});
-    box.append(inspectorField("備註",ta));
+    box.append(inspectorField(T("tag.note_2"),ta));
     const pending=[];
-    if(aiPending("keys",mid))pending.push(["keys","關鍵",S.aiReasons.keys[mid]]);
-    if(aiPending("turns",mid))pending.push(["turns","轉向",S.aiReasons.turns[mid]]);
-    if(aiPending("tags",tagKey(i)))pending.push(["tags","主題分類",""]);
+    if(aiPending("keys",mid))pending.push(["keys",T("tag.key_3"),S.aiReasons.keys[mid]]);
+    if(aiPending("turns",mid))pending.push(["turns",T("tag.turn"),S.aiReasons.turns[mid]]);
+    if(aiPending("tags",tagKey(i)))pending.push(["tags",T("ws.topics"),""]);
     if(pending.length){
-      box.append(el("div",{class:"inspector-separator"}),el("div",{class:"inspector-label",text:"待確認的 AI 建議"}));
+      box.append(el("div",{class:"inspector-separator"}),el("div",{class:"inspector-label",text:T("ws.ai_suggestions_to_review")}));
       pending.forEach(([kind,label,reason])=>{
         const div=el("div",{class:"inspector-suggestion"});
         div.append(el("strong",{text:label}));
         if(reason)div.append(el("p",{class:"inspector-details",text:reason}));
         const actions=el("div",{class:"inspector-actions"});
-        actions.append(elBtn("確認",()=>confirmAi(kind,kind==="tags"?tagKey(i):mid),"secondary"));
-        actions.append(elBtn("否決",()=>{
+        actions.append(elBtn(T("tag.confirm"),()=>confirmAi(kind,kind==="tags"?tagKey(i):mid),"secondary"));
+        actions.append(elBtn(T("ws.reject"),()=>{
           if(kind==="keys"){touchAi("keys",mid,"removed",true);delete S.keys[mid];}
           if(kind==="turns"){touchAi("turns",mid,"removed",true);delete S.turnsConfirmed[mid];}
           if(kind==="tags"){touchAi("tags",tagKey(i),"removed",main);assign([i],null);}
@@ -360,7 +360,7 @@ const ATWorkspace = (() => {
         div.append(actions);box.append(div);
       });
     }
-    box.append(el("p",{class:"inspector-details",text:"本機草稿會自動保存；按上方「儲存」才會寫入 GitHub。"}));
+    box.append(el("p",{class:"inspector-details",text:T("ws.local_drafts_are_saved_automatically_press")}));
   }
   window.renderWorkspaceInspector=renderWorkspaceInspector;
   function mount(){

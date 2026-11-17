@@ -115,7 +115,18 @@ const ATBundle = (() => {
       total += size;
       if (total > MAX_TOTAL_BYTES) throw new Error("ZIP 解開後超過安全大小");
       if (localOffset + 30 > bytes.length || view.getUint32(localOffset, true) !== 0x04034b50) throw new Error("ZIP 項目損壞");
-      const start = localOffset + 30 + view.getUint16(localOffset + 26, true) + view.getUint16(localOffset + 28, true);
+      const localNameLen = view.getUint16(localOffset + 26, true);
+      const localExtraLen = view.getUint16(localOffset + 28, true);
+      const start = localOffset + 30 + localNameLen + localExtraLen;
+      // Verify both ZIP headers refer to the same entry. Otherwise a corrupt or
+      // malicious archive can pass the data CRC with a mutated local filename.
+      const centralName = bytes.subarray(at - (46 + nameLen + extraLen + commentLen) + 46, at - (extraLen + commentLen));
+      const localName = bytes.subarray(localOffset + 30, localOffset + 30 + localNameLen);
+      if (localNameLen !== nameLen || start > bytes.length ||
+          view.getUint16(localOffset + 8, true) !== method ||
+          localName.some((byte, j) => byte !== centralName[j])) {
+        throw new Error("ZIP 項目檢查失敗：" + name);
+      }
       if (start + compressed > bytes.length) throw new Error("ZIP 資料不完整");
       let data;
       if (method === 0) {

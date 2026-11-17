@@ -5,8 +5,8 @@
 
 const LABELS_PATH = "inbox/labels.json";
 const LABELS_FORMAT = "after-thinking/conversation-labels";
-const STATUS_TEXT = { todo: "未處理", done: "已整理", skip: "不用整理" };
-const SKIP_REASONS = { chat: "閒聊", duplicate: "重複了", no_info: "沒什麼資訊", other: "其他" };
+const STATUS_TEXT = { todo: T("list.to_do"), done: T("list.done"), skip: T("list.skip") };
+const SKIP_REASONS = { chat: T("labels.small_talk"), duplicate: T("labels.duplicate"), no_info: T("labels.not_much_information"), other: T("labels.other") };
 const LABEL_COLORS = [
   { bg: "#E6EBFB", fg: "#1F3487", line: "#3451C7" },
   { bg: "#FCE9D8", fg: "#7E3A05", line: "#C9600F" },
@@ -25,7 +25,7 @@ function emptyLabels() {
 function parseLabels(raw) {
   if (!raw) return emptyLabels();
   let o;
-  try { o = JSON.parse(raw); } catch (e) { throw new Error(LABELS_PATH + " 不是正確的 JSON，請先修好或刪掉它"); }
+  try { o = JSON.parse(raw); } catch (e) { throw new Error(T("labels.is_not_valid_json_fix_or", LABELS_PATH)); }
   const d = emptyLabels();
   if (Array.isArray(o.labels)) d.labels = o.labels.filter((l) => l && l.id).map((l) => ({ id: String(l.id), name: String(l.name || ""), color: Number(l.color) || 0 }));
   if (o.conversations && typeof o.conversations === "object") d.conversations = o.conversations;
@@ -66,7 +66,7 @@ function makeLabelsStore(config, branch, data) {
     },
     later(ms) {
       clearTimeout(store.timer);
-      store.onState("還沒存", false);
+      store.onState(T("labels.not_saved_yet"), false);
       store.timer = setTimeout(store.save, ms === undefined ? 1500 : ms);
     },
     dirty() { return store.labelsChanged || Object.keys(store.pending).length > 0; },
@@ -77,7 +77,7 @@ function makeLabelsStore(config, branch, data) {
       store.saving = true;
       const pending = store.pending, labelsChanged = store.labelsChanged, labels = store.data.labels;
       store.pending = {}; store.labelsChanged = false;
-      store.onState("儲存中…", false);
+      store.onState(T("tag.saving"), false);
       let committed = null;
       try {
         await commitFiles(config, branch, [], "After-thinking: update conversation labels", null, [{
@@ -109,14 +109,14 @@ function makeLabelsStore(config, branch, data) {
           });
           store.data = committed;
         }
-        store.onState(store.dirty() ? "還沒存" : "已儲存", false);
+        store.onState(store.dirty() ? T("labels.not_saved_yet") : T("list.saved"), false);
         if (store.dirty()) store.later();
         return true;
       } catch (e) {
         // 沒存成的部分放回去，下次一起存
         Object.entries(pending).forEach(([f, p]) => { store.pending[f] = Object.assign({}, p, store.pending[f]); });
         if (labelsChanged) store.labelsChanged = true;
-        store.onState("儲存失敗：" + e.message, true);
+        store.onState(T("labels.save_failed", e.message), true);
         return false;
       } finally {
         store.saving = false;

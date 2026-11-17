@@ -5,7 +5,9 @@ const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 
-const source = fs.readFileSync(path.join(__dirname, "..", "tag-workspace-data.js"), "utf8");
+// UI strings come from i18n.js and the locale files; without a browser the language defaults to zh-TW.
+const i18nSource = ["i18n.js", "locales/zh-TW.js", "locales/en.js"].map((f) => fs.readFileSync(path.join(__dirname, "..", f), "utf8")).join("\n");
+const source = i18nSource + "\n" + fs.readFileSync(path.join(__dirname, "..", "tag-workspace-data.js"), "utf8");
 const sample = [
   "Introduction", "## 第一節", "重要內容", "~~~md",
   "## 程式碼不是標題", "~~~", "### 子節", "更多內容", "## 第二節", "結論"
@@ -44,6 +46,7 @@ function fixture() {
   vm.createContext(context);
   vm.runInContext(source + "\nglobalThis.api = {parts:ATSections,boot:()=>defaultState(),save:()=>buildOutline(),load:d=>applyOutline(d)};", context);
   context.api.boot();
+  context.locale = vm.runInContext("ATI18n", context);
   return context;
 }
 test("native Markdown headings ignore fenced code", () => {
@@ -203,4 +206,34 @@ test("numbered heading section marks persist without rewriting the original", ()
   env.api.boot();env.api.load(saved);
   assert.equal(env.msgs[0].content,before);
   assert.equal(env.api.parts.marked(0,env.api.parts.parse(before)[1]),true);
+});
+
+test("localized section preview changes, persisted summary stays the same", () => {
+  const env = fixture();
+  const section = env.api.parts.parse(sample)[1];
+  env.api.parts.toggle(0, section);
+  const summaryIn = (lang) => {
+    env.locale.lang = lang;
+    return env.api.save().summary;
+  };
+  const savedChinese = summaryIn("zh-TW");
+  const savedEnglish = summaryIn("en");
+  assert.equal(savedChinese, savedEnglish, "persisted summary must not depend on locale");
+  assert.match(savedEnglish, /AI 小節重點/);
+});
+test("unmatched section reasons persist as stable codes plus legacy Chinese", () => {
+  const env = fixture();
+  const section = env.api.parts.parse(sample)[1];
+  env.api.parts.toggle(0, section);
+  const saved = env.api.save();
+  env.msgs[0].content = sample.replace("更多內容", "different body");
+  env.locale.lang = "en";
+  env.api.boot();
+  env.api.load(saved);
+  const item = env.api.save().unmatched_section_key_points[0];
+  assert.ok(item.reason_code.startsWith("ws."));
+  assert.match(item.reason, /[\u3400-\u9fff]/);
+  assert.notEqual(env.locale.t(item.reason_code), item.reason);
+  env.locale.lang = "zh-TW";
+  assert.equal(env.locale.t(item.reason_code), item.reason);
 });

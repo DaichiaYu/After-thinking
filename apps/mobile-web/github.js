@@ -95,7 +95,7 @@
   }
   async function getAttachment(path){
     const c=config();if(!c)throw Error("GitHub 尚未連接");
-    if(!/^source\/attachments\/[A-Za-z0-9._-]+$/.test(path)||path.includes(".."))throw Error("附件路徑不安全");
+    if(!/(?:^|\/)source\/attachments\/[A-Za-z0-9._-]+$/.test(path)||path.includes(".."))throw Error("附件路徑不安全");
     const info=await request(api+"/repos/"+c.repo+"/contents/"+safePath(path)+"?ref="+encodeURIComponent(c.branch));
     if(!info||Array.isArray(info)||info.type!=="file")throw Error("附件檔案不存在");
     if(info.size>MAX_ATTACHMENT_BYTES)throw Error("附件超過 25MB 預覽上限");

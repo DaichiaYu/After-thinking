@@ -138,7 +138,7 @@ test('ChatGPT: <Cite ref> tags resolve through search results stored on other me
 
 test('Gemini: source addresses are read from the recorded page data and kept as consulted pages', () => {
   const fn = (name) => { const a = src.indexOf('function ' + name + '('); const b = src.indexOf('\n}\n', a); return src.slice(a, b + 3); };
-  const gem = vm.runInNewContext(fn('geminiPayloadsOf') + fn('applyGeminiSources') + '\n({ applyGeminiSources });', { URL });
+  const gem = vm.runInNewContext(fn('geminiPayloadsOf') + fn('geminiInitPayloadsOf') + fn('applyGeminiSources') + '\n({ applyGeminiSources });', { URL });
   const answer = ['rc_abc123', ['## 標題\n\n**輝達**執行長目前由財務長暫時代理。\n\n另外出口管制新規擴大到海外資料中心的算力。'],
     [null, [[[0, 30], [1]], [[['https://news.example/a', 'News A', null, 'https://www.gstatic.com/favicon.ico']]],
       [['https://gov.example/rule', 'Rule page']]]],
@@ -159,4 +159,18 @@ test('Gemini: source addresses are read from the recorded page data and kept as 
   assert.equal(probe.urls, 4);
   assert.ok(!JSON.stringify(probe).includes('example'), 'probe carries no URLs or text');
   assert.equal(gem.applyGeminiSources({ items: [{ speaker: 'assistant', text: 'x' }] }, []).payloads, 0);
+});
+
+test('Gemini: answers found outside rc_ nodes, including page init scripts, still yield their addresses', () => {
+  const fn = (name) => { const a = src.indexOf('function ' + name + '('); const b = src.indexOf('\n}\n', a); return src.slice(a, b + 3); };
+  const gem = vm.runInNewContext(fn('geminiPayloadsOf') + fn('geminiInitPayloadsOf') + fn('applyGeminiSources') + '\n({ applyGeminiSources });', { URL });
+  const turn = [['c_1', 'r_1'], [['這一段是回答的內容，談的是出口管制新規與海外資料中心算力的限制範圍。']],
+    [[[1, 2], ['https://rule.example/x', 'Rule']]]];
+  const other = [['c_2'], [['另一段完全無關的文字，講天氣和旅遊行程安排的細節內容。']], [['https://noise.example/']]];
+  const script = "AF_initDataCallback({key: 'ds:1', hash: '2', data:" + JSON.stringify([[turn, other]]) + ", sideChannel: {}});";
+  const page = { items: [{ speaker: 'assistant', text: '這一段是回答的內容，談的是出口管制新規與海外資料中心算力的限制範圍。[來源：未取得網址]' }] };
+  const probe = gem.applyGeminiSources(page, [], [script]);
+  assert.equal(probe.init_scripts, 1);
+  assert.equal(probe.fallback, 1);
+  assert.deepEqual(plain(page.items[0].consulted), [{ url: 'https://rule.example/x', title: 'Rule' }]);
 });

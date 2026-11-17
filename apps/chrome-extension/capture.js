@@ -1467,11 +1467,34 @@ function geminiPayloadsOf(raws) {
   return payloads;
 }
 
-function applyGeminiSources(page, raws) {
-  const payloads = geminiPayloadsOf(raws);
+// 重新整理頁面時，Gemini 可能把對話直接放在網頁本身的 <script>（AF_initDataCallback）裡，
+// 不經過 batchexecute，記錄器就聽不到。這裡也從那些 script 讀。
+function geminiInitPayloadsOf(texts) {
+  const out = [];
+  (texts || []).forEach((t) => {
+    const re = /AF_initDataCallback\(\{key:\s*'([^']+)'[\s\S]*?data:([\s\S]*?),\s*sideChannel:/g;
+    let m;
+    while ((m = re.exec(String(t || "")))) {
+      try { out.push({ rpc: "init:" + m[1], data: JSON.parse(m[2]) }); } catch (e) {}
+    }
+  });
+  return out;
+}
+
+// 注入到 Gemini 頁面：取出網頁本身帶的初始資料 script（只讀，不執行）
+function readGeminiInitScripts() {
+  const LIMIT = 40 * 1024 * 1024;
+  let total = 0;
+  return Array.from(document.querySelectorAll("script")).map((el) => el.textContent || "")
+    .filter((t) => t.includes("AF_initDataCallback") && (total += t.length) <= LIMIT);
+}
+
+function applyGeminiSources(page, raws, initTexts) {
+  const payloads = geminiPayloadsOf(raws).concat(geminiInitPayloadsOf(initTexts));
   const probe = { recorder: page.recorder || null, payloads: payloads.length,
     rpcs: {}, candidates: 0, answers: 0, matched: 0, urls: 0, kept: 0, url_paths: {}, url_parents: {},
-    answer_lengths: [], best_scores: [], candidate_info: [], urls_by_rpc: {} };
+    answer_lengths: [], best_scores: [], candidate_info: [], urls_by_rpc: {}, init_scripts: (initTexts || []).length,
+    payload_scores: [], fallback: 0 };
   payloads.forEach((p) => { const k = String(p.rpc); if (Object.keys(probe.rpcs).length < 40 || probe.rpcs[k]) probe.rpcs[k] = (probe.rpcs[k] || 0) + 1; });
   // 只留字母和數字（含中文），用來比對畫面文字和原始 Markdown
   const squash = (s) => String(s || "").replace(/\[來源[^\]]*\]/g, "").replace(/[^\p{L}\p{N}]+/gu, "").toLowerCase();
@@ -1480,6 +1503,13 @@ function applyGeminiSources(page, raws) {
     const out = [];
     const go = (x, d) => { if (d > 3) return; if (typeof x === "string") out.push(x); else if (Array.isArray(x)) x.forEach((y) => go(y, d + 1)); };
     go(n[1], 0);
+    return out.join("\n");
+  };
+  // 一段資料裡所有文字接起來（不含網址），用來算相似度
+  const allText = (n) => {
+    const out = [];
+    const go = (x, d) => { if (d > 60) return; if (typeof x === "string") { if (!/^https?:\/\//i.test(x)) out.push(x); } else if (Array.isArray(x)) x.forEach((y) => go(y, d + 1)); };
+    go(n, 0);
     return out.join("\n");
   };
   const candidates = [];
@@ -1539,7 +1569,28 @@ function applyGeminiSources(page, raws) {
       if (score > best) { best = score; hit = c; }
     });
     probe.best_scores.push(Math.round(best * 100) / 100);
-    if (!hit || best < 0.5) return;
+    if (!hit || best < 0.5) {
+      // 回答不在 rc_ 那種結構裡：改找「含有這則回答過半內容的最小一段資料」，網址從那裡收
+      const scoreOf = (flatText) => pieces.filter((p) => flatText.includes(p)).length / pieces.length;
+      let top = [];
+      payloads.forEach((p, k) => {
+        if (p.flat === undefined) p.flat = squash(allText(p.data));   // 每份資料只算一次
+        const sc = scoreOf(p.flat);
+        if (sc > 0) top.push([String(p.rpc), Math.round(sc * 100) / 100, k]);
+      });
+      top.sort((a, b) => b[1] - a[1]);
+      probe.payload_scores.push(top.slice(0, 3).map((t) => [t[0], t[1]]));
+      if (!top.length || top[0][1] < 0.5) return;
+      let node = payloads[top[0][2]].data;
+      for (let guard = 0; guard < 60; guard++) {
+        // 往下縮到最小、但還帶著網址的那一段（再往下就只剩文字，網址在旁邊那一層）
+        const next = Array.isArray(node) ? node.find((c) => Array.isArray(c) && countUrls(c, 0) > 0 && scoreOf(squash(allText(c))) >= 0.5) : null;
+        if (!next) break;
+        node = next;
+      }
+      hit = { node, fallback: true };
+      probe.fallback++;
+    }
     probe.matched++;
     const already = new Set((item.sources || []).map((s) => s.url));
     const list = item.consulted || [];
@@ -1746,7 +1797,12 @@ async function finalizeCapture(tabId, platform, page) {
       const raws = inj && inj.result;
       page.recorder = raws ? (raws.length ? "active" : "active_empty") : "not_loaded";
       if (raws && raws.length) applyGeminiTimes(page, conversationId, parseGeminiRecorded(raws));
-      try { applyGeminiSources(page, raws || []); } catch (e) { page.source_probe = { recorder: page.recorder, error: String(e && e.message || e).slice(0, 120) }; }
+      let initTexts = [];
+      try {
+        const [ini] = await chrome.scripting.executeScript({ target: { tabId }, func: readGeminiInitScripts });
+        initTexts = (ini && ini.result) || [];
+      } catch (e) {}
+      try { applyGeminiSources(page, raws || [], initTexts); } catch (e) { page.source_probe = { recorder: page.recorder, error: String(e && e.message || e).slice(0, 120) }; }
     } catch (e) { page.recorder = "error"; page.source_probe = { recorder: "error" }; }
   }
   const dl = await downloadAttachments(tabId, page.items);

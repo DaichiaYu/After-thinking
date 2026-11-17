@@ -110,9 +110,30 @@
           </div>
           <div class="reader-toolbar-actions"><button id="reader-review" class="toolbar-link" type="button">審查</button><button id="open-topics" class="toolbar-link" type="button">主題</button><div class="reader-arrows"><button id="prev-item" aria-label="上一項">↑</button><button id="next-item" aria-label="下一項">↓</button><span id="position" class="small muted">—</span></div></div>
         </div>
-        <div class="reader-layout"><div class="reader-main"><div id="source-warning" class="warning" hidden></div>
-        <div id="message-list" class="message-list"></div>
-        <button id="load-more" class="load-more" hidden>繼續載入對話</button></div><aside id="desktop-rail" class="desktop-rail" aria-label="對話快速索引"></aside></div>
+        <div class="reader-layout">
+          <aside class="desktop-outline" aria-label="主題與標記索引">
+            <div class="desktop-panel-title"><h2>主題結構</h2><button id="desktop-add-topic" type="button" class="desktop-small-action">＋ 新增</button></div>
+            <div id="desktop-topic-tree" class="desktop-topic-tree"></div>
+            <div class="desktop-panel-title desktop-section-gap"><h2>快速查找</h2></div>
+            <label class="sr-only" for="desktop-find">搜尋這段對話</label>
+            <input id="desktop-find" type="search" autocomplete="off" placeholder="搜尋對話原文…">
+            <div id="desktop-find-results" class="desktop-find-results" role="status"></div>
+            <div id="desktop-rail" class="desktop-rail" aria-label="關鍵與轉向索引"></div>
+          </aside>
+          <div class="reader-main">
+            <div id="source-warning" class="warning" hidden></div>
+            <div id="message-list" class="message-list"></div>
+            <button id="load-more" class="load-more" hidden>繼續載入對話</button>
+          </div>
+          <aside class="desktop-inspector" aria-label="訊息標記與審查">
+            <div class="desktop-inspector-tabs" role="group" aria-label="檢查器頁籤">
+              <button type="button" data-inspector-view="message" class="active" aria-pressed="true">訊息</button>
+              <button type="button" data-inspector-view="review" aria-pressed="false">AI 審查</button>
+              <button type="button" data-inspector-view="summary" aria-pressed="false">摘要</button>
+            </div>
+            <div id="desktop-inspector-body" class="desktop-inspector-body"></div>
+          </aside>
+        </div>
       </section>
       <section id="topics-page" data-page="topics" hidden>
         <div class="title-row"><div><p class="eyebrow">DISCUSSION STRUCTURE</p><h1>主題總覽</h1></div><button id="new-topic" class="ghost">＋ 新增</button></div>

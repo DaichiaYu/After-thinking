@@ -80,6 +80,32 @@
     }
     throw new Error("無法讀取 "+path+"；GitHub 未回傳可解碼的檔案內容");
   }
+  const MAX_ATTACHMENT_BYTES=25*1024*1024;
+  function binaryFromBase64(base64){
+    const clean=String(base64||"").replace(/\s+/g,"");
+    if(clean.length>Math.ceil(MAX_ATTACHMENT_BYTES/3)*4+16)throw Error("附件超過 25MB 預覽上限");
+    const bytes=new Uint8Array(Math.floor(clean.length*3/4));
+    let at=0;
+    for(let i=0;i<clean.length;i+=65536){
+      const part=atob(clean.slice(i,i+65536));
+      if(at+part.length>MAX_ATTACHMENT_BYTES)throw Error("附件超過 25MB 預覽上限");
+      for(let j=0;j<part.length;j++)bytes[at++]=part.charCodeAt(j);
+    }
+    return bytes.subarray(0,at);
+  }
+  async function getAttachment(path){
+    const c=config();if(!c)throw Error("GitHub 尚未連接");
+    if(!/^source\/attachments\/[A-Za-z0-9._-]+$/.test(path)||path.includes(".."))throw Error("附件路徑不安全");
+    const info=await request(api+"/repos/"+c.repo+"/contents/"+safePath(path)+"?ref="+encodeURIComponent(c.branch));
+    if(!info||Array.isArray(info)||info.type!=="file")throw Error("附件檔案不存在");
+    if(info.size>MAX_ATTACHMENT_BYTES)throw Error("附件超過 25MB 預覽上限");
+    if(info.encoding==="base64"&&info.content)return binaryFromBase64(info.content);
+    if(info.sha){
+      const data=await request(api+"/repos/"+c.repo+"/git/blobs/"+encodeURIComponent(info.sha));
+      if(data.encoding==="base64")return binaryFromBase64(data.content);
+    }
+    throw Error("GitHub 無法提供附件內容");
+  }
   async function writeFile(path,text,expectedSha,message) {
     const c=config();if(!c)throw new Error("尚未連接 GitHub");
     // Check the entire prior version before saving. A browser tab must not
@@ -107,5 +133,5 @@
     await writeFile("inbox/index.jsonl",text,file.sha,"After-thinking mobile: refresh outline index");
     return {updated:true};
   }
-  root.ATGitHub={onUnauthorized:null,connect,disconnect,config,getFile,writeFile,refreshIndex,safeRepo,safePath,encode,decode};
+  root.ATGitHub={onUnauthorized:null,connect,disconnect,config,getFile,getAttachment,writeFile,refreshIndex,safeRepo,safePath,encode,decode};
 })(typeof window!=="undefined"?window:globalThis);

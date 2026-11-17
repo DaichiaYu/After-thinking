@@ -219,6 +219,12 @@ function parseJsonl(text) {
       file: typeof a.file === "string" ? a.file : null,
       missing: typeof a.missing === "string" ? a.missing : null,
       content_note: a.content_note === "extracted_text" ? "extracted_text" : null
+    })) : [],
+    // AI 引用的網址；只收 http(s)，避免把其他種類的連結畫成可點的
+    sources: Array.isArray(r.sources) ? r.sources.filter(s => s && typeof s.url === "string" && /^https?:\/\//i.test(s.url)).map((s, k) => ({
+      n: Number.isInteger(s.n) ? s.n : k + 1,
+      url: s.url,
+      title: typeof s.title === "string" && s.title ? s.title : null
     })) : []
   }));
 }
@@ -1277,6 +1283,18 @@ function msgRow(i, alsoIn) {
   const long = text.length > limit;
   const open = !!UI.exp[i];
   body.append(el("div", { class: "text", text: long && !open ? text.slice(0, limit) + "…" : text }));
+
+  // AI 引用的來源網址：預設收起，點開是可回到原網頁的清單
+  if (m.sources && m.sources.length) {
+    UI.srcOpen = UI.srcOpen || {};
+    const box = el("details", { class: "sources" }, el("summary", { text: T("tag.sources_count", m.sources.length) }));
+    if (UI.srcOpen[i]) box.open = true;
+    box.addEventListener("toggle", () => { UI.srcOpen[i] = box.open; });
+    m.sources.forEach((s) => box.append(el("div", { class: "source" },
+      el("span", { class: "source-n", text: String(s.n) }),
+      el("a", { href: s.url, target: "_blank", rel: "noopener noreferrer", text: s.title || s.url }))));
+    body.append(box);
+  }
 
   // 備註
   const note = S.notes[m.id] || "";

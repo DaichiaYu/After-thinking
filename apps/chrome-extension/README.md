@@ -79,7 +79,7 @@ v0.8.0 brings **both parallel developments into one extension**: (1) preview-fir
 ## What's new in v0.8.0
 
 - **Attachment originals on all four platforms**: files and images in ChatGPT, Claude, and Grok conversations are now downloaded into `source/attachments/` like Gemini's, instead of leaving only a marker. [Details](#files-and-images-v080-all-platforms)
-- **Grok support** (`grok.com`): single capture reads the full conversation from Grok's own data, including original times. Grok's citation tags are turned into `[來源]` markers. [Details](#grok-notes-v080)
+- **Grok support** (`grok.com`): single capture reads the full conversation from Grok's own data, including original times. Grok's citation tags are turned into numbered `[來源 n]` markers backed by a per-message `sources` list. [Details](#grok-notes-v080)
 - **Preview before choosing**: the tagging page opens with every question you asked (numbered; ones longer than 50 characters are collapsed), so you can see the conversation before deciding "several topics" or "one topic". If an AI has already drafted tags, its view is shown there too.
 - **「這篇不用整理」 (no need to organize)**: a third choice for small talk, duplicates, or conversations with little in them. Pick a reason; no `outline.json` is written, and the list shows the status.
 - **Also related to another topic**: a message keeps one main topic, and can additionally be marked as related to other topics (`also_messages` in `outline.json`).
@@ -342,7 +342,7 @@ ChatGPT replies can contain its own layout markup (`<box>`, `<row>`, `<text>`, `
 
 - Layout tags are removed and their text kept; card indentation is removed so it isn't mistaken for code.
 - `<Link url="…" title="…"/>` → `[title](url)`; `<Entity value="Google"/>` → `Google`; badges → `（text）`; dividers → `---`.
-- Citations become short markers: `[來源]` (source), `[引用記憶]` (from memory), `[引用附件第 133–168 行]` (attachment lines 133–168).
+- Citations become short markers: `[來源 n]` (source, numbered against the message's `sources` list; see [Source links](#source-links)), `[引用記憶]` (from memory), `[引用附件第 133–168 行]` (attachment lines 133–168).
 - `<AsyncImage query="…"/>` → `[網路圖片：…]` (web image); `<Chart/>` → `[圖表：title]` (chart).
 - Only these tag names are touched; any other `<…>`, code blocks, and inline code are left as they are. `metadata.yaml` lists `chatgpt_ui_markup` under `capture.cleaning` when this happened.
 - Conversations captured before this version still contain the markup; re-capture them to clean it (see the tip under "What gets saved" first).
@@ -352,7 +352,7 @@ ChatGPT replies can contain its own layout markup (`<box>`, `<row>`, `<text>`, `
 - Only `grok.com` is supported. Grok inside X (`x.com/i/grok`) uses a different page and is not captured.
 - Grok is read from the site's own data (`/rest/app-chat/…`), the same way the page loads it, so long conversations don't need scrolling and every message keeps its original time. If that fails, the extension falls back to scroll reading, which keeps no times.
 - Branches: when you regenerate or edit a message, Grok keeps several versions. The extension captures the path whose messages are on screen; if it can't tell from the page, it takes the newest path and says so in the popup. `metadata.yaml` records which: `capture.branch_captured` is `on_screen_path`, `on_screen_path_then_latest` (continued past what was on screen by taking the newest reply at each fork), `url_rid_path`, or `latest_path`.
-- Only answer text is captured; thinking and search steps are left out. Grok's `<grok:render …>` tags are removed, citations become `[來源]` (source) markers, and `metadata.yaml` lists `grok_render_markup` under `capture.cleaning`. Code blocks are left as they are.
+- Only answer text is captured; thinking and search steps are left out. Grok's `<grok:render …>` tags are removed, citations become `[來源 n]` (source) markers with their addresses in the message's `sources` list, and `metadata.yaml` lists `grok_render_markup` under `capture.cleaning`. Code blocks are left as they are.
 - Uploaded files, images, and generated images are downloaded (see "Files and images"). Grok doesn't publish its file fields, so the extension looks for them broadly; if files show as missing, send the diagnostic report.
 - Batch capture is Gemini-only for now.
 
@@ -392,6 +392,22 @@ After-thinking Capture 是 [After-thinking](../../README.md) 的 Chrome 擴充�
 「讓其他 AI 協助預先標記」是一條**選用**路徑。其「下載 AI 預先標記請求檔」輸出包含原文及規則的 Markdown，目的是讓其他 AI 產生 `outline.ai.json`；這份請求檔本身不是標記結果，也不是進入工作台的必要條件。AI 回傳建議後可從本機匯入審查。
 
 新版會優先辨識原始 Markdown `#` 標題；對舊版從畫面純文字擷取的 AI 回覆，若出現至少兩個結構明確的「一、…／二、…」或數字編號式小標題，會嘗試建立章節概覽。這是保守的純文字解析，不會改寫 `source/conversation.jsonl`，無法辨識的舊回覆仍可展開全文。過去未保存的原生 Markdown 層級不能保證完全重建。
+
+## Source links
+
+Web addresses the AI cited are now kept in the captured record, so a claim can be traced without reopening the original conversation. Each assistant message in `conversation.jsonl` may carry a `sources` list (`n`, `url`, `title`, `inline`), and citation markers in the text become `[來源 n]`, numbered against that list. The format is defined in [`docs/source-format.md`](../../docs/source-format.md).
+
+| Platform | Where the addresses come from | Markers in the text |
+| --- | --- | --- |
+| ChatGPT | `content_references` in the site's own conversation data | Yes |
+| Claude | `citations` on each text block | Yes |
+| Grok | citation cards (`cardAttachmentsJson`); if a card has no address, the answer's search-result list is kept instead | Yes |
+| Gemini, and any platform when the text has to be read from the screen | external links found in the answer on the page | No — listed only (`inline: false`) |
+
+- A citation whose address the site did not provide is written as `[來源：未取得網址]`. `metadata.yaml` records `capture.source_links: {total, unresolved}`, and the capture log has `sources` / `sources_unresolved`.
+- The tagging page shows a collapsed "來源網址" list under each message that has one.
+- Conversations captured earlier have no stored addresses; capture them again to get the list.
+- These fields come from internal site data that can change without notice. **This has been checked with unit tests on sample data only, not yet against live conversations on each platform.**
 
 ## v0.9.1 標記頁附件預覽（候選版）
 

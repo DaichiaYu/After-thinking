@@ -33,4 +33,20 @@ Every semantic source mutation increments `source_revision` and triggers stale e
 
 `source/metadata.yaml.source_revision` is authoritative. `state.yaml.source.revision` is a synchronized mirror for fast resume. If they disagree, execution is `blocked` until synchronized; do not guess which value is current.
 
+## Source links cited by the assistant
+
+An assistant item may carry an optional `sources` array holding the web addresses the AI cited, so a claim stays traceable from the record itself without reopening the original conversation:
+
+```json
+{"message_id":"msg-000002","order":20,"speaker":"assistant","content":"The limit was raised in 2024.[來源 1]","timestamp":null,"sources":[{"n":1,"url":"https://example.org/report","title":"Annual report","inline":true}]}
+```
+
+- `n` is the number used by `[來源 n]` markers in the same item's `content` (`[來源 1、2]` cites several). Numbers are local to one item.
+- `url` is always an absolute `http(s)` address; `title` may be null.
+- `inline: true` means a marker in `content` points at this entry. `inline: false` means the platform listed the link for this answer without tying it to a sentence (footnote lists, links found on the page when the text had to be read from the screen).
+- `[來源：未取得網址]` in `content` marks a citation whose address the platform did not provide. It is never left as a bare marker.
+- Marker text is fixed and does not follow the interface language.
+
+Records captured before this field existed have no `sources`; the addresses were not stored and can only be recovered by capturing the conversation again.
+
 External material may use `speaker: external` and additional bibliographic/URL fields. Analysis files cite stable `message_id` values as source references.

@@ -228,6 +228,26 @@ async function main() {
     return;
   }
 
+  // Projects need their own batch route before trying to capture a single chat.
+  const proj = platform === "chatgpt" && typeof ATProject !== "undefined" ? ATProject.parse(tab.url) : null;
+  if (proj) {
+    const name = proj.on_project_page ? String(tab.title || "").replace(/^ChatGPT\\s*[-–|]\\s*|\\s*[-–|]\\s*ChatGPT$/g, "").trim() : "";
+    const box = document.getElementById("project-batch");
+    document.getElementById("project-batch-text").textContent = proj.on_project_page
+      ? "這是 ChatGPT 專案頁，可以一次擷取專案中的對話。"
+      : "這段對話位於 ChatGPT 專案中，也可以一次擷取整個專案。";
+    box.hidden = false;
+    document.getElementById("open-project-batch").addEventListener("click", () => {
+      const query = new URLSearchParams({ source: "chatgpt", project: proj.project_url });
+      if (name && name !== "ChatGPT") query.set("name", name);
+      chrome.tabs.create({url: chrome.runtime.getURL("batch.html?" + query.toString())});
+    });
+    if (proj.on_project_page) {
+      document.getElementById("platform").textContent = "ChatGPT｜專案頁";
+      return;
+    }
+  }
+
   // 讀取中持續顯示經過秒數，讓使用者知道程式還在跑
   const statusLine = document.getElementById("platform");
   const startedAt = Date.now();

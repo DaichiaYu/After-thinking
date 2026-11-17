@@ -20,10 +20,21 @@ test('portable ZIP preserves UTF-8 filenames, JSONL and binary attachments', asy
   assert.equal(ATBundle.decode(files.get(inputs[1].path)), inputs[1].data);
   assert.deepEqual([...files.get(inputs[2].path)], [...inputs[2].data]);
 });
-test('ZIP rejects corruption with CRC verification', async () => {
+test('ZIP rejects payload corruption with CRC verification', async () => {
   const blob = ATBundle.pack([{ path: 'a/source/conversation.jsonl', data: 'a'.repeat(100) }]);
   const bytes = new Uint8Array(await blob.arrayBuffer());
-  bytes[50] ^= 0x01;
+  // ZIP local header: fixed 30 bytes + filename length (offset 26) + extra length (offset 28).
+  const header = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  assert.equal(header.getUint32(0, true), 0x04034b50);
+  const payloadOffset = 30 + header.getUint16(26, true) + header.getUint16(28, true);
+  bytes[payloadOffset] ^= 0x01;
+  await assert.rejects(() => ATBundle.unpack(new Blob([bytes])), /ZIP 項目檢查失敗/);
+});
+
+test('ZIP rejects local filename corruption even when payload CRC still matches', async () => {
+  const blob = ATBundle.pack([{ path: 'a/source/conversation.jsonl', data: 'a'.repeat(100) }]);
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  bytes[30] ^= 0x01; // Local filename starts immediately after its 30-byte header.
   await assert.rejects(() => ATBundle.unpack(new Blob([bytes])), /ZIP 項目檢查失敗/);
 });
 test('ZIP rejects duplicate or unsafe paths', () => {

@@ -265,6 +265,148 @@ function renderReader(keep=false){
  navStatus();renderDesktopRail();renderWorkBench();change();
  if(keep)window.scrollTo(0,y);
 }
+
+function renderWorkbenchSearch(){
+ const box=$("desktop-find-results"),m=model(),q=S.findText.trim().toLocaleLowerCase();box.replaceChildren();
+ if(!m||!q)return;
+ const hits=m.msgs.map((msg,i)=>({msg,i})).filter(x=>x.msg.content.toLocaleLowerCase().includes(q));
+ box.append(node("p","desktop-panel-meta","找到 "+hits.length+" 則訊息"));
+ for(const {msg,i} of hits.slice(0,12))box.append(btn(String(i+1).padStart(3,"0")+" · "+plain(msg.content).slice(0,52),()=>focusMessage(i),"desktop-search-result"));
+ if(hits.length>12)box.append(node("p","desktop-panel-meta","還有 "+(hits.length-12)+" 則，請縮小搜尋範圍。"));
+}
+function renderWorkBench(){
+ const m=model(),left=$("desktop-topic-tree"),box=$("desktop-inspector-body");
+ if(!m||!left||!box)return;left.replaceChildren();box.replaceChildren();
+ $("desktop-find").value=S.findText;renderWorkbenchSearch();
+ const mine=m.msgs.filter(x=>x.speaker!=="assistant").length;
+ left.append(node("p","desktop-panel-meta",m.msgs.length+" 則 · 我的 "+mine+" 則 · "+(m.dirty?"尚未儲存":"已儲存")));
+ left.append(node("p","desktop-panel-meta",m.topics.length+" 個主題 · 未分類 "+m.msgs.filter(x=>!m.primary[x.id]).length+" 則"));
+ for(const topic of m.topics){
+  const wrap=node("div","desktop-topic-item"),count=m.msgs.filter(x=>m.primary[x.id]===topic.id).length;
+  wrap.append(btn(topic.id+" · "+topic.name,()=>{const i=m.msgs.findIndex(x=>m.primary[x.id]===topic.id);i>=0?focusMessage(i):notify("此主題還沒有主要訊息")},"desktop-topic-name"),
+    node("span","desktop-topic-count",count+" 則"),
+    btn("編輯",()=>editTopic(topic),"desktop-small-action"));
+  if(topic.note)wrap.append(node("p","desktop-panel-meta",topic.note));
+  left.append(wrap);
+ }
+ for(const tab of document.querySelectorAll("[data-inspector-view]")){
+  const active=tab.dataset.inspectorView===S.workbenchTab;
+  tab.classList.toggle("active",active);tab.setAttribute("aria-pressed",String(active));
+ }
+ if(S.workbenchTab==="summary"){renderWorkbenchSummary(box);return}
+ if(S.workbenchTab==="review"){renderWorkbenchReview(box);return}
+ const msg=m.msgs.find(x=>x.id===S.workbenchId);
+ if(!msg){
+  box.append(node("h2","","訊息檢查器"),node("p","desktop-panel-meta","點選中間一則訊息的「檢查」，可直接編輯完整標記。"));
+  box.append(btn("從第一則開始",()=>focusMessage(0),"secondary full"));return;
+ }
+ const id=msg.id,i=m.msgs.indexOf(msg),valid=!m.sourceMismatch;
+ box.append(node("h2","","第 "+String(i+1).padStart(3,"0")+" 則 · "+(msg.speaker==="assistant"?"AI":msg.speaker==="author"?"我":"外部")),
+ node("p","desktop-inspector-snippet",plain(msg.content).slice(0,170)||"（只有附件）"));
+ if(msg.ts)box.append(node("p","desktop-panel-meta","時間："+msg.ts));
+ const select=document.createElement("select");select.setAttribute("aria-label","主要主題");
+ for(const t of [{id:"",name:"未分類"},...m.topics]){
+  const opt=document.createElement("option");opt.value=t.id;opt.textContent=t.id?t.id+" · "+t.name:t.name;opt.selected=(m.primary[id]||"")===t.id;select.append(opt);
+ }
+ select.disabled=!valid||m.mode==="single_topic";
+ select.addEventListener("change",()=>{C.setPrimary(m,id,select.value||null);renderReader(true)});
+ box.append(node("h3","desktop-section-title","主要主題"),select);
+ if(m.mode==="multi_topic"){
+  box.append(node("h3","desktop-section-title","相關主題（可多選）"));
+  for(const t of m.topics)box.append(workbenchCheck(t.id+" · "+t.name,(m.related[id]||[]).includes(t.id),()=>{
+   const ids=new Set(m.related[id]||[]);ids.has(t.id)?ids.delete(t.id):ids.add(t.id);
+   C.setRelated(m,id,[...ids]);renderReader(true);
+  },!valid));
+ }
+ box.append(node("h3","desktop-section-title","關鍵與轉向"));
+ const actions=node("div","desktop-direct-actions");
+ actions.append(btn(m.keys[id]?"★ 移除關鍵":"☆ 標記關鍵",()=>{C.toggleKey(m,id);renderReader(true)},"secondary"));
+ if(msg.speaker!=="assistant")actions.append(btn(m.turns[id]?"↗ 移除轉向":"↗ 標記轉向",()=>{C.toggleTurn(m,id);renderReader(true)},"secondary"));
+ actions.querySelectorAll("button").forEach(b=>b.disabled=!valid);box.append(actions);
+ box.append(node("h3","desktop-section-title","跨訊息關鍵段落"));
+ const start=S.rangeFrom?m.msgs.findIndex(x=>x.id===S.rangeFrom):-1;
+ const range=node("div","desktop-direct-actions");
+ range.append(btn(start<0?"設為範圍起點":"起點 "+(start+1)+" → 改設此則",()=>{S.rangeFrom=id;renderWorkBench()},"secondary"));
+ if(start>=0){
+  range.append(btn("標記至此",()=>{
+   try{C.addKeyRange(m,S.rangeFrom,id);S.rangeFrom=null;renderReader(true)}
+   catch(err){notify(err.message,true)}
+  },"primary"));
+  range.append(btn("取消",()=>{S.rangeFrom=null;renderWorkBench()},"desktop-small-action"));
+ }
+ range.querySelectorAll("button").forEach(b=>b.disabled=!valid);box.append(range);
+ for(const r of m.keyRanges){
+  const a=m.msgs.findIndex(x=>x.id===r.from_message_id),b=m.msgs.findIndex(x=>x.id===r.to_message_id);
+  if(a<=i&&i<=b){
+   const row=node("div","desktop-range-item");
+   row.append(node("span","",(a+1)+"–"+(b+1)+" 則"),
+     btn("移除",()=>{C.removeKeyRange(m,r.from_message_id,r.to_message_id);renderReader(true)},"desktop-small-action"));
+   row.querySelector("button").disabled=!valid;box.append(row);
+  }
+ }
+ if(msg.speaker==="assistant"){
+  const sections=C.sections(msg.content);
+  if(sections.length)box.append(node("h3","desktop-section-title","AI 回覆小節"));
+  for(const section of sections){
+   const marked=(m.sectionMarks[id]||[]).some(x=>x.heading_start===section.start&&x.section_fingerprint===section.fp);
+   box.append(workbenchCheck(section.title,marked,()=>{C.toggleSection(m,id,section);renderReader(true)},!valid));
+  }
+ }
+ box.append(node("h3","desktop-section-title","備註"));
+ const note=document.createElement("textarea");note.rows=5;note.value=m.notes[id]||"";note.placeholder="補充這則訊息的重要脈絡…";note.disabled=!valid;
+ note.addEventListener("change",()=>{if((m.notes[id]||"")!==note.value){C.setNote(m,id,note.value);renderReader(true)}});
+ box.append(note,node("p","desktop-panel-meta","離開備註欄位會寫入草稿；按儲存才會提交。"));
+ if(!valid)box.append(node("p","warning","原文版本不一致，暫時禁止修改。"));
+}
+function workbenchCheck(label,checked,act,disabled){
+ const wrap=node("label","desktop-check"),input=document.createElement("input");input.type="checkbox";input.checked=!!checked;input.disabled=!!disabled;
+ input.addEventListener("change",act);wrap.append(input,node("span","",label));return wrap;
+}
+function renderWorkbenchReview(box){
+ const m=model(),pending=C.pending(m);
+ box.append(node("h2","","AI 建議審查"),node("p","desktop-panel-meta",pending.length+" 項待確認"));
+ if(!pending.length)box.append(node("p","desktop-panel-meta","目前沒有待確認的建議。"));
+ for(const item of pending.slice(0,35)){
+  const i=m.msgs.findIndex(x=>x.id===item.id),row=node("article","desktop-review-item");
+  row.append(node("strong","",({key:"關鍵",turn:"轉向",range:"關鍵段落",topic:"主題"}[item.type]||item.type)+" · 第 "+(i+1)+" 則"));
+  if(item.detail)row.append(node("p","desktop-panel-meta",item.detail));
+  const actions=node("div","desktop-direct-actions");
+  actions.append(btn("查看",()=>{S.workbenchTab="message";focusMessage(i)},"desktop-small-action"));
+  for(const [text,yes] of [["確認",true],["否決",false]]){
+   const b=btn(text,()=>{C.decide(m,item,yes);renderReader(true)},"desktop-small-action");b.disabled=m.sourceMismatch;actions.append(b);
+  }
+  row.append(actions);box.append(row);
+ }
+ if(pending.length>35)box.append(btn("開啟完整審查",reviewSheet,"secondary full"));
+ if(S.aiReport){
+  box.append(node("h3","desktop-section-title","AI 預標記檔案"));
+  const report=S.aiReport;
+  box.append(node("p","desktop-panel-meta",report.plan?"已讀取建議"+(report.stale?" · 來源待確認":""):"建議內容需修正"));
+  if(report.errors?.length)box.append(node("p","warning",report.errors.join("；")));
+  if(report.plan){const b=btn("套用並審查 AI 建議",applyAi,"secondary full");b.disabled=m.sourceMismatch;box.append(b)}
+ }
+ if(S.repo)box.append(btn("從 GitHub 重新讀取建議",async()=>{await reloadAi();renderWorkBench()},"secondary full"));
+ box.append(btn("開啟 AI 指令與匯入",()=>show("prepare"),"desktop-small-action"));
+}
+function renderWorkbenchSummary(box){
+ const m=model(),c=S.repo?G.config():null;
+ box.append(node("h2","","標記摘要"),node("p","desktop-panel-meta",S.localHandle?"本機資料夾："+S.localHandle.name:S.local?"本機檔案":c?c.repo+" / "+c.branch:"尚未連線"));
+ if(S.folder)box.append(node("p","desktop-path",S.folder));
+ const counts=[
+ ["對話訊息",m.msgs.length+" 則"],["主題",m.topics.length+" 個"],["已分類",m.msgs.filter(x=>m.primary[x.id]).length+" 則"],
+ ["關鍵訊息",Object.keys(m.keys).length+" 則"],["關鍵段落",m.keyRanges.length+" 段"],["轉向",Object.keys(m.turns).length+" 處"],
+ ["AI 小節",Object.values(m.sectionMarks).reduce((n,x)=>n+x.length,0)+" 節"],["備註",Object.keys(m.notes).length+" 則"],["待確認",C.pending(m).length+" 項"],
+ ["無法對應",m.unmatched.length+" 項"],["狀態",m.sourceMismatch?"原文需核對":m.dirty?"尚未儲存":"已儲存"]
+ ];
+ const dl=node("dl","desktop-info-grid");
+ for(const [k,v] of counts)dl.append(node("dt","",k),node("dd","",v));box.append(dl);
+ if(m.sourceMismatch)return;
+ try{
+  const text=C.makeOutline(m).summary||"",preview=node("pre","desktop-summary-pre",text||"目前沒有標記摘要");
+  box.append(preview,btn("複製摘要",()=>copyText(text,"已複製摘要"),"secondary full"),btn("下載 outline.json 備份",download,"desktop-small-action"));
+ }catch(e){box.append(node("p","warning","摘要讀取失敗："+e.message))}
+}
+
 function renderDesktopRail(){
  const rail=$("desktop-rail"),m=model();if(!rail)return;
  rail.replaceChildren();if(!m)return;

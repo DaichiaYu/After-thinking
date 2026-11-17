@@ -626,7 +626,6 @@ async function captureViaApi(platform) {
       const items = [];
       let markupCleaned = 0;
       // 診斷用：只有數字和欄位名稱，沒有對話內容
-      const probe = { citation_tags: 0, unresolved: 0, cards: 0, web_results: 0, response_keys: new Set() };
       const grokStats = { answers: 0, cite_tags: 0, unresolved: 0, cards: 0, web_results: 0 };
       const grokKeys = new Set();
       path.forEach((id) => {
@@ -647,12 +646,7 @@ async function captureViaApi(platform) {
           grokStats.answers++;
           grokStats.cite_tags += cite.tags; grokStats.unresolved += cite.unresolved;
           grokStats.web_results += cite.results; grokStats.cards += cite.cards;
-          Object.keys(r).forEach((k) => grokKeys.add(k));
-          probe.citation_tags += (text.match(/\[來源[ ：]/g) || []).length;
-          probe.unresolved += cite.unresolved;
-          probe.cards += Array.isArray(r.cardAttachmentsJson) ? r.cardAttachmentsJson.length : 0;
-          probe.web_results += Array.isArray(r.webSearchResults) ? r.webSearchResults.length : 0;
-          Object.keys(r).forEach((k) => { const v = r[k]; if (v !== null && v !== undefined && v !== "" && !(Array.isArray(v) && !v.length)) probe.response_keys.add(k); });
+          Object.keys(r).forEach((k) => { const v = r[k]; if (v !== null && v !== undefined && v !== "" && !(Array.isArray(v) && !v.length)) grokKeys.add(k); });
         }
         let atts = fileAtts(r);
         if (speaker === "assistant") {
@@ -671,7 +665,6 @@ async function captureViaApi(platform) {
 
       const branchPoints = Object.values(children).filter((k) => k.length > 1).length;
       const created = ids.map(timeOf).filter(Boolean).sort((a, b) => a - b)[0];
-      log.source_refs = { ...probe, response_keys: Array.from(probe.response_keys).sort().slice(0, 80) };
       return result(items, { strategy: "grok:rest-app-chat", branches: branchPoints,
         created: created ? new Date(created).toISOString() : null, branchCaptured,
         cleaning: markupCleaned ? ["grok_render_markup"] : [] });
@@ -1203,8 +1196,6 @@ function buildMetadata(kept, detected, platform, page, mode) {
     "  source_links: {total: " + countSources(page.items).total + ", unresolved: " + countSources(page.items).unresolved + "}",
     // 來源網址的診斷：只有數字和資料欄位名稱，沒有對話內容
     "  source_probe: " + (page.api && page.api.source_refs ? JSON.stringify(page.api.source_refs) : "null"),
-    // 來源對照的診斷：只有數字和欄位名稱（JSON 也是合法的 YAML），方便對不上時照實際結構修
-    ...(page.api && page.api.source_refs ? ["  source_refs: " + JSON.stringify(page.api.source_refs)] : []),
     "  items_still_truncated: " + page.items.filter((i) => i.truncated).length,
     "  items_detected: " + detected,
     "  items_excluded_by_user: " + (detected - kept),

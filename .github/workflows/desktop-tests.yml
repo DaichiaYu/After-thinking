@@ -2,7 +2,7 @@ name: Desktop capture and localization tests
 
 on:
   push:
-    branches: [main, integration/i18n-safe-output-20261117]
+    branches: [main, 'integration/**']
     paths:
       - 'apps/chrome-extension/**'
       - '.github/workflows/desktop-tests.yml'

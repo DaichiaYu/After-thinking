@@ -77,11 +77,14 @@ const ATSections = (() => {
   // Conservative fallback: never trust renumbered message_id alone. A unique
   // unchanged section at the same ordinal requires a stable neighbouring message
   // (or an otherwise single-message conversation) before auto-restoring.
+  // Stable diagnostic codes survive changes to the UI language. Keep a
+  // Traditional-Chinese legacy reason for readers of older outline files.
+  const diagnostic = (key) => ({reason_code:key, reason:ATI18n.stored(()=>T(key))});
   function candidateFor(entry, doc, resolve) {
     const i=resolve(entry.message_id);
     if(i>=0 && msgs[i]?.speaker==="assistant") return {i,reason:null};
     const j=msgs.findIndex(m=>m.id===entry.message_id && m.speaker==="assistant");
-    if(j<0) return {i:-1,reason:T("ws.no_original_message_could_be_confirmed")};
+    if(j<0) return {i:-1,...diagnostic("ws.no_original_message_could_be_confirmed")};
     const old=doc.source?.message_fingerprints;
     const k=Array.isArray(old)?old.findIndex(x=>Array.isArray(x)&&x[0]===entry.message_id):-1;
     const sameLength=Array.isArray(old)&&old.length===msgs.length;
@@ -97,12 +100,12 @@ const ATSections = (() => {
     const sectionUnique=sectionMatches.length===1 && sectionMatches[0].pos===j;
     const stableContext=stableNeighbours.length>0 || (msgs.length===1&&old?.length===1);
     if(sameLength && sameIndex && stableContext && sectionUnique)return {i:j,reason:null};
-    if(sectionMatches.some(x=>x.pos===j))return {i:-1,reason:T("ws.the_section_content_still_exists_but")};
+    if(sectionMatches.some(x=>x.pos===j))return {i:-1,...diagnostic("ws.the_section_content_still_exists_but")};
     if(sameLength && sameIndex && stableContext){
       const headingStillExists=parse(msgs[j].content).some(s=>s.title===entry.heading&&s.level===entry.level);
-      return {i:-1,reason:headingStillExists?T("ws.the_surrounding_messages_match_but_the"):T("ws.the_surrounding_messages_match_but_the_2")};
+      return {i:-1,...diagnostic(headingStillExists?"ws.the_surrounding_messages_match_but_the":"ws.the_surrounding_messages_match_but_the_2")};
     }
-    return {i:-1,reason:T("ws.the_original_message_is_unclear_or")};
+    return {i:-1,...diagnostic("ws.the_original_message_is_unclear_or")};
   }
   function sectionIdentity(e) {
     return String(e.message_id)+"|"+String(e.section_fingerprint)+"|"+String(e.heading_start)+"|"+String(e.heading);
@@ -123,14 +126,14 @@ const ATSections = (() => {
       const match=candidateFor(entry,doc,resolver);
       const i=match.i;
       if(i<0){
-        S.unmatchedSections.push({...entry,reason:match.reason||T("ws.could_not_be_safely_matched_to")});
+        S.unmatchedSections.push({...entry,...diagnostic(match.reason_code||"ws.could_not_be_safely_matched_to")});
         continue;
       }
       const candidates=parse(msgs[i].content).filter(x=>x.fingerprint===entry.section_fingerprint&&x.title===entry.heading&&x.level===entry.level);
       const oldMessageFp=entry.message_fingerprint||((doc.source?.message_fingerprints||[]).find(x=>Array.isArray(x)&&x[0]===entry.message_id)||[])[1];
       const unchanged=oldMessageFp && oldMessageFp===fingerprint(msgs[i]);
       const s=candidates.length===1?candidates[0]:(unchanged?candidates.find(x=>x.start===entry.heading_start):null);
-      if(!s){S.unmatchedSections.push({...entry,reason:T("ws.the_section_text_changed_or_there")});continue;}
+      if(!s){S.unmatchedSections.push({...entry,...diagnostic("ws.the_section_text_changed_or_there")});continue;}
       const id=msgs[i].id;
       (S.sectionKeys[id]||=[]).push({heading:s.title,level:s.level,start:s.start,end:s.end,fingerprint:s.fingerprint});
     }
@@ -145,13 +148,13 @@ const ATSections = (() => {
       heading_start:s.start,section_end:s.end,section_fingerprint:s.fingerprint,origin:"user"
     })));
     doc.unmatched_section_key_points=S.unmatchedSections.slice();
-    doc.summary=outputText();return doc;
+    doc.summary=ATI18n.stored(outputText);return doc;
   };
   outputText=function(){
     const extra=msgs.flatMap((m,i)=>marks(i).map(s=>pad(i)+"「"+s.heading+"」"));
-    // Saved into outline.json as part of the summary, so built in the stored language.
-    return ATI18n.stored(()=>oldOutput()+(extra.length?T("ws.ai_section_highlights", extra.join(T("common.list_sep"))):"")+
-      (S.unmatchedSections.length?T("ws.section_highlights_to_verify_2", S.unmatchedSections.length):""));
+    // Localized for the visible preview; buildOutline stores the fixed-language version.
+    return oldOutput()+(extra.length?T("ws.ai_section_highlights", extra.join(T("common.list_sep"))):"")+
+      (S.unmatchedSections.length?T("ws.section_highlights_to_verify_2", S.unmatchedSections.length):"");
   };
   KIND_ORDER.section=1.5;
   reviewItems=function(){

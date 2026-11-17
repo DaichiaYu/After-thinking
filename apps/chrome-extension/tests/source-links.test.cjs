@@ -17,19 +17,23 @@ const api = vm.runInNewContext(block('source-links') + block('grok-markup') +
   block('chatgpt-markup') +
   '\n({ makeSources, chatgptSources, chatgptRefIndex, cleanChatgptMarkup, claudeBlockText, grokCiter, cleanGrokMarkup, SOURCE_UNRESOLVED });', { URL, Map, Set });
 const topLevel = vm.runInNewContext(src.slice(src.indexOf('// 來源網址統計')).split('\nfunction buildCaptureEntry')[0] +
-  src.slice(src.indexOf('function buildJsonl')).split('\n}\n')[0] + '\n}\n({ countSources, buildJsonl });', {});
+  src.slice(src.indexOf('function buildJsonl')).split('\nfunction buildMetadata')[0] + '\n({ countSources, buildJsonl, buildConsultedJsonl, consultedFileEntries });', {});
 const plain = (x) => JSON.parse(JSON.stringify(x));
 
 test('sources are numbered once per URL and reject non-web links', () => {
   const reg = api.makeSources();
   assert.equal(reg.add('https://a.example/x', ' A  page ', true), 1);
-  assert.equal(reg.add('https://b.example/', null, false), 2);
+  assert.equal(reg.add('https://b.example/', null, false), null);   // consulted only: kept apart, not numbered
+  assert.equal(reg.add('https://b.example/', 'B', false), null);
+  assert.equal(reg.add('https://c.example/', 'C', false), null);
+  assert.equal(reg.add('https://c.example/', null, true), 2);       // later cited: moves over and keeps its title
   assert.equal(reg.add('https://a.example/x', 'other', false), 1);
   assert.equal(reg.add('javascript:alert(1)', 'bad', true), null);
   assert.equal(reg.add('', null, true), null);
   assert.deepEqual(plain(reg.list), [
     { n: 1, url: 'https://a.example/x', title: 'A page', inline: true },
-    { n: 2, url: 'https://b.example/', title: null, inline: false }]);
+    { n: 2, url: 'https://c.example/', title: 'C', inline: true }]);
+  assert.deepEqual(plain(reg.extra), [{ url: 'https://b.example/', title: 'B' }]);
   assert.equal(reg.mark([1, 2, 1]), '[來源 1、2]');
   assert.equal(reg.mark([null]), api.SOURCE_UNRESOLVED);
 });
@@ -47,8 +51,9 @@ test('ChatGPT: hidden citation markers become numbered markers backed by URLs', 
   ] }, reg);
   assert.equal(out, 'Fact one.[來源 1、2] Fact two.[來源：未取得網址] The word plain stays.');
   assert.deepEqual(plain(reg.list).map((s) => [s.n, s.url, s.inline]), [
-    [1, 'https://a.example/1', true], [2, 'https://b.example/2', true],
-    [3, 'https://c.example/3', false], [4, 'https://d.example/4', false]]);
+    [1, 'https://a.example/1', true], [2, 'https://b.example/2', true]]);
+  // Listed for the answer but not tied to a sentence: kept apart for the separate file.
+  assert.deepEqual(plain(reg.extra), [{ url: 'https://c.example/3', title: 'Three' }, { url: 'https://d.example/4', title: null }]);
 });
 
 test('ChatGPT: text without references is untouched', () => {
@@ -81,20 +86,30 @@ test('Grok: citation cards resolve through cardAttachmentsJson; unresolved ones 
   assert.equal(c.text, 'Claim[來源 1] and another[來源：未取得網址].');
   assert.equal(cite.unresolved, 1);
   cite.listAll();
-  assert.deepEqual(plain(reg.list), [
-    { n: 1, url: 'https://a.example/', title: 'A', inline: true },
-    { n: 2, url: 'https://z.example/', title: 'Z', inline: false }]);
+  assert.deepEqual(plain(reg.list), [{ n: 1, url: 'https://a.example/', title: 'A', inline: true }]);
+  assert.deepEqual(plain(reg.extra), [{ url: 'https://z.example/', title: 'Z' }]);
 });
 
 test('sources are written to conversation.jsonl and counted', () => {
   const items = [
     { speaker: 'author', content: 'q', platform_message_id: 'u1' },
     { speaker: 'assistant', content: 'a[來源 1] b[來源：未取得網址]', platform_message_id: 'a1',
-      sources: [{ n: 1, url: 'https://a.example/', title: 'A', inline: true }] }];
+      sources: [{ n: 1, url: 'https://a.example/', title: 'A', inline: true }],
+      consulted: [{ url: 'https://z.example/', title: 'Z' }, { url: 'https://y.example/', title: null }] }];
   const rows = topLevel.buildJsonl(items).trim().split('\n').map((l) => JSON.parse(l));
   assert.equal('sources' in rows[0], false);
   assert.deepEqual(rows[1].sources, items[1].sources);
-  assert.deepEqual(plain(topLevel.countSources(items)), { total: 1, unresolved: 1 });
+  assert.equal(rows[1].consulted_sources, 2);
+  assert.equal('consulted' in rows[1], false);
+  assert.deepEqual(plain(topLevel.countSources(items)), { total: 1, consulted: 2, unresolved: 1 });
+  // Consulted pages go to their own file, keyed by the same message_id.
+  const extra = topLevel.buildConsultedJsonl(items).trim().split('\n').map((l) => JSON.parse(l));
+  assert.deepEqual(extra, [{ message_id: 'msg-000002', platform_message_id: 'a1',
+    sources: [{ url: 'https://z.example/', title: 'Z' }, { url: 'https://y.example/', title: null }] }]);
+  assert.deepEqual(plain(topLevel.consultedFileEntries('d/', items, 'data')).map((f) => [f.path, typeof f.data]),
+    [['d/source/consulted-sources.jsonl', 'string']]);
+  assert.equal(topLevel.buildConsultedJsonl(items.slice(0, 1)), null);
+  assert.deepEqual(plain(topLevel.consultedFileEntries('d/', items.slice(0, 1))), []);
 });
 
 test('ChatGPT: <Cite ref> tags resolve through search results stored on other messages', () => {

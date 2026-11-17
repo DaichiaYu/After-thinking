@@ -397,17 +397,20 @@ After-thinking Capture 是 [After-thinking](../../README.md) 的 Chrome 擴充�
 
 Web addresses the AI cited are now kept in the captured record, so a claim can be traced without reopening the original conversation. Each assistant message in `conversation.jsonl` may carry a `sources` list (`n`, `url`, `title`, `inline`), and citation markers in the text become `[來源 n]`, numbered against that list. The format is defined in [`docs/source-format.md`](../../docs/source-format.md).
 
-| Platform | Where the addresses come from | Markers in the text |
+| Platform | Cited by a sentence → `sources` on the message, `[來源 n]` in the text | Listed for the answer only → `source/consulted-sources.jsonl` |
 | --- | --- | --- |
-| ChatGPT | `content_references` in the site's own conversation data | Yes |
-| Claude | `citations` on each text block | Yes |
-| Grok | citation cards (`cardAttachmentsJson`); if a card has no address, the answer's search-result list is kept instead | Yes |
-| Gemini, and any platform when the text has to be read from the screen | external links found in the answer on the page | No — listed only (`inline: false`) |
+| ChatGPT | `<Cite ref>` tags and hidden citation markers, resolved through the conversation's search results | footnote-style source lists |
+| Claude | `citations` on each text block | — |
+| Grok | citation cards (`cardAttachmentsJson`) | the answer's web search results (often dozens) |
+| Gemini | source chips, when the page exposes their address | — |
 
-- A citation whose address the site did not provide is written as `[來源：未取得網址]`. `metadata.yaml` records `capture.source_links: {total, unresolved}`, and the capture log has `sources` / `sources_unresolved`.
+- **Two places, on purpose.** Lists of pages an answer merely consulted can be larger than the conversation itself, so they are kept out of `conversation.jsonl`; the message only records `consulted_sources` (a count). The separate file is created only when there is something to put in it.
+- When text has to be read from the screen (Gemini always; other platforms as a fallback), links that were part of the answer are kept in `sources` with `inline: false` and no marker.
+- A citation whose address the site did not provide is written as `[來源：未取得網址]`. Gemini's source chips usually fall here: the address is only shown after clicking the chip.
+- `metadata.yaml` records `capture.source_links: {total, consulted, unresolved}` and a content-free `capture.source_probe` (counts and field names) for troubleshooting.
 - The tagging page shows a collapsed "來源網址" list under each message that has one.
 - Conversations captured earlier have no stored addresses; capture them again to get the list.
-- These fields come from internal site data that can change without notice. **This has been checked with unit tests on sample data only, not yet against live conversations on each platform.**
+- These fields come from internal site data that can change without notice. Checked against one live conversation each on ChatGPT, Claude and Grok; Gemini chip addresses are not yet recovered.
 
 ## v0.9.1 標記頁附件預覽（候選版）
 

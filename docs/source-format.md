@@ -43,9 +43,19 @@ An assistant item may carry an optional `sources` array holding the web addresse
 
 - `n` is the number used by `[來源 n]` markers in the same item's `content` (`[來源 1、2]` cites several). Numbers are local to one item.
 - `url` is always an absolute `http(s)` address; `title` may be null.
-- `inline: true` means a marker in `content` points at this entry. `inline: false` means the platform listed the link for this answer without tying it to a sentence (footnote lists, links found on the page when the text had to be read from the screen).
+- `inline: true` means a marker in `content` points at this entry. `inline: false` means the link was part of the answer text itself but its position was lost (text read from the screen keeps only the link's label).
 - `[來源：未取得網址]` in `content` marks a citation whose address the platform did not provide. It is never left as a bare marker.
 - Marker text is fixed and does not follow the interface language.
+
+### Consulted pages (separate file)
+
+Platforms often list the pages an answer drew on without tying them to a sentence, sometimes dozens per answer. These are **not** stored in `conversation.jsonl`. They go to `source/consulted-sources.jsonl`, one line per message:
+
+```json
+{"message_id":"msg-000002","platform_message_id":"…","sources":[{"url":"https://example.org/a","title":"A"}]}
+```
+
+The message itself carries only `consulted_sources` (the count). `source/metadata.yaml` lists the file under `source_files` with `role: consulted_sources`. Executors do not load this file by default; read it only to check what an answer may have drawn on. An entry here is not evidence that a particular sentence came from that page.
 
 Records captured before this field existed have no `sources`; the addresses were not stored and can only be recovered by capturing the conversation again.
 

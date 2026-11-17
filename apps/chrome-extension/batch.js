@@ -324,6 +324,7 @@ async function uploadCapture(chat, page, attachmentFiles) {
   if (chat.project) entry.project = chat.project;
   const files = [
     { path: folder + "source/conversation.jsonl", content: buildJsonl(items) },
+    ...consultedFileEntries(folder, items),
     { path: folder + "source/metadata.yaml", content: buildMetadata(items.length, items.length, platform, page, "batch") },
     ...attachmentFiles.map((f) => ({ path: folder + "source/" + f.path, base64: f.base64 }))
   ];

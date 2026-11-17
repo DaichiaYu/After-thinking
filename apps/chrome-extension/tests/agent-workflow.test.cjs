@@ -51,6 +51,7 @@ async function simulate({ warning = false, auto = true, existing = false, repoOk
     ATTarget, setTimeout, clearTimeout,
     captureViaApi() {}, captureConversation() {}, ensureGeminiRecorder() {},
     async finalizeCapture() { return []; },
+    consultedFileEntries() { return []; },
     defaultDiscussionId() { return "2026-11-13-claude-422a07fa"; },
     sanitizeId(s) { return s.trim(); },
     async loadConfig() { return { repo: "test/private", root: "discussions/", token: "fake" }; },

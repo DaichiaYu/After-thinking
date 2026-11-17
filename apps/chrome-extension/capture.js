@@ -42,26 +42,37 @@ async function captureViaApi(platform) {
   // AI 回答引用的網址：存成每則訊息的 sources 清單（編號、網址、標題），
   // 文字裡的引用記號改成 [來源 n]，n 對得上同一則訊息的清單。
   // 網站沒給網址時寫 [來源：未取得網址]，不留看不出是什麼的空白記號。
-  // inline = true：文字裡有記號指到它；false：網站列在這則回答底下，但沒對到特定句子。
+  // 分兩種：
+  //   list  = 文字裡有記號指到的（被引用的），跟著訊息存在 conversation.jsonl
+  //   extra = 網站列出「這則回答參考過」但沒對到特定句子的網頁（常常幾十個），另外存成獨立檔案，
+  //           不塞進對話原文，免得原文被網址清單撐大
   const SOURCE_UNRESOLVED = "[來源：未取得網址]";
   const makeSources = () => {
-    const list = [];
+    const list = [], extra = [];
     const add = (url, title, inline) => {
       let href = null;
       try { const u = new URL(String(url || "")); if (u.protocol === "https:" || u.protocol === "http:") href = u.href; } catch (e) {}
       if (!href) return null;
       const t = typeof title === "string" ? title.replace(/\s+/g, " ").trim().slice(0, 300) : "";
       let s = list.find((x) => x.url === href);
-      if (!s) { s = { n: list.length + 1, url: href, title: t || null, inline: false }; list.push(s); }
-      else if (!s.title && t) s.title = t;
-      if (inline) s.inline = true;
+      const k = extra.findIndex((x) => x.url === href);
+      if (s) { if (!s.title && t) s.title = t; return s.n; }
+      if (!inline) {
+        if (k < 0) extra.push({ url: href, title: t || null });
+        else if (!extra[k].title && t) extra[k].title = t;
+        return null;
+      }
+      // 被引用了：如果先前只列在「參考過」，移過來
+      const moved = k >= 0 ? extra.splice(k, 1)[0] : null;
+      s = { n: list.length + 1, url: href, title: t || (moved && moved.title) || null, inline: true };
+      list.push(s);
       return s.n;
     };
     const mark = (ns) => {
       const u = (ns || []).filter((n, k, all) => n && all.indexOf(n) === k);
       return u.length ? "[來源 " + u.join("、") + "]" : SOURCE_UNRESOLVED;
     };
-    return { list, add, mark };
+    return { list, extra, add, mark };
   };
   // ChatGPT：引用資料在 metadata.content_references，文字裡是一串看不見的記號（matched_text）。
   const chatgptSources = (text, metadata, reg) => {
@@ -401,7 +412,11 @@ async function captureViaApi(platform) {
       log.source_refs = citeStats.unresolved ? { ...citeStats, paths: refIndex.paths, metadata_keys: refIndex.keys } : citeStats;
       items.forEach((i) => { i.content = withMarkers(i.text, i.attachments, i.speaker); });
       // __reg 帶著函式，不能傳回擴充功能；只留清單
-      items.forEach((i) => { if (i.__reg && i.__reg.list.length) i.sources = i.__reg.list; delete i.__reg; });
+      items.forEach((i) => {
+        if (i.__reg && i.__reg.list.length) i.sources = i.__reg.list;
+        if (i.__reg && i.__reg.extra.length) i.consulted = i.__reg.extra;
+        delete i.__reg;
+      });
 
       // 附件原檔：先向網站要下載網址（要帶登入的 token），真正下載在擷取後統一處理
       const auth = { Authorization: "Bearer " + session.accessToken };
@@ -640,9 +655,9 @@ async function captureViaApi(platform) {
           const cite = grokCiter(r, reg);
           const c = cleanGrokMarkup(text, cite);
           if (c.changed) { text = c.text; markupCleaned++; }
-          // Grok 常常不在句子裡放引用，只在回答底下列「參考了哪些網頁」。
-          // 句子裡沒有對到任何網址（或有引用對不到）時，把這份清單留下，至少查得到。
-          if (cite.unresolved || !reg.list.length) cite.listAll();
+          // Grok 常常不在句子裡放引用，只在回答底下列「參考了哪些網頁」（一則可能幾十個）。
+          // 這份清單一律留下，存到獨立檔案；句子裡有引用到的不重複列。
+          cite.listAll();
           grokStats.answers++;
           grokStats.cite_tags += cite.tags; grokStats.unresolved += cite.unresolved;
           grokStats.web_results += cite.results; grokStats.cards += cite.cards;
@@ -656,11 +671,13 @@ async function captureViaApi(platform) {
         if (!text && !atts.length) return;
         items.push({ speaker, text, content: withMarkers(text, atts, speaker),
           platform_message_id: r.responseId, timestamp: isoOf(id), attachments: atts,
-          ...(reg.list.length ? { sources: reg.list } : {}) });
+          ...(reg.list.length ? { sources: reg.list } : {}),
+          ...(reg.extra.length ? { consulted: reg.extra } : {}) });
       });
 
       // 診斷用：只有數字和欄位名稱，沒有對話內容
       log.source_refs = { ...grokStats, saved: items.reduce((n, i) => n + (i.sources ? i.sources.length : 0), 0),
+        consulted: items.reduce((n, i) => n + (i.consulted ? i.consulted.length : 0), 0),
         response_keys: Array.from(grokKeys).sort().slice(0, 80) };
 
       const branchPoints = Object.values(children).filter((k) => k.length > 1).length;
@@ -723,11 +740,35 @@ async function captureConversation(platform) {
   // 做法：複製一份放到畫面外，拿掉這些元素後再讀文字，原本的頁面不受影響。
   const GEMINI_NOISE = ".code-block-decoration, mat-icon, button, .cdk-visually-hidden, " +
     "sources-carousel-inline, source-inline-chip, .source-inline-chip-container";
-  function geminiText(node) {
+  // 來源小卡：畫面上只是一顆按鈕，網址通常要點開才看得到。
+  // 先試著從小卡的屬性找網址；找不到就在原位置寫「未取得網址」，不讓引用無聲消失。
+  const GEMINI_CHIPS = "sources-carousel-inline, source-inline-chip, .source-inline-chip-container";
+  function geminiChipMarker(chip, src) {
+    const urls = [];
+    [chip].concat(Array.from(chip.querySelectorAll("*"))).forEach((el) => {
+      if (el.tagName === "IMG") return;   // 小圖示的網址不是來源
+      Array.from(el.attributes || []).forEach((at) => {
+        const v = String(at.value || "");
+        if (/^https?:\/\//i.test(v) && !/favicon|gstatic\.com/i.test(v) && urls.indexOf(v) < 0) urls.push(v);
+      });
+    });
+    if (!src || !urls.length) return "[來源：未取得網址]";
+    const ns = urls.map((u) => {
+      let s = src.find((x) => x.url === u);
+      if (!s) { s = { n: src.length + 1, url: u, title: null, inline: true }; src.push(s); }
+      s.inline = true;
+      return s.n;
+    });
+    return "[來源 " + ns.join("、") + "]";
+  }
+  function geminiText(node, src) {
     if (!node.querySelector(GEMINI_NOISE)) return node.innerText;
     const box = document.createElement("div");
     box.style.cssText = "position:fixed;left:-100000px;top:0;width:" + Math.max(300, node.clientWidth) + "px;";
     const copy = node.cloneNode(true);
+    outermost(Array.from(copy.querySelectorAll(GEMINI_CHIPS))).forEach((chip) => {
+      chip.replaceWith(document.createTextNode(geminiChipMarker(chip, src)));
+    });
     copy.querySelectorAll(GEMINI_NOISE).forEach((el) => el.remove());
     box.appendChild(copy);
     document.body.appendChild(box);
@@ -901,8 +942,9 @@ async function captureConversation(platform) {
           // 只拿回答本文；思考過程（model-thoughts）不在這個區塊裡
           const body = r.querySelector(".model-response-text .markdown") || r.querySelector("message-content .markdown") ||
             r.querySelector(".model-response-text") || r.querySelector("message-content");
-          if (body) out.push({ node: body, speaker: "assistant", raw: geminiText(body), platform_message_id: null,
-            attachments: geminiResponseImages(r), linkNode: r,
+          const src = domLinks(r);
+          if (body) out.push({ node: body, speaker: "assistant", raw: geminiText(body, src), platform_message_id: null,
+            attachments: geminiResponseImages(r), sources: src,
             key: turnKey ? "turn:" + turnKey + ":r" : null });
         }
       });
@@ -930,7 +972,7 @@ async function captureConversation(platform) {
       const content = withMarkers(text, atts, m.speaker);
       return { node: m.node, speaker: m.speaker, content, text, platform_message_id: m.platform_message_id, key: m.key || null,
         attachments: atts, truncated: TRUNCATED_TAIL.test(text),
-        sources: m.speaker === "assistant" ? domLinks(m.linkNode || m.node) : [] };
+        sources: m.sources || (m.speaker === "assistant" ? domLinks(m.node) : []) };
     }).filter((m) => m.content.length > 0);
   }
 
@@ -1095,14 +1137,16 @@ function previewQuestions(items) {
 }
 
 // 擷取紀錄（inbox/index.jsonl）的一行
-// 來源網址統計：total = 存下的網址數；unresolved = 文字裡標了「未取得網址」的引用數
+// 來源網址統計：total = 跟著訊息存的網址數；consulted = 另存在獨立檔案的參考網頁數；
+// unresolved = 文字裡標了「未取得網址」的引用數
 function countSources(items) {
-  let total = 0, unresolved = 0;
+  let total = 0, unresolved = 0, consulted = 0;
   (items || []).forEach((i) => {
     if (Array.isArray(i.sources)) total += i.sources.length;
+    if (Array.isArray(i.consulted)) consulted += i.consulted.length;
     if (i.speaker === "assistant" && typeof i.content === "string") unresolved += i.content.split("[來源：未取得網址]").length - 1;
   });
-  return { total, unresolved };
+  return { total, consulted, unresolved };
 }
 
 function buildCaptureEntry(platform, conversationId, title, url, folder, items, page, mode) {
@@ -1126,6 +1170,7 @@ function buildCaptureEntry(platform, conversationId, title, url, folder, items, 
     attachments_saved: allAtts.filter((a) => a.file).length,
     attachments_missing: allAtts.filter((a) => a.missing).length,
     sources: countSources(items).total,
+    sources_consulted: countSources(items).consulted,
     sources_unresolved: countSources(items).unresolved,
     started_at: page.conversation_created_at || null,
     updated_at: page.conversation_updated_at || null,
@@ -1157,8 +1202,31 @@ function buildJsonl(items) {
     platform_message_id: item.platform_message_id,
     ...(item.model ? { model: item.model } : {}),
     ...(Array.isArray(item.attachments) && item.attachments.length ? { attachments: item.attachments } : {}),
-    ...(Array.isArray(item.sources) && item.sources.length ? { sources: item.sources } : {})
+    ...(Array.isArray(item.sources) && item.sources.length ? { sources: item.sources } : {}),
+    // 「參考過但沒對到句子」的網頁另存在 consulted-sources.jsonl，這裡只留數量當指標
+    ...(Array.isArray(item.consulted) && item.consulted.length ? { consulted_sources: item.consulted.length } : {})
   })).join("\n") + "\n";
+}
+
+// AI 回答時參考過、但沒對到特定句子的網頁清單：一行一則訊息，用 message_id 對回對話原文。
+// 沒有任何這類清單時回傳 null（不建立檔案）。
+const CONSULTED_FILE = "consulted-sources.jsonl";
+function buildConsultedJsonl(items) {
+  const lines = [];
+  (items || []).forEach((item, i) => {
+    if (!Array.isArray(item.consulted) || !item.consulted.length) return;
+    lines.push(JSON.stringify({
+      message_id: "msg-" + String(i + 1).padStart(6, "0"),
+      platform_message_id: item.platform_message_id || null,
+      sources: item.consulted.map((s) => ({ url: s.url, title: s.title || null }))
+    }));
+  });
+  return lines.length ? lines.join("\n") + "\n" : null;
+}
+// 寫檔用：有清單就回傳一個檔案項目（key 是 "content" 或 ZIP 用的 "data"），沒有就是空陣列
+function consultedFileEntries(prefix, items, key) {
+  const text = buildConsultedJsonl(items);
+  return text ? [{ path: prefix + "source/" + CONSULTED_FILE, [key || "content"]: text }] : [];
 }
 
 function buildMetadata(kept, detected, platform, page, mode) {
@@ -1171,6 +1239,7 @@ function buildMetadata(kept, detected, platform, page, mode) {
     "source_files:",
     "  - path: source/conversation.jsonl",
     "    role: primary",
+    ...(countSources(page.items).consulted ? ["  - path: source/" + CONSULTED_FILE, "    role: consulted_sources"] : []),
     'message_id_scheme: "msg-000001"',
     "message_id_counter: " + kept,
     "order_field: order",
@@ -1193,7 +1262,8 @@ function buildMetadata(kept, detected, platform, page, mode) {
     "  auto_scroll: " + (page.scroll ? "{down_steps: " + page.scroll.down_steps + ", gaps: " + page.scroll.gaps + ", timed_out: " + page.scroll.timed_out + "}" : "null"),
     "  attachments: " + (page.attachment_report ? "{total: " + page.attachment_report.total + ", saved: " + page.attachment_report.saved +
       ", missing: " + Object.values(page.attachment_report.missing).reduce((a, b) => a + b, 0) + "}" : "null"),
-    "  source_links: {total: " + countSources(page.items).total + ", unresolved: " + countSources(page.items).unresolved + "}",
+    "  source_links: {total: " + countSources(page.items).total + ", consulted: " + countSources(page.items).consulted +
+      ", unresolved: " + countSources(page.items).unresolved + "}",
     // 來源網址的診斷：只有數字和資料欄位名稱，沒有對話內容
     "  source_probe: " + (page.api && page.api.source_refs ? JSON.stringify(page.api.source_refs) : "null"),
     "  items_still_truncated: " + page.items.filter((i) => i.truncated).length,

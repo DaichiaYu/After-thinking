@@ -557,7 +557,7 @@ window.addEventListener("beforeunload", (e) => { if (dirty) { e.preventDefault()
 // ── 輸出 ──
 
 // The summary is saved into outline.json, so it is always built in the stored language (ATI18n.STORED_LANG).
-function outputText() { return ATI18n.stored(outputTextBody); }
+function outputText() { return outputTextBody(); }
 function outputTextBody() {
   const lines = [];
   if (S.mode === "multi") {
@@ -674,7 +674,8 @@ function buildOutline() {
         seen_messages: all.filter((i) => S.aiSeen[msgs[i].id]).map((i) => msgs[i].id)
       })
       : null,
-    summary: outputText()
+    // Canonical persisted summary is independent of the editor language.
+    summary: ATI18n.stored(outputText)
   };
 }
 

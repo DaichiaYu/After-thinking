@@ -161,6 +161,7 @@ input:focus,textarea:focus,select:focus{border-color:var(--accent);box-shadow:0 
 /* Desktop three-column tagging workbench; mobile sheet layout stays unchanged. */
 .desktop-outline,.desktop-inspector,.desktop-action{display:none!important}
 @media(min-width:1100px){
+ body[data-page="reader"] main{max-width:1700px;padding-top:14px}
  body[data-page="reader"] .topbar{display:flex}
  body[data-page="reader"] .workspace-heading{top:var(--bar)}
  body[data-page="reader"] .reader-toolbar{top:calc(var(--bar) + 56px)}

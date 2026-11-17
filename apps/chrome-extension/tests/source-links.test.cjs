@@ -14,7 +14,8 @@ const block = (name) => {
   return m[1];
 };
 const api = vm.runInNewContext(block('source-links') + block('grok-markup') +
-  '\n({ makeSources, chatgptSources, claudeBlockText, grokCiter, cleanGrokMarkup, SOURCE_UNRESOLVED });', { URL, Map });
+  block('chatgpt-markup') +
+  '\n({ makeSources, chatgptSources, chatgptRefIndex, cleanChatgptMarkup, claudeBlockText, grokCiter, cleanGrokMarkup, SOURCE_UNRESOLVED });', { URL, Map, Set });
 const topLevel = vm.runInNewContext(src.slice(src.indexOf('// 來源網址統計')).split('\nfunction buildCaptureEntry')[0] +
   src.slice(src.indexOf('function buildJsonl')).split('\n}\n')[0] + '\n}\n({ countSources, buildJsonl });', {});
 const plain = (x) => JSON.parse(JSON.stringify(x));
@@ -94,4 +95,28 @@ test('sources are written to conversation.jsonl and counted', () => {
   assert.equal('sources' in rows[0], false);
   assert.deepEqual(rows[1].sources, items[1].sources);
   assert.deepEqual(plain(topLevel.countSources(items)), { total: 1, unresolved: 1 });
+});
+
+test('ChatGPT: <Cite ref> tags resolve through search results stored on other messages', () => {
+  const conv = { mapping: {
+    a: { message: { author: { role: 'tool' }, content: {}, metadata: { search_result_groups: [{ domain: 'a.example', entries: [
+      { url: 'https://a.example/7', title: 'Seven', ref_id: { turn_index: 724155, ref_type: 'search', ref_index: 7 } },
+      { url: 'https://a.example/news', title: 'News', ref_id: 'turn267042news45' }] }] } } },
+    b: { message: { author: { role: 'assistant' }, content: {}, metadata: { content_references: [
+      { type: 'grouped_webpages', items: [{ url: 'https://b.example/14', title: 'Fourteen', refs: [{ turn_index: 458767, ref_type: 'search', ref_index: 14 }] }] }] } } },
+    c: { message: null }
+  } };
+  const index = api.chatgptRefIndex(conv);
+  assert.deepEqual(Object.keys(index.map).sort(), ['turn267042news45', 'turn458767search14', 'turn724155search7']);
+  assert.ok(index.paths.includes('metadata.search_result_groups[].entries[].ref_id'));
+  const reg = api.makeSources();
+  let unresolved = 0;
+  const cite = (ids) => reg.mark(ids.map((id) => { const hit = index.map[id]; if (!hit) { unresolved++; return null; } return reg.add(hit.url, hit.title, true); }));
+  const text = 'One.<Cite ref="turn724155search7"/> Two.<Cite refs={["turn458767search14","turn458767search8"]}/> Three.<Cite ref="turn1search1"/>';
+  const out = api.cleanChatgptMarkup(text, cite).text;
+  assert.equal(out, 'One.[來源 1] Two.[來源 2] Three.[來源：未取得網址]');
+  assert.equal(unresolved, 2);
+  assert.deepEqual(plain(reg.list).map((s) => s.url), ['https://a.example/7', 'https://b.example/14']);
+  // Without a resolver the reference id is kept, as before.
+  assert.equal(api.cleanChatgptMarkup('<Cite ref="turn1search1"/>').text, '[來源：turn1search1]');
 });

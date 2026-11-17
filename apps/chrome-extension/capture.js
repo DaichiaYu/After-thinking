@@ -97,6 +97,38 @@ async function captureViaApi(platform) {
     });
     return out;
   };
+  // ChatGPT 的另一種引用：回答文字裡是 <Cite ref="turn12search3"/>，網址放在別則（搜尋工具）訊息的資料裡。
+  // 這裡把整段對話資料掃一遍，凡是同時帶「引用編號」和 url 的物件都記下來：編號 → 網址。
+  // paths 只記欄位路徑（不含任何內容），對不到時寫進診斷報告，方便照實際結構修正。
+  const chatgptRefIndex = (conv) => {
+    const map = {}, paths = new Set(), keys = new Set();
+    const idOf = (r) => {
+      if (typeof r === "string") return /^turn\d+[a-z_]+\d+$/i.test(r) ? r : null;
+      if (r && typeof r === "object" && r.turn_index !== undefined && r.ref_type !== undefined && r.ref_index !== undefined) {
+        return "turn" + r.turn_index + r.ref_type + r.ref_index;
+      }
+      return null;
+    };
+    const walk = (o, path, depth) => {
+      if (!o || typeof o !== "object" || depth > 14) return;
+      if (Array.isArray(o)) { o.forEach((x) => walk(x, path + "[]", depth + 1)); return; }
+      // 先走到最裡面：越裡面的物件，網址和編號的對應越精確
+      Object.keys(o).forEach((k) => walk(o[k], path + "." + k, depth + 1));
+      const ids = [];
+      if (o.ref_id !== undefined) { ids.push(idOf(o.ref_id)); paths.add(path + ".ref_id"); }
+      if (Array.isArray(o.refs)) { o.refs.forEach((r) => ids.push(idOf(r))); paths.add(path + ".refs"); }
+      if (typeof o.url !== "string" || !o.url) return;
+      ids.filter(Boolean).forEach((id) => { if (!map[id]) map[id] = { url: o.url, title: typeof o.title === "string" ? o.title : null }; });
+    };
+    Object.values((conv && conv.mapping) || {}).forEach((node) => {
+      const m = node && node.message;
+      if (!m) return;
+      Object.keys(m.metadata || {}).forEach((k) => keys.add(k));
+      walk(m.metadata, "metadata", 0);
+      if (m.author && m.author.role === "tool") walk(m.content, "tool_content", 0);
+    });
+    return { map, paths: Array.from(paths).slice(0, 40), keys: Array.from(keys).sort().slice(0, 80) };
+  };
   // Claude：引用掛在文字區塊的 citations，位置用 end_index 標在該區塊文字裡。
   const claudeBlockText = (block, reg) => {
     let text = block.text;
@@ -144,7 +176,7 @@ async function captureViaApi(platform) {
   // ChatGPT 的回覆夾著它自己的版面語法（<box>、<row>、<text>、<Cite/>、<Link/>…），網站上畫成卡片，
   // 存成文字就是雜訊。轉成一般文字：容器標籤拿掉、連結變 [標題](網址)、引用留簡短記號、圖表留標題。
   // 只認得下面列的標籤名稱，其他 <...> 原樣保留；``` 程式碼區塊和 `行內程式碼` 都不動。
-  const cleanChatgptMarkup = (text) => {
+  const cleanChatgptMarkup = (text, cite) => {
     const NAMES = "box|row|col|column|stack|grid|grid-item|list|list-item|text|caption|title|badge|card|icon|favicon|divider|spacer|Cite|MemoryCite|FileCite|Entity|Link|AsyncImage|Image|Chart|checkbox|button|input|select|radio|radio-group|slider|date-picker|textarea|segmented-control|pressable|label|bold|italic|escape";
     const KNOWN = new RegExp("^(" + NAMES + ")$");
     const CONTAINERS = /^(box|row|col|column|stack|grid|grid-item|list|list-item|text|caption|title|badge|card|checkbox|button|pressable|label|bold|italic|escape|radio|radio-group)$/;
@@ -179,7 +211,12 @@ async function captureViaApi(platform) {
         return n === "badge" ? "（" : n === "list-item" ? "- " : "";
       }
       if (n === "Link") { const u = str(raw, "url"), ti = str(raw, "title"); return u && ti ? "[" + ti + "](" + u + ")" : (u || ti || "[動態連結，網址未保留]"); }
-      if (n === "Cite") { const ref = str(raw, "ref") || str(raw, "refs") || (raw.match(/\brefs?=\{([^}]+)\}/) || [])[1] || ""; return ref ? "[來源：" + ref + "]" : "[來源（原始引用標記）]"; }
+      if (n === "Cite") {
+        const ref = str(raw, "ref") || str(raw, "refs") || (raw.match(/\brefs?=\{([^}]+)\}/) || [])[1] || "";
+        // 有對照表時換成 [來源 n]；沒有（或這個編號查不到網址）就明講沒取得
+        if (cite) return cite(ref.match(/turn\d+[a-z_]+\d+/gi) || []);
+        return ref ? "[來源：" + ref + "]" : "[來源（原始引用標記）]";
+      }
       if (n === "MemoryCite") return "[引用記憶]";
       if (n === "FileCite") { const a = num(raw, "line_range_start"), b = num(raw, "line_range_end"); return a && b ? "[引用附件第 " + a + "–" + b + " 行]" : "[引用附件]"; }
       if (n === "Entity") return str(raw, "value");
@@ -340,9 +377,24 @@ async function captureViaApi(platform) {
         if (last) last.attachments = last.attachments.concat(pendingGenerated);
       }
       let markupCleaned = 0;
+      const refIndex = chatgptRefIndex(conv);
+      const citeStats = { indexed: Object.keys(refIndex.map).length, cited: 0, unresolved: 0 };
       items.forEach((i) => {
-        if (i.speaker === "assistant") { const c = cleanChatgptMarkup(i.text); if (c.changed) { i.text = c.text; markupCleaned++; } }
+        if (i.speaker !== "assistant") return;
+        const cite = (ids) => {
+          const ns = ids.map((id) => {
+            const hit = refIndex.map[id];
+            citeStats.cited++;
+            if (!hit) { citeStats.unresolved++; return null; }
+            return i.__reg.add(hit.url, hit.title, true);
+          });
+          return i.__reg.mark(ns);
+        };
+        const c = cleanChatgptMarkup(i.text, cite);
+        if (c.changed) { i.text = c.text; markupCleaned++; }
       });
+      // 診斷用：只有數字和欄位路徑，沒有對話內容
+      log.source_refs = citeStats.unresolved ? { ...citeStats, paths: refIndex.paths, metadata_keys: refIndex.keys } : citeStats;
       items.forEach((i) => { i.content = withMarkers(i.text, i.attachments, i.speaker); });
       // __reg 帶著函式，不能傳回擴充功能；只留清單
       items.forEach((i) => { if (i.__reg && i.__reg.list.length) i.sources = i.__reg.list; delete i.__reg; });

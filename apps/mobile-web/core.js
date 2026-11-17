@@ -81,11 +81,12 @@
       msgs,base:base&&typeof base==="object"?clone(base):null,
       folder:meta?.folder||"",revision:meta?.revision||1,
       title:meta?.title||"未命名對話",dirty:false,editVersion:0,
-      topics:[],primary:{},related:{},keys:{},turns:{},notes:{},sectionMarks:{},
+      topics:[],primary:{},related:{},keys:{},turns:{},notes:{},sectionMarks:{},keyRanges:[],
       unmatched:[],manualAi:new Set(),aiRejected:[],aiSeen:[],sourceMismatch:false
     };
     const doc=model.base;
     model.mode=doc?.mode==="single_topic"?"single_topic":"multi_topic";
+    model.keyRanges=Array.isArray(doc?.key_ranges)?clone(doc.key_ranges):[];
     model.sourceMismatch=!!(doc && ((doc.outline_version&&doc.outline_version>6) ||
       (doc.source?.fingerprint&&doc.source.fingerprint!==sourceFingerprint(msgs)) ||
       (Number.isInteger(doc.source?.message_count)&&doc.source.message_count!==msgs.length) ||
@@ -202,7 +203,7 @@
     const out=[];
     for(const v of Object.values(m.keys))if(v.origin==="ai_unreviewed")out.push({type:"key",id:v.message_id,detail:v.ai_reason||"",value:v});
     for(const v of Object.values(m.turns))if(v.origin==="ai_unreviewed")out.push({type:"turn",id:v.message_id,detail:v.ai_reason||"",value:v});
-    for(const v of m.base?.key_ranges||[])if(v.origin==="ai_unreviewed")out.push({type:"range",id:v.from_message_id,detail:v.ai_reason||"",value:v});
+    for(const v of m.keyRanges)if(v.origin==="ai_unreviewed")out.push({type:"range",id:v.from_message_id,detail:v.ai_reason||"",value:v});
     const aiMarked=new Set();
     for(const t of m.base?.topics||[])for(const id of t.ai_unreviewed_messages||[])if(m.primary[id]===t.id&&!aiMarked.has(id)){
       aiMarked.add(id);out.push({type:"topic",id,detail:t.name||"",value:t.id});
@@ -223,9 +224,9 @@
         if(t){t.ai_unreviewed_messages=(t.ai_unreviewed_messages||[]).filter(x=>x!==item.id);(t.ai_confirmed_messages ||= []).push(item.id);}
       }else {setPrimary(m,item.id,null,false);m.aiRejected.push({kind:"tags",ref:item.id,action:"removed",ai_value:item.value,at:now});}
     }else if(item.type==="range"){
-      const r=(m.base.key_ranges||[]).find(x=>x.from_message_id===item.id);
+      const r=m.keyRanges.find(x=>x.from_message_id===item.id);
       if(r){if(accept)r.origin="ai_confirmed";else {
-        m.base.key_ranges=m.base.key_ranges.filter(x=>x!==r);
+        m.keyRanges=m.keyRanges.filter(x=>x!==r);
         m.aiRejected.push({kind:"ranges",ref:item.id,action:"removed",ai_value:r.messages||[],at:now});
       }}
     }
@@ -236,6 +237,24 @@
     m.topics.push({id,name:name.trim()||"新主題 "+id,note:"",name_origin:"user"});markEdited(m);return id;
   }
 
+  function addKeyRange(m,fromId,toId){
+    const start=m.msgs.findIndex(x=>x.id===fromId),end=m.msgs.findIndex(x=>x.id===toId);
+    if(start<0||end<0)throw Error("找不到選取的訊息");
+    const a=Math.min(start,end),b=Math.max(start,end);
+    const overlap=m.keyRanges.some(r=>{
+      const x=m.msgs.findIndex(z=>z.id===r.from_message_id),y=m.msgs.findIndex(z=>z.id===r.to_message_id);
+      return x>=0&&y>=0&&a<=y&&b>=x;
+    });
+    if(overlap)throw Error("選取範圍與既有關鍵段落重疊，請先移除原有段落");
+    m.keyRanges.push({from_message_id:m.msgs[a].id,to_message_id:m.msgs[b].id,origin:"user"});
+    m.keyRanges.sort((x,y)=>m.msgs.findIndex(z=>z.id===x.from_message_id)-m.msgs.findIndex(z=>z.id===y.from_message_id));
+    markEdited(m);
+  }
+  function removeKeyRange(m,fromId,toId){
+    const old=m.keyRanges.length;
+    m.keyRanges=m.keyRanges.filter(r=>!(r.from_message_id===fromId&&r.to_message_id===toId));
+    if(m.keyRanges.length!==old)markEdited(m);
+  }
   function setMode(m,mode) {
     if(mode!=="multi_topic"&&mode!=="single_topic")throw new Error("未知的整理方式");
     if(m.mode===mode){markEdited(m);return}
@@ -273,7 +292,7 @@
     if(p.mode==="multi_topic"){m.topics=p.topics.map(t=>({id:t.id,name:t.name,note:t.note,name_origin:"ai"}));m.msgs.forEach((msg,i)=>{if(p.at[i])m.primary[msg.id]=p.at[i]});base.topics=m.topics.map(t=>({id:t.id,name:t.name,note:t.note,name_origin:"ai",messages:m.msgs.filter((x,i)=>p.at[i]===t.id).map(x=>x.id),also_messages:[],ai_unreviewed_messages:m.msgs.filter((x,i)=>p.at[i]===t.id).map(x=>x.id),ai_confirmed_messages:[]}));base.single_topic=base.single_topic||{name:"",note:""}}
     else{const single=p.single||{},name=(single.name||m.title||"主要討論").trim();m.topics=[{id:"A",name,note:single.note||"",name_origin:"ai"}];for(const msg of m.msgs)m.primary[msg.id]="A";base.topics=[];base.single_topic={name,note:single.note||""}}
     m.keys={};for(const k of p.keys){const msg=m.msgs[k.i];m.keys[msg.id]={message_id:msg.id,speaker:msg.speaker,origin:"ai_unreviewed",ai_reason:k.reason}}m.turns={};for(const t of p.turns){const msg=m.msgs[t.i];m.turns[msg.id]={message_id:msg.id,hinted_by:[],origin:"ai_unreviewed",ai_reason:t.reason}}
-    base.key_ranges=p.ranges.map(r=>({from_message_id:m.msgs[r.a].id,to_message_id:m.msgs[r.b].id,origin:"ai_unreviewed",ai_reason:r.reason}));base.ai_suggestion={file:"outline.ai.json",content_fingerprint:fingerprint({speaker:"ai-file",content:String(raw||"")}),generated_at:p.generated_at,generated_by:p.generated_by,source_matched:!rep.stale,applied_at:new Date().toISOString(),applied_how:"replace"};m.aiRejected=[];m.aiSeen=[];markEdited(m);
+    m.keyRanges=p.ranges.map(r=>({from_message_id:m.msgs[r.a].id,to_message_id:m.msgs[r.b].id,origin:"ai_unreviewed",ai_reason:r.reason}));base.key_ranges=clone(m.keyRanges);base.ai_suggestion={file:"outline.ai.json",content_fingerprint:fingerprint({speaker:"ai-file",content:String(raw||"")}),generated_at:p.generated_at,generated_by:p.generated_by,source_matched:!rep.stale,applied_at:new Date().toISOString(),applied_how:"replace"};m.aiRejected=[];m.aiSeen=[];markEdited(m);
   }
   function summaryText(m,doc) {
     const all=m.msgs.map((_,i)=>i);
@@ -364,6 +383,7 @@
         unseen_ai_messages:messages.filter(id=>priorUnreviewed.has(id)&&!m.aiSeen.includes(id))};
     });
     doc.untagged=all.filter(id=>!m.primary[id]);
+    doc.key_ranges=clone(m.keyRanges);
     if(doc.mode==="single_topic")doc.single_topic={name:m.topics[0]?.name||"",note:m.topics[0]?.note||""};
     else doc.single_topic=doc.single_topic||{name:"",note:""};
     doc.key_points=all.filter(id=>!!m.keys[id]).map(id=>clone(m.keys[id]));
@@ -378,5 +398,5 @@
   }
   root.ATCore={fingerprint,parseJsonl,sourceFingerprint,sections,normalizeFolder,makeModel,
     setPrimary,setRelated,toggleKey,toggleTurn,setNote,toggleSection,pending,decide,addTopic,setMode,
-    parseSuggestionText,checkSuggestion,applySuggestion,makeOutline,keyOf,turnOf};
+    parseSuggestionText,checkSuggestion,applySuggestion,makeOutline,keyOf,turnOf,addKeyRange,removeKeyRange};
 })(typeof window!=="undefined"?window:globalThis);

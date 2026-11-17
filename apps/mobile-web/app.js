@@ -108,7 +108,7 @@ async function connect(e){
  const submit=$("connect-button");submit.disabled=true;
  try{
   const cfg=await G.connect($("repo-input").value,$("branch-input").value,token);
-  D.saveConnection(cfg.repo,cfg.branch,token,remember);S.usingSaved=remember;
+  D.saveConnection(cfg.repo,cfg.branch,token,remember);S.usingSaved=remember;S.localHandle=null;S.localSource=null;S.localOutline=null;
   $("token-input").value="";S.model=null;S.row=null;S.rows=[];S.draft=null;
   await getIndex();show("library");notify("");
  }catch(err){
@@ -461,11 +461,11 @@ function changeRepo(){
  leave();show("connect");syncConnectForm();
 }
 // 中斷連線並忘記這台裝置：刪掉記住的倉庫、Token 和所有草稿
-function disconnect(){
+async function disconnect(){
  writeDraft();const drafts=D.draftCount();
  if(!confirm("會刪掉這台裝置記住的倉庫和 Token"+(drafts?"，以及 "+drafts+" 份未儲存的標記草稿":"")+"。GitHub 上的資料不受影響。確定？"))return;
  if(model())model().dirty=false;
- leave();D.forgetAll();$("repo-input").value="";$("branch-input").value="main";show("connect");syncConnectForm();
+ leave();D.forgetAll();try{await window.ATLocalFolder?.forget()}catch(err){notify("已清除一般設定，但無法忘記資料夾："+err.message,true)}$("repo-input").value="";$("branch-input").value="main";show("connect");syncConnectForm();
 }
 function initialize(){
  const folderControl=window.ATLocalFolder;

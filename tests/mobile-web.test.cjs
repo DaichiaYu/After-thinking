@@ -7,7 +7,7 @@ const vm=require("node:vm");
 
 const root=path.join(__dirname,"..");
 const get=name=>fs.readFileSync(path.join(root,"apps","mobile-web",name),"utf8");
-const js={core:get("core.js"),github:get("github.js"),device:get("device.js"),app:get("app.js"),html:get("index.html")};
+const js={core:get("core.js"),github:get("github.js"),device:get("device.js"),app:get("app.js"),localFolder:get("local-folder.js"),html:get("index.html")};
 function core(){
   const window={};
   vm.runInNewContext(js.core,{window,Date,TextEncoder,TextDecoder});
@@ -30,7 +30,7 @@ test("production interface has no built-in user repository, data or token",()=>{
   assert.doesNotMatch(js.html,/value="[^"]+\/[^"]+"[^>]*id="repo-input"/);
 });
 test("all JavaScript parses without a bundler",()=>{
-  for(const filename of ["core.js","github.js","device.js","app.js"]) assert.doesNotThrow(()=>new Function(get(filename)));
+  for(const filename of ["core.js","github.js","device.js","local-folder.js","app.js"]) assert.doesNotThrow(()=>new Function(get(filename)));
 });
 test("mobile controls exist in HTML without duplicate IDs",()=>{
   const ids=[...js.html.matchAll(/id="([^"]+)"/g)].map(x=>x[1]);
@@ -182,3 +182,27 @@ test("connect form supports password managers and the remember option",()=>{
 test("mobile setup exposes mode choice and AI drafting controls",()=>{for(const id of ["prepare-page","choose-multi","choose-single","choose-skip","ai-copy-repo","ai-reload","ai-download-request","enter-workspace","reader-review","reader-mode"]) assert.match(js.html,new RegExp('id="'+id+'"'));});
 test("mode selection writes the chosen outline mode and can switch back",()=>{const C=core(),msgs=messages(C),m=C.makeModel(msgs,null,{title:"測試對話"});assert.equal(m.mode,"multi_topic");C.setMode(m,"single_topic");assert.equal(C.makeOutline(m).mode,"single_topic");assert.ok(msgs.every(x=>m.primary[x.id]==="A"));C.setMode(m,"multi_topic");assert.equal(C.makeOutline(m).mode,"multi_topic");});
 test("AI suggestion parser checks source and creates reviewable marks",()=>{const C=core(),msgs=messages(C),m=C.makeModel(msgs,null,{title:"測試對話"});const raw=JSON.stringify({format:"after-thinking/outline-suggestion",format_version:1,source_fingerprint:C.sourceFingerprint(msgs),message_count:4,mode:"multi_topic",topics:[{id:"A",name:"規劃",note:"",spans:[{from:"sample-1",to:"sample-2"}]},{id:"B",name:"交叉標記",note:"",spans:[{from:"sample-3",to:"sample-4"}]}],single_topic:null,turns:[{message_id:"sample-3",reason:"改談交叉標記"}],key_points:[{message_id:"sample-2",reason:"核心說明"}],key_ranges:[],uncertain:[],alternatives:[]});const rep=C.checkSuggestion(m,C.parseSuggestionText(raw));assert.equal(rep.errors.length,0);assert.equal(rep.stale,false);C.applySuggestion(m,raw,rep);assert.equal(m.mode,"multi_topic");assert.equal(m.primary["sample-3"],"B");assert.equal(C.pending(m).filter(x=>x.type==="key").length,1);assert.equal(C.pending(m).filter(x=>x.type==="turn").length,1);});
+
+test("local folder binding verifies original data and refuses to overwrite concurrent changes",async()=>{
+ const window={indexedDB:{},showDirectoryPicker:()=>{}};
+ vm.runInNewContext(js.localFolder,{window});
+ const LF=window.ATLocalFolder;
+ let source='{"speaker":"author","content":"test"}\n';
+ let saved=null;
+ function file(name,folder){
+  return {async getFile(){return {async text(){return folder?source:saved}}},async createWritable(){
+   let pending=null;
+   return {async write(value){pending=value},async close(){saved=pending},async abort(){}};
+  }};
+ }
+ const sourceFolder={async getFileHandle(name){assert.equal(name,"conversation.jsonl");return file(name,true)}};
+ const root={kind:"directory",name:"fixture",async getDirectoryHandle(name){assert.equal(name,"source");return sourceFolder},
+  async getFileHandle(name,opts){assert.equal(name,"outline.json");if(saved===null&&!opts?.create)throw Object.assign(Error("missing"),{name:"NotFoundError"});return file(name,false)}};
+ assert.equal(LF.supported(),true);
+ assert.equal(await LF.read(root,"source/conversation.jsonl"),source);
+ assert.equal(await LF.read(root,"outline.json",true),null);
+ assert.equal(await LF.writeOutline(root,'{"outline_version":6}',source,null),'{"outline_version":6}');
+ await assert.rejects(LF.writeOutline(root,'{"outline_version":6,"new":true}',source,null),/其他程式修改/);
+ source+="changed";
+ await assert.rejects(LF.writeOutline(root,'{"outline_version":6,"new":true}',source.slice(0,-7),saved),/其他程式修改/);
+});

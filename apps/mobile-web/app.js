@@ -12,7 +12,7 @@ const S={page:"connect",previousPage:"connect",repo:false,local:false,rows:[],
  search:"",filter:"all",sort:"conversation",previews:{},allQuestions:{},expanded:new Set(),
  count:20,cursor:null,kind:"all",review:"all",sheetAction:null,busy:false,readerY:0,prepareExpanded:false,modeConfirmed:false,
  aiRaw:null,aiReport:null,aiFrom:null,guideText:null,
- usingSaved:false,draft:null,draftVersion:0,draftTimer:null,localHandle:null,localSource:null,localOutline:null,workbenchId:null,workbenchTab:"message",rangeFrom:null,findText:""};
+ usingSaved:false,draft:null,draftVersion:0,draftTimer:null,localHandle:null,localSource:null,localOutline:null,workbenchId:null,workbenchTab:"message",rangeFrom:null,findText:"",attachmentUrl:null,attachmentNonce:0};
 function notify(message,error=false){const e=$("notice");e.textContent=message||"";e.hidden=!message;e.classList.toggle("error",error);}
 function change(){
  $("bottom-nav").hidden=true;$("sync-state").textContent=S.model?.dirty?"尚未儲存":S.local?"本機":S.repo?"已連線":"未連線";$("quick-save").hidden=!S.model||!S.model.dirty||S.page==="reader";
@@ -430,6 +430,70 @@ function renderDesktopRail(){
  turns.slice(0,12).forEach(i=>add(String(i+1).padStart(3,"0")+" · "+plain(m.msgs[i]?.content).slice(0,35),i));
  if(!rail.querySelector(".rail-item"))rail.append(node("p","small muted","尚無標記，從中間的對話開始即可。"));
 }
+
+function attachmentPath(att){
+ const p=String(att?.file||"");
+ return /^attachments\/[A-Za-z0-9._-]+$/.test(p)&&!p.includes("..")?p:null;
+}
+function attachmentMime(bytes,name){
+ if(bytes.length>=8&&bytes[0]===137&&bytes[1]===80&&bytes[2]===78&&bytes[3]===71)return "image/png";
+ if(bytes.length>=3&&bytes[0]===255&&bytes[1]===216&&bytes[2]===255)return "image/jpeg";
+ if(bytes.length>=6&&String.fromCharCode(...bytes.subarray(0,6)).match(/^GIF8[79]a$/))return "image/gif";
+ if(bytes.length>=12&&String.fromCharCode(...bytes.subarray(0,4))==="RIFF"&&String.fromCharCode(...bytes.subarray(8,12))==="WEBP")return "image/webp";
+ if(bytes.length>=5&&String.fromCharCode(...bytes.subarray(0,5))==="%PDF-")return "application/pdf";
+ return /\.(txt|md|markdown|json|jsonl|csv|tsv|ya?ml|log|py|js|css|ts|sql|xml|srt)$/i.test(name)?"text/plain":"application/octet-stream";
+}
+function closeAttachment(){
+ S.attachmentNonce++;
+ if($("attachment-dialog").open)$("attachment-dialog").close();
+ if(S.attachmentUrl){URL.revokeObjectURL(S.attachmentUrl);S.attachmentUrl=null}
+ $("attachment-dialog-body").replaceChildren();
+}
+async function openAttachment(att){
+ const path=attachmentPath(att),name=String(att.name||path?.split("/").at(-1)||"附件");
+ closeAttachment();const ticket=S.attachmentNonce;
+ const dialog=$("attachment-dialog"),body=$("attachment-dialog-body");
+ $("attachment-dialog-title").textContent=name;
+ $("attachment-dialog-status").textContent="正在讀取附件…";
+ $("attachment-dialog-download").hidden=true;
+ dialog.showModal();
+ if(!path){$("attachment-dialog-status").textContent="擷取時未保存此附件原檔，無法從目前資料來源預覽。";return}
+ try{
+  let bytes;
+  if(S.localHandle)bytes=await window.ATLocalFolder.readAttachment(S.localHandle,path);
+  else if(S.repo&&S.folder)bytes=await G.getAttachment(S.folder+"source/"+path);
+  else throw Error("目前使用選檔模式；請改用連接 GitHub 或授權本機對話資料夾讀取附件。");
+  if(ticket!==S.attachmentNonce||!dialog.open)return;
+  const type=attachmentMime(bytes,name),blob=new Blob([bytes],{type}),url=URL.createObjectURL(blob);
+  S.attachmentUrl=url;
+  $("attachment-dialog-status").textContent=type==="application/octet-stream"?"無法直接預覽此格式，可以下載原檔。":"已讀取保存的附件原檔。";
+  if(type.startsWith("image/")){
+   const image=document.createElement("img");image.src=url;image.alt=name;image.className="attachment-preview-image";body.append(image);
+  }else if(type==="text/plain"){
+   const text=new TextDecoder("utf-8").decode(bytes.subarray(0,Math.min(bytes.length,2*1024*1024)));
+   body.append(node("pre","attachment-preview-text",text+(bytes.length>2*1024*1024?"\n…（預覽已截斷）":"")));
+  }else if(type==="application/pdf"){
+   body.append(node("p","small muted","PDF 原檔已讀取；請使用下載按鈕，在你選擇的 PDF 閱讀器中開啟。"));
+  }
+  const save=$("attachment-dialog-download");save.hidden=false;
+  save.onclick=()=>{const a=document.createElement("a");a.href=url;a.download=name.replace(/[\\/]/g,"_");document.body.append(a);a.click();a.remove()};
+ }catch(err){if(ticket===S.attachmentNonce)$("attachment-dialog-status").textContent="無法讀取附件："+err.message}
+}
+function renderMessageAttachments(msg){
+ const out=node("section","message-attachments"),items=msg.attachments||[];
+ out.append(node("strong","attachment-section-label","附件 "+items.length+" 個"));
+ for(const [i,att] of items.entries()){
+  const path=attachmentPath(att),label=String(att.name||path?.split("/").at(-1)||"附件 "+(i+1));
+  const row=node("div","message-attachment-row");
+  row.append(node("span","attachment-name",label));
+  const status=!path?"原檔未保存":att.content_note==="extracted_text"?"僅保存平台提供的文字":"已記錄原檔路徑";
+  row.append(node("span","attachment-state",status));
+  const action=btn(path?"預覽／下載":"檢視狀態",()=>openAttachment(att),"attachment-open");row.append(action);
+  out.append(row);
+ }
+ return out;
+}
+
 function messageRow(msg,i){
  const m=model(),entry=node("article","message "+(msg.speaker==="assistant"?"ai":"user"));
  if(S.workbenchId===msg.id)entry.classList.add("desktop-selected");
@@ -459,6 +523,7 @@ function messageRow(msg,i){
   else if(trimmed)block.append(btn(full?"收起全文":"展開全文",()=>{if(full)S.expanded.delete(msg.id);else S.expanded.add(msg.id);renderReader(true)},"full-toggle"));
  }
  entry.append(block);
+ if(msg.attachments?.length)entry.append(renderMessageAttachments(msg));
  if(m.notes[msg.id])entry.append(node("div","message-notes",m.notes[msg.id]));
  const actions=node("div","message-actions");
  actions.append(btn("◇ 主題",()=>messageInspector(msg,"topic"),m.primary[msg.id]?"selected":""));
@@ -605,7 +670,7 @@ async function save(){
  finally{buttonSave.disabled=false;$("quick-save").disabled=false;if(S.page==="settings")renderSettings()}
 }
 function leave(){
- writeDraft();
+ closeAttachment();writeDraft();
  G.disconnect();S.repo=false;S.local=false;S.localHandle=null;S.localSource=null;S.localOutline=null;S.model=null;S.row=null;S.rows=[];S.expanded.clear();S.previews={};S.allQuestions={};S.aiRaw=null;S.aiReport=null;S.aiFrom=null;S.readerY=0;S.workbenchId=null;S.rangeFrom=null;S.modeConfirmed=false;S.usingSaved=false;S.draft=null;
  $("token-input").value="";notify("");
 }
@@ -637,7 +702,9 @@ function initialize(){
  $("desktop-add-topic").addEventListener("click",()=>editTopic(null));
  $("desktop-find").addEventListener("input",e=>{S.findText=e.target.value;renderWorkbenchSearch()});
  for(const b of document.querySelectorAll("[data-inspector-view]"))b.addEventListener("click",()=>{S.workbenchTab=b.dataset.inspectorView;renderWorkBench()});
- $("load-more").addEventListener("click",()=>{S.count=Math.min(model().msgs.length,S.count+20);renderReader(true)});$("prev-item").addEventListener("click",()=>jump(-1));$("next-item").addEventListener("click",()=>jump(1));$("sheet-close").addEventListener("click",closeSheet);$("sheet-overlay").addEventListener("click",e=>{if(e.target===$("sheet-overlay"))closeSheet()});$("sheet-apply").addEventListener("click",()=>{if(S.sheetAction)S.sheetAction()});document.addEventListener("keydown",e=>{if(e.key==="Escape"&&S.sheetAction)closeSheet();if(S.page==="reader"&&!S.sheetAction&&!["INPUT","TEXTAREA","SELECT"].includes(document.activeElement?.tagName)){if(e.key.toLowerCase()==="j"){e.preventDefault();jump(1)}else if(e.key.toLowerCase()==="k"){e.preventDefault();jump(-1)}}});window.addEventListener("beforeunload",e=>{if(model()?.dirty){e.preventDefault();e.returnValue=""}});
+ $("load-more").addEventListener("click",()=>{S.count=Math.min(model().msgs.length,S.count+20);renderReader(true)});$("prev-item").addEventListener("click",()=>jump(-1));$("next-item").addEventListener("click",()=>jump(1));$("attachment-dialog-close").addEventListener("click",closeAttachment);
+ $("attachment-dialog").addEventListener("close",()=>{if(S.attachmentUrl){URL.revokeObjectURL(S.attachmentUrl);S.attachmentUrl=null}});
+ $("sheet-close").addEventListener("click",closeSheet);$("sheet-overlay").addEventListener("click",e=>{if(e.target===$("sheet-overlay"))closeSheet()});$("sheet-apply").addEventListener("click",()=>{if(S.sheetAction)S.sheetAction()});document.addEventListener("keydown",e=>{if(e.key==="Escape"&&S.sheetAction)closeSheet();if(S.page==="reader"&&!S.sheetAction&&!["INPUT","TEXTAREA","SELECT"].includes(document.activeElement?.tagName)){if(e.key.toLowerCase()==="j"){e.preventDefault();jump(1)}else if(e.key.toLowerCase()==="k"){e.preventDefault();jump(-1)}}});window.addEventListener("beforeunload",e=>{if(model()?.dirty){e.preventDefault();e.returnValue=""}});
  // 手機切到別的 App 時分頁可能被系統回收：離開畫面前立刻把草稿寫好
  document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="hidden")writeDraft()});window.addEventListener("pagehide",writeDraft);
  // 記住的 Token 被 GitHub 拒絕（過期或撤銷）：從這台裝置刪掉，草稿還在

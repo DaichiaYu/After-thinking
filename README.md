@@ -260,8 +260,8 @@ After-thinking 本身沒有中央伺服器在背後接收你的對話內容。�
 
 ## Mobile annotation web app (in development)
 
-The new [mobile tagging editor](apps/mobile-web/) is a static GitHub Pages client for the existing AT annotation format. It is intended to connect directly to a **repository selected by each user**, with GitHub read/write permission granted in that user's browser. The published AT repository contains **only application code**, not private conversation records or repository-specific credentials.
+The [responsive browser tagging editor](apps/mobile-web/) is a static GitHub Pages client for the existing AT annotation format. It is intended to connect directly to a **repository selected by each user**, with GitHub read/write permission granted in that user's browser. The published AT repository contains **only application code**, not private conversation records or repository-specific credentials.
 
-It preserves the captured conversation's original title, allows question previews to open directly in the library, and continues the desktop `outline.json` v6 tagging workflow on a phone. See the [mobile editor setup, privacy model, and limitations](docs/mobile-web.md). The Pages link is provided only after deployment completes. The article-generation project remains separate.
+It preserves the captured conversation's original title, supports expandable question previews, and edits the same `outline.json` v6 records **without installing the Chrome extension**. On desktop, the browser provides a three-column workbench with topic management, source search, inline message marking, a contextual inspector, AI review, key ranges, and an export summary; on phones, it keeps the touch-oriented layout. Captured attachment metadata and authorized previews remain tied to each original message. See the [mobile editor setup, privacy model, and limitations](docs/mobile-web.md). The Pages link is provided only after deployment completes. The article-generation project remains separate.
 
-**繁中：** AT 手機標記網頁會部署在 AT 的 GitHub Pages，讓使用者自行連接自己的對話資料倉庫。公開倉庫只放程式，不預設私人倉庫或儲存對話及憑證；正式部署方式及使用限制請見[手機版說明](docs/mobile-web.md)。
+**繁中：** AT 響應式標記網頁（手機與電腦皆可使用、不必安裝插件）會部署在 AT 的 GitHub Pages，讓使用者自行連接自己的對話資料倉庫。公開倉庫只放程式，不預設私人倉庫或儲存對話及憑證；正式部署方式及使用限制請見[手機版說明](docs/mobile-web.md)。

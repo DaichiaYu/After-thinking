@@ -1,13 +1,13 @@
-# After-thinking 行動標記工作台
+# After-thinking 網頁標記工作台（手機與桌面）
 
-這是 **AT 主倉庫**的 GitHub Pages 手機標記頁。沿用桌面 Chrome 插件的 outline.json 第 6 版規格。
+這是 **AT 主倉庫**的 GitHub Pages 響應式標記網頁，桌面可直接連接 GitHub 使用，**不必安裝 Chrome 插件**。與桌面插件共用 outline.json 第 6 版資料格式；小螢幕使用觸控版佈局，寬螢幕有三欄標記工作台。
 文章轉換功能屬於另外的 display-AT 專案，本頁不負責文章生成。
 
 ## 部署與使用
 
 1. 在 AT 倉庫的 **Settings → Pages** 將 Build and deployment 的 Source 設為 **GitHub Actions**。
 2. 將經過測試的分支合併到 main 後，由 `.github/workflows/mobile-pages.yml` 發布 `apps/mobile-web/`，網址以 GitHub Pages 實際提供為準。
-3. 使用者在手機開啟網站，**自行輸入**資料倉庫（owner/repository）、分支及 Fine-grained Personal Access Token。
+3. 使用者在電腦或手機開啟網站，**自行輸入**資料倉庫（owner/repository）、分支及 Fine-grained Personal Access Token。
 4. 該 Token 只需授權使用者選定的資料倉庫，Repository permission → Contents: Read and write。**切勿**把 Token 寫入公開程式碼、Issues、網址或分享給其他人。
 5. 清單沿用 AT 原有的對話標題、搜尋、時間排序、已標記與已整理等狀態。預覽提問可以在同一個清單項目展開或收合。
 6. 進入標記頁後可編輯主要主題、其他相關主題、整則關鍵、轉向、備註及 AI 小節重點，審查 AI 已產生的建議。
@@ -36,10 +36,13 @@
 
 ## 目前範圍
 
-- 本機模式：可同時載入 conversation.jsonl 與 outline.json，之後下載 outline.json，不會寫 GitHub。
-- 初版尚未包含 ZIP 匯入、AI 草稿檔案匯入、完整分段範圍編輯與自訂標籤管理；桌面插件原有功能不受影響。
+- 手動選檔模式：同時載入 conversation.jsonl 與 outline.json，之後下載 outline.json，不會寫 GitHub。
+- 桌面網頁的三欄工作台包含主題結構、原文搜尋、標記檢查器、關鍵段落起訖編輯、AI 審查與標記摘要；手機保留原本的觸控標記面板。
+- 附件資訊會在原訊息下方呈現。已保存原檔的圖片與純文字可透過 GitHub 授權或本機資料夾授權按需預覽；其他格式提供下載；未保存原檔者顯示狀態。
+- 本機資料夾模式使用桌面 Chromium 的資料夾授權直接存回 outline.json；不支援的瀏覽器仍可手動匯入 JSONL/JSON。詳見 [本機資料夾指南](../../docs/local-folder-editor.md)。
+- 目前仍未包含完整 ZIP 匯入、自訂標籤管理，以及與插件完全一致的附件進階功能；桌面插件原有功能不受影響。
 - 對話閱讀每次載入 20 則，並保留上下導航、Markdown 小節展開及個別小節標重點。
-- 需用**測試專用資料倉庫**完成真實 Chrome/Safari 行動瀏覽器與 GitHub 讀寫驗證，才能合併正式使用。
+- 目前已具備程式測試與 Pages 部署；真實 Chrome/Safari 操作、授權提示及 GitHub 寫入仍應使用測試資料倉庫做端對端驗證。
 
 ## 驗證
 

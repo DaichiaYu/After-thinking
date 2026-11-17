@@ -54,6 +54,15 @@
   }
   await verify(handle);return handle;
  }
+ async function readAttachment(handle,path){
+  if(!/^attachments\/[A-Za-z0-9._-]+$/.test(path)||path.includes(".."))throw Error("附件路徑不安全");
+  const folder=await handle.getDirectoryHandle("source");
+  const att=await folder.getDirectoryHandle("attachments");
+  const name=path.split("/")[1];
+  const file=await (await att.getFileHandle(name)).getFile();
+  if(file.size>25*1024*1024)throw Error("附件超過 25MB 預覽上限");
+  return new Uint8Array(await file.arrayBuffer());
+ }
  async function writeOutline(handle,text,expectedSource,expectedOutline){
   const currentSource=await read(handle,"source/conversation.jsonl");
   const currentOutline=await read(handle,"outline.json",true);
@@ -64,5 +73,5 @@
   try{await writer.write(text);await writer.close()}catch(err){try{await writer.abort()}catch(e){}throw err}
   return await read(handle,"outline.json");
  }
- root.ATLocalFolder={supported,pick,restore,getStored,forget,read,writeOutline};
+ root.ATLocalFolder={supported,pick,restore,getStored,forget,read,readAttachment,writeOutline};
 })(typeof window!=="undefined"?window:globalThis);

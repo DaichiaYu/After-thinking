@@ -1,10 +1,10 @@
-# After-thinking Mobile Tagging (GitHub Pages)
+# After-thinking Responsive Browser Tagging (GitHub Pages)
 
 > **Repository boundary:** This web interface belongs to After-thinking. It does not build articles; that is a separate display-AT project. The AT repository is public, while the GitHub conversation repository is selected by each individual user at runtime.
 
 ## What this is
 
-A mobile-first browser editor for After-thinking conversation records, served as static assets from `apps/mobile-web/`. It uses the **existing AT data layout and `outline.json` v6 schema**, not a separate backend or a second annotation format.
+A responsive browser editor for After-thinking conversation records, served as static assets from `apps/mobile-web/`. **Desktop usage does not require the Chrome extension**. At desktop widths the editor exposes topic structure, source-wide search, the source reader, an inspector for primary/related topics and notes, AI review, manual key ranges and a summary; narrow displays keep the touch-first sheet workflow. It uses the **existing AT data layout and `outline.json` v6 schema**, not a separate backend or a second annotation format.
 
 Workflow:
 
@@ -22,7 +22,7 @@ The GitHub Actions workflow `.github/workflows/mobile-pages.yml` validates the a
 
 A repository administrator must select **Settings → Pages → Build and deployment → Source: GitHub Actions**. This cannot be inferred from repository code alone. A successful deployment will show its actual URL under the workflow run and Pages settings. Do not assume a link is active before the workflow succeeds.
 
-The published artifact contains `index.html`, `style.css`, `app.js`, `core.js`, `github.js` and `device.js`. No conversation dataset, GitHub token, personal repository name or personal profile is bundled.
+The published artifact contains `index.html`, `style.css`, `app.js`, `core.js`, `github.js`, `device.js`, and `local-folder.js`. No conversation dataset, GitHub token, personal repository name or personal profile is bundled.
 
 ## Authentication and privacy
 
@@ -64,3 +64,9 @@ This is a production-data-connected **candidate**; end-to-end testing on a separ
 - 儲存前核對來源及標記檔版本，遇到衝突不覆蓋。私人資料不要提交到公開 AT。
 - Token 預設關閉分頁就清除；勾選「記住這台裝置」才會存在該瀏覽器，可隨時忘記。未儲存的標記會自動留草稿在本機。
 - 網站需在 AT 倉庫的 Settings → Pages → Source 選 GitHub Actions，合併及部署成功後才能正式取得網址。
+
+## Desktop workbench and captured attachments (2026-11)
+
+- The browser-only desktop workbench reuses the same outline v6 schema; manual multi-message key ranges remain part of `outline.json`. AI review and summary are available without switching away from the source reader.
+- Per-message attachments are preserved in memory from `conversation.jsonl`. The browser makes an authenticated GitHub or permissioned local folder request **only when the user opens a saved attachment**. File size and path limits apply; image and plain text previews are supported, otherwise download is offered. Missing source files are explicitly reported.
+- Test automation checks source metadata, path handling and model serialization. Real browser visual and permission testing, including different screen widths, remains a separate acceptance check.

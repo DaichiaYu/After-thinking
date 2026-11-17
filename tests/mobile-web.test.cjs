@@ -238,3 +238,44 @@ test("web editor exposes desktop topic, search, inspector, and summary controls"
  assert.match(js.app,/function renderWorkbenchReview\(/);
  assert.match(js.app,/function renderWorkbenchSummary\(/);
 });
+
+test("captured attachments remain associated with their original message",()=>{
+ const C=core();
+ const sample=JSON.stringify({order:0,message_id:"fixture-1",speaker:"author",content:"See attached.",attachments:[
+  {kind:"image",name:"picture.png",file:"attachments/01.png"},
+  {kind:"file",name:"missing.txt",missing:"not_available"}
+ ]});
+ const msgs=C.parseJsonl(sample);
+ assert.equal(msgs[0].attachments.length,2);
+ assert.equal(msgs[0].attachments[0].file,"attachments/01.png");
+ assert.equal(msgs[0].attachments[1].missing,"not_available");
+ const without=C.parseJsonl(JSON.stringify({order:0,message_id:"fixture-1",speaker:"author",content:"See attached."}));
+ assert.equal(C.sourceFingerprint(msgs),C.sourceFingerprint(without));
+});
+test("GitHub attachment reads preserve binary bytes and reject unsafe paths",async()=>{
+ const bytes=Buffer.from([0,255,12,70,200]);
+ const calls=[];
+ const fetch=async(url,options={})=>{
+  calls.push(String(url));
+  if(String(url).includes("/contents/inbox/index.jsonl"))return{ok:true,status:200,text:async()=>JSON.stringify({sha:"index",type:"file",encoding:"base64",content:Buffer.from('{"folder":"inbox/sample/"}\n').toString("base64")})};
+  if(String(url).includes("/contents/inbox/sample/source/attachments/01.png"))return{ok:true,status:200,text:async()=>JSON.stringify({sha:"image",type:"file",size:bytes.length,encoding:"base64",content:bytes.toString("base64")})};
+  return{ok:true,status:200,text:async()=>JSON.stringify({full_name:"sample/repo"})};
+ };
+ const window={};
+ vm.runInNewContext(js.github,{window,fetch,TextEncoder,TextDecoder,
+  btoa:s=>Buffer.from(s,"latin1").toString("base64"),
+  atob:s=>Buffer.from(s,"base64").toString("latin1")});
+ const G=window.ATGitHub;
+ await G.connect("sample/repo","main","fictional-token");
+ const got=await G.getAttachment("inbox/sample/source/attachments/01.png");
+ assert.deepEqual([...got],[...bytes]);
+ await assert.rejects(G.getAttachment("inbox/sample/source/../secret.txt"),/不安全/);
+ assert.ok(calls.every(x=>!x.includes("fictional-token")));
+});
+test("web tagging exposes attachment details and a bounded preview dialog",()=>{
+ assert.match(js.core,/attachments:Array\.isArray/);
+ assert.match(js.app,/renderMessageAttachments/);
+ assert.match(js.app,/attachmentMime/);
+ assert.match(js.html,/id="attachment-dialog"/);
+ assert.match(js.html,/img-src 'self' data: blob:/);
+});

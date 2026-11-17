@@ -12,7 +12,7 @@ const S={page:"connect",previousPage:"connect",repo:false,local:false,rows:[],
  search:"",filter:"all",sort:"conversation",previews:{},allQuestions:{},expanded:new Set(),
  count:20,cursor:null,kind:"all",review:"all",sheetAction:null,busy:false,readerY:0,prepareExpanded:false,modeConfirmed:false,
  aiRaw:null,aiReport:null,aiFrom:null,guideText:null,
- usingSaved:false,draft:null,draftVersion:0,draftTimer:null};
+ usingSaved:false,draft:null,draftVersion:0,draftTimer:null,localHandle:null,localSource:null,localOutline:null};
 function notify(message,error=false){const e=$("notice");e.textContent=message||"";e.hidden=!message;e.classList.toggle("error",error);}
 function change(){
  $("bottom-nav").hidden=true;$("sync-state").textContent=S.model?.dirty?"尚未儲存":S.local?"本機":S.repo?"已連線":"未連線";$("quick-save").hidden=!S.model||!S.model.dirty||S.page==="reader";
@@ -34,6 +34,7 @@ function syncConnectForm(){
 }
 function draftRef(){
  const m=model();if(!m)return null;
+ if(S.localHandle)return["local-folder",S.localHandle.name+"|"+C.sourceFingerprint(m.msgs)];
  if(S.local)return["local",C.sourceFingerprint(m.msgs)];
  const c=G.config();return c&&S.folder?[c.repo+"@"+c.branch,S.folder]:null;
 }
@@ -118,6 +119,21 @@ async function connect(e){
  }
  finally{submit.disabled=false;syncConnectForm()}
 }
+async function openLocalFolder(restore=false){
+ const LF=window.ATLocalFolder;if(!LF?.supported())return notify("這個瀏覽器不支援資料夾直接存取；請改用本機 JSONL 檔案。",true);
+ if(S.model?.dirty&&!confirm("有未儲存修改，確定要切換資料夾？"))return;
+ try{
+  const handle=restore?await LF.restore():await LF.pick();if(!handle)return;
+  const source=await LF.read(handle,"source/conversation.jsonl"),outlineRaw=await LF.read(handle,"outline.json",true);
+  let doc=null;if(outlineRaw!==null){try{doc=JSON.parse(outlineRaw)}catch(err){throw Error("這個資料夾的 outline.json 無法讀取，為避免覆寫已停止載入。")}}
+  const msgs=C.parseJsonl(source);if(!msgs.length)throw Error("資料夾中沒有可用的對話訊息。");
+  S.local=true;S.repo=false;S.localHandle=handle;S.localSource=source;S.localOutline=outlineRaw;
+  S.model=C.makeModel(msgs,doc,{folder:"",title:handle.name,revision:doc?.source?.source_revision||1});
+  S.row=null;S.folder="";S.sourceSha=null;S.outlineSha=null;S.count=20;S.expanded.clear();S.cursor=null;S.modeConfirmed=!!doc?.mode;
+  S.aiRaw=null;S.aiReport=null;S.aiFrom=null;S.prepareExpanded=false;findDraft();
+  show(S.draft?"prepare":S.modeConfirmed?"reader":"prepare");notify("已連接本機資料夾："+handle.name+"。儲存時會直接更新 outline.json。");
+ }catch(err){if(err.name!=="AbortError")notify("無法開啟資料夾："+err.message,true)}
+}
 async function loadLocal(e){
  const files=[...e.target.files];e.target.value="";
  const conv=files.find(f=>/\.jsonl$/i.test(f.name));
@@ -128,6 +144,7 @@ async function loadLocal(e){
   const doc=outlineFile?JSON.parse(await outlineFile.text()):null;
   if(S.model?.dirty&&!confirm("尚未儲存的修改會被取代，確定？"))return;
   G.disconnect();S.repo=false;S.local=true;S.rows=[];
+  S.localHandle=null;S.localSource=null;S.localOutline=null;
   S.model=C.makeModel(msgs,doc,{folder:"",title:conv.name,revision:doc?.source?.source_revision||1});
   S.row=null;S.folder="";S.sourceSha=null;S.outlineSha=null;S.count=20;S.expanded.clear();S.cursor=null;S.modeConfirmed=!!doc?.mode;
   S.aiRaw=null;S.aiReport=null;S.aiFrom=null;S.prepareExpanded=false;findDraft();show(S.draft?"prepare":S.modeConfirmed?"reader":"prepare");notify("本機模式：儲存時會下載 outline.json，不會寫入 GitHub。");
@@ -381,11 +398,11 @@ function renderReview(){
 }
 function renderSettings(){
  const m=model();
- $("connection-detail").textContent=S.local?"本機檔案":G.config()?G.config().repo+" / "+G.config().branch:"未連線";
+ $("connection-detail").textContent=S.localHandle?"本機資料夾："+S.localHandle.name:S.local?"本機檔案":G.config()?G.config().repo+" / "+G.config().branch:"未連線";
  const drafts=D.draftCount();
  $("device-detail").textContent=(D.hasToken()?"已記住 Token，下次打開會自動連線。":"沒有記住 Token，關閉或重新整理後要重新輸入。")+(drafts?" 有 "+drafts+" 份未儲存草稿。":"");
  $("save-detail").textContent=!m?"尚未選擇對話":m.dirty?"有尚未儲存的修改":"沒有待儲存修改";
- $("save-button").textContent=S.local?"下載 outline.json":"儲存到 GitHub";
+ $("save-button").textContent=S.localHandle?"直接存回資料夾":S.local?"下載 outline.json":"儲存到 GitHub";
  $("save-button").disabled=$("download-button").disabled=!m||m.sourceMismatch||S.busy;
 }
 function download(){
@@ -398,8 +415,20 @@ function download(){
   notify("已下載 outline.json。");
  }catch(err){notify(err.message,true)}
 }
+async function saveLocalFolder(){
+ const m=model(),LF=window.ATLocalFolder;if(!m||!S.localHandle||!LF)return;
+ if(m.sourceMismatch)return notify("原文指紋不一致，禁止覆寫本機標記。",true);
+ if(S.busy)return;S.busy=true;change();
+ try{
+  const version=m.editVersion||0,doc=C.makeOutline(m),text=JSON.stringify(doc,null,2)+"\n";
+  const actual=await LF.writeOutline(S.localHandle,text,S.localSource,S.localOutline);
+  S.localOutline=actual;m.base=doc;m.dirty=(m.editVersion||0)!==version;
+  if(m.dirty){S.draftVersion=-1;queueDraft()}else{const ref=draftRef();if(ref)D.dropDraft(ref[0],ref[1]);S.draftVersion=m.editVersion||0}
+  notify(m.dirty?"已存入資料夾，但儲存期間還有新的修改，請再儲存一次。":"已直接儲存到本機資料夾 outline.json。");
+ }catch(err){notify("本機儲存失敗："+err.message,true)}finally{S.busy=false;change();if(S.page==="settings")renderSettings()}
+}
 async function save(){
- const m=model();if(!m)return;if(S.local)return download();
+ const m=model();if(!m)return;if(S.localHandle)return saveLocalFolder();if(S.local)return download();
  if(!S.repo)return notify("尚未連接 GitHub",true);
  if(m.sourceMismatch)return notify("原文指紋不一致，禁止覆蓋遠端資料。",true);
  const buttonSave=$("save-button");buttonSave.disabled=true;$("quick-save").disabled=true;
@@ -423,7 +452,7 @@ async function save(){
 }
 function leave(){
  writeDraft();
- G.disconnect();S.repo=false;S.local=false;S.model=null;S.row=null;S.rows=[];S.expanded.clear();S.previews={};S.allQuestions={};S.aiRaw=null;S.aiReport=null;S.aiFrom=null;S.readerY=0;S.modeConfirmed=false;S.usingSaved=false;S.draft=null;
+ G.disconnect();S.repo=false;S.local=false;S.localHandle=null;S.localSource=null;S.localOutline=null;S.model=null;S.row=null;S.rows=[];S.expanded.clear();S.previews={};S.allQuestions={};S.aiRaw=null;S.aiReport=null;S.aiFrom=null;S.readerY=0;S.modeConfirmed=false;S.usingSaved=false;S.draft=null;
  $("token-input").value="";notify("");
 }
 // 切換倉庫：回到連線頁，這台裝置記住的設定和草稿都留著
@@ -439,6 +468,13 @@ function disconnect(){
  leave();D.forgetAll();$("repo-input").value="";$("branch-input").value="main";show("connect");syncConnectForm();
 }
 function initialize(){
+ const folderControl=window.ATLocalFolder;
+ $("folder-option").hidden=!folderControl?.supported();
+ if(folderControl?.supported()){
+  $("choose-local-folder").addEventListener("click",()=>openLocalFolder());
+  $("reopen-local-folder").addEventListener("click",()=>openLocalFolder(true));
+  folderControl.getStored().then(h=>{$("reopen-local-folder").hidden=!h}).catch(()=>{});
+ }
  $("connect-form").addEventListener("submit",connect);$("local-files").addEventListener("change",loadLocal);$("menu-button").addEventListener("click",()=>{if(S.model)show("settings");else{const detail=document.querySelector(".explain");if(detail)detail.open=true}});
  for(const [id,kind,link] of [["library-copy-path","library",false],["library-copy-link","library",true],["reader-copy-path","reader",false],["reader-copy-link","reader",true]])$(id).addEventListener("click",()=>copyLocation(kind,link));$("quick-save").addEventListener("click",save);$("save-button").addEventListener("click",save);$("reader-save").addEventListener("click",save);$("download-button").addEventListener("click",download);$("disconnect").addEventListener("click",disconnect);$("change-repo").addEventListener("click",changeRepo);$("draft-use").addEventListener("click",useDraft);$("draft-drop").addEventListener("click",dropDraft);$("reader-back").addEventListener("click",()=>show("library"));$("prepare-back").addEventListener("click",()=>show("library"));$("settings-back").addEventListener("click",()=>show(S.previousPage==="settings"?"library":S.previousPage));
  $("reader-mode").addEventListener("click",()=>show("prepare"));$("reader-more").addEventListener("click",()=>show("settings"));$("open-topics").addEventListener("click",topicsSheet);$("reader-review").addEventListener("click",reviewSheet);$("new-topic").addEventListener("click",()=>editTopic(null));$("prepare-preview-toggle").addEventListener("click",()=>{S.prepareExpanded=!S.prepareExpanded;renderPrepare()});$("choose-multi").addEventListener("click",()=>chooseMode("multi_topic"));$("choose-single").addEventListener("click",()=>chooseMode("single_topic"));$("choose-skip").addEventListener("click",skipSheet);$("enter-workspace").addEventListener("click",()=>{if(!S.modeConfirmed)return notify("請先選擇整理方式。",true);S.readerY=0;show("reader")});

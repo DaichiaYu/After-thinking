@@ -466,3 +466,8 @@ async function main() {
 }
 
 main();
+
+// Explicit Agent entrypoint, available even when no supported chat is active.
+document.getElementById("open-agent").addEventListener("click", () => {
+  chrome.tabs.create({ url: chrome.runtime.getURL("agent.html") });
+});

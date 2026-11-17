@@ -214,7 +214,7 @@ test("desktop workbench key ranges survive save, reload, and review decisions",(
   assert.equal(m.dirty,true);
   assert.throws(()=>C.addKeyRange(m,msgs[1].id,msgs[3].id),/重疊/);
   const doc=C.makeOutline(m);
-  assert.deepEqual(doc.key_ranges.map(x=>x.origin),["user"]);
+  assert.equal([...doc.key_ranges].map(x=>x.origin).join(","),"user");
   assert.equal(doc.summary.includes("關鍵段落"),true);
   const restored=C.makeModel(msgs,doc,{title:"fixture"});
   assert.equal(restored.keyRanges.length,1);

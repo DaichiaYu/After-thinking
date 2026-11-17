@@ -36,6 +36,7 @@
         <button type="submit" id="connect-button" class="primary full">連接 GitHub 並開啟對話庫 <span aria-hidden="true">→</span></button>
       </form>
       <div class="offline-option"><span>或</span><label for="local-files" class="text-action">使用本機 conversation.jsonl＋outline.json</label><input id="local-files" type="file" accept=".jsonl,.json" multiple hidden></div>
+      <div class="folder-option" id="folder-option" hidden><button type="button" class="secondary" id="choose-local-folder">連接本機對話資料夾</button><button type="button" class="ghost" id="reopen-local-folder" hidden>重新開啟上次資料夾</button><p class="small muted">桌面 Chrome／Edge：選擇含 source/conversation.jsonl 的對話資料夾；授權後可直接讀取和儲存 outline.json。</p></div>
       <details class="explain"><summary>為什麼需要 Token？</summary><p>勾選「記住這台裝置」後，Token 只存在這個瀏覽器的本機儲存空間，不會上傳到任何地方；隨時可以在「更多」裡忘記這台裝置。也可以改讓手機的密碼管理員記住它。</p><p>GitHub Pages 是靜態網站，不能在公開前端安全保存 OAuth Client Secret。此版本採用只授權使用者指定倉庫的 Token；未來可以透過獨立 GitHub App 授權服務取代手動輸入。</p></details>
     </section>
     <div id="workspace" hidden>
@@ -152,6 +153,7 @@
   <script src="./core.js" defer></script>
   <script src="./github.js" defer></script>
   <script src="./device.js" defer></script>
-  <script src="./app.js" defer></script>
+  <script src="./local-folder.js" defer></script>
+   <script src="./app.js" defer></script>
 </body>
 </html>

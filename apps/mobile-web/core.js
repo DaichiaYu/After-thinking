@@ -22,7 +22,8 @@
       speaker:r.speaker==="author"||r.speaker==="assistant"?r.speaker:"external",
       content:typeof r.content==="string"?r.content:"",
       pid:r.platform_message_id||null,
-      ts:r.timestamp||null
+      ts:r.timestamp||null,
+      attachments:Array.isArray(r.attachments)?r.attachments.filter(x=>x&&typeof x==="object").map(x=>({kind:typeof x.kind==="string"?x.kind:"file",name:typeof x.name==="string"?x.name:null,file:typeof x.file==="string"?x.file:null,missing:typeof x.missing==="string"?x.missing:null,content_note:x.content_note==="extracted_text"?"extracted_text":null})):[]
     }));
   }
   function sourceFingerprint(msgs) {

@@ -2,13 +2,13 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="utf-8">
-<title>批量擷取 Gemini 對話</title>
+<title>批量擷取對話（Gemini／ChatGPT 專案）</title>
 <link rel="stylesheet" href="batch.css">
 </head>
 <body>
 <main>
-  <h1>批量擷取 Gemini 對話</h1>
-  <p class="lead">把 Gemini 側邊欄裡的對話一段段打開、擷取，上傳到你私人倉庫的 <code>inbox/</code>。
+  <h1>批量擷取對話</h1>
+  <p class="lead">把 Gemini 側邊欄裡的對話，或 ChatGPT 某個專案裡的對話，一段段打開、擷取，上傳到你私人倉庫的 <code>inbox/</code>。
     抓過的會記在 <code>inbox/index.jsonl</code>，下次只抓新的。</p>
 
   <section class="card">
@@ -19,8 +19,23 @@
 
   <section class="card">
     <h2>2. 讀取對話清單</h2>
-    <p class="muted">會開一個 Gemini 視窗，自動捲完側邊欄，讀出所有對話的標題。</p>
-    <button id="list" disabled>讀取 Gemini 對話清單</button>
+    <div class="sources" role="radiogroup" aria-label="來源">
+      <label><input type="radio" name="source" value="gemini" checked> Gemini 全部對話</label>
+      <label><input type="radio" name="source" value="chatgpt"> ChatGPT 專案</label>
+    </div>
+    <div id="gemini-panel">
+      <p class="muted">會開一個 Gemini 視窗，自動捲完側邊欄，讀出所有對話的標題。</p>
+      <button id="list" disabled>讀取 Gemini 對話清單</button>
+    </div>
+    <div id="chatgpt-panel" hidden>
+      <p class="muted">會開一個 ChatGPT 視窗。第一次使用時 Chrome 會問能不能讀取 chatgpt.com，請按允許。</p>
+      <p id="project-current"></p>
+      <div class="pair">
+        <button id="load-projects" class="secondary" disabled>讀取我的 ChatGPT 專案</button>
+        <button id="list-project" disabled>讀取這個專案的對話</button>
+      </div>
+      <select id="project-select" hidden aria-label="選擇專案"></select>
+    </div>
     <p id="list-status" class="muted" role="status"></p>
     <div id="list-result" hidden>
       <p id="summary"></p>
@@ -37,7 +52,7 @@
 
   <section class="card">
     <h2>3. 開始擷取</h2>
-    <p class="muted">擷取時請讓 Gemini 那個視窗留在畫面上（不要縮到最小），也不要關掉這一頁。你可以去做別的事。</p>
+    <p class="muted">擷取時請讓自動打開的那個視窗留在畫面上（不要縮到最小），也不要關掉這一頁。你可以去做別的事。</p>
     <div class="pair">
       <button id="start" disabled>開始擷取</button>
       <button id="stop" class="secondary" disabled>做完這一段後停止</button>
@@ -58,6 +73,7 @@
 </main>
 <script src="github.js"></script>
 <script src="capture.js"></script>
+<script src="chatgpt-project.js"></script>
 <script src="guide.js"></script>
 <script src="batch.js"></script>
 </body>

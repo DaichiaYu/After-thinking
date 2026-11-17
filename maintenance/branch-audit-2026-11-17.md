@@ -84,3 +84,10 @@ All three primary candidate workstreams were reconciled against the current main
 - PR #10 (ChatGPT Project batch): `6e5a119e6b3cac542789d7b515e4d5f9c51dc859`; integrated Project-only functionality after Agent, keeping Gemini batch.
 
 These are **code integration results**, not evidence of full authenticated Chrome end-to-end testing. The original experiment branches and earlier Git comparison counts above remain as historical snapshots. Popup, batch, settings, Agent and mobile interface localization is still incomplete; this is the next separate follow-up.
+
+### Final verification and follow-ups
+
+- GitHub Actions desktop test run `44004029550` on post-merge `main`: **success** (syntax and Node regressions).
+- Original Agent proof-of-concept PR #6 is closed as **superseded** by merged PR #9; its historical branch has not been deleted.
+- Remaining localization work is tracked in issue #11; real authenticated Chrome/Project regression tests are tracked in issue #12.
+- Static test success does not imply browser-based permission/upload validation; mobile UI is unchanged by these integration PRs.

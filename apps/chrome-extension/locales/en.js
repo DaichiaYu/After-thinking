@@ -214,6 +214,8 @@ ATI18n.add("en", {
   "page.conversation": "Conversation",
   "page.conversations_opened_from_this_computer_are": "Conversations opened from this computer are not linked to a repository, so the status cannot be recorded.",
   "page.copy": "Copy",
+  "page.copy_folder_path": "Copy conversation path",
+  "page.copy_folder_link": "Copy GitHub link",
   "page.copy_instructions": "Copy instructions",
   "page.copy_this_sentence": "Copy this sentence",
   "page.data_for_the_next_step": "Data for the next step",

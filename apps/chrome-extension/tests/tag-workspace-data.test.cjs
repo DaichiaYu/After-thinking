@@ -46,6 +46,7 @@ function fixture() {
   vm.createContext(context);
   vm.runInContext(source + "\nglobalThis.api = {parts:ATSections,boot:()=>defaultState(),save:()=>buildOutline(),load:d=>applyOutline(d)};", context);
   context.api.boot();
+  context.locale = vm.runInContext("ATI18n", context);
   return context;
 }
 test("native Markdown headings ignore fenced code", () => {
@@ -205,4 +206,34 @@ test("numbered heading section marks persist without rewriting the original", ()
   env.api.boot();env.api.load(saved);
   assert.equal(env.msgs[0].content,before);
   assert.equal(env.api.parts.marked(0,env.api.parts.parse(before)[1]),true);
+});
+
+test("localized section preview changes, persisted summary stays the same", () => {
+  const env = fixture();
+  const section = env.api.parts.parse(sample)[1];
+  env.api.parts.toggle(0, section);
+  const summaryIn = (lang) => {
+    env.locale.lang = lang;
+    return env.api.save().summary;
+  };
+  const savedChinese = summaryIn("zh-TW");
+  const savedEnglish = summaryIn("en");
+  assert.equal(savedChinese, savedEnglish, "persisted summary must not depend on locale");
+  assert.match(savedEnglish, /AI 小節重點/);
+});
+test("unmatched section reasons persist as stable codes plus legacy Chinese", () => {
+  const env = fixture();
+  const section = env.api.parts.parse(sample)[1];
+  env.api.parts.toggle(0, section);
+  const saved = env.api.save();
+  env.msgs[0].content = sample.replace("更多內容", "different body");
+  env.locale.lang = "en";
+  env.api.boot();
+  env.api.load(saved);
+  const item = env.api.save().unmatched_section_key_points[0];
+  assert.ok(item.reason_code.startsWith("ws."));
+  assert.match(item.reason, /[\u3400-\u9fff]/);
+  assert.notEqual(env.locale.t(item.reason_code), item.reason);
+  env.locale.lang = "zh-TW";
+  assert.equal(env.locale.t(item.reason_code), item.reason);
 });

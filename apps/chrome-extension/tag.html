@@ -65,6 +65,7 @@
     <div id="backfill" class="banner" hidden></div>
     <div id="convos" class="convos"></div>
     <div class="file-open">
+      <div id="local-folder-actions" class="row wrap-row" hidden><button type="button" id="choose-local-folder" class="secondary" data-i18n="page.choose_local_folder">連接本機對話資料夾</button><button type="button" id="reopen-local-folder" class="secondary" data-i18n="page.reopen_local_folder" hidden>重新開啟上次資料夾</button></div>
       <p class="muted" data-i18n="page.not_using_github_or_want_to">沒有用 GitHub，或想標記下載下來的檔案：</p>
       <label class="file-btn"><span data-i18n="page.open_an_at_zip_or_conversation">從電腦開啟 AT ZIP 或 conversation.jsonl</span>
         <input id="file" type="file" multiple>
@@ -241,6 +242,7 @@
 <script src="capture.js"></script>
 <script src="guide.js"></script>
 <script src="offline-bundle.js"></script>
+<script src="local-folder.js"></script>
 <script src="tag.js"></script>
 <script src="tag-ai.js"></script>
 <script src="labels.js"></script>

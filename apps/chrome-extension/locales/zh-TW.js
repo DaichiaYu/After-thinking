@@ -214,6 +214,8 @@ ATI18n.add("zh-TW", {
   "page.conversation": "對話",
   "page.conversations_opened_from_this_computer_are": "從電腦開啟的對話沒有連到倉庫，記不了狀態。",
   "page.copy": "複製",
+  "page.copy_folder_path": "複製對話路徑",
+  "page.copy_folder_link": "複製 GitHub 連結",
   "page.copy_instructions": "複製指令",
   "page.copy_this_sentence": "複製這句話",
   "page.data_for_the_next_step": "交給下一步的資料",

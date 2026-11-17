@@ -81,3 +81,6 @@ button.secondary { background: transparent; color: var(--ink); border: 1px solid
 .agent-route strong { display: block; font-size: 13px; }
 .agent-route p { margin: 4px 0 2px; color: var(--muted); font-size: 12px; line-height: 1.5; }
 .agent-route button { margin-top: 8px; }
+
+#project-batch { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin: 8px 0; }
+#project-batch p { margin: 0 0 4px; }

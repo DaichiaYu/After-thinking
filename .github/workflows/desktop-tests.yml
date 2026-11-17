@@ -28,4 +28,4 @@ jobs:
         run: |
           find apps/chrome-extension -name '*.js' -print0 | xargs -0 -n1 node --check
       - name: Run capture, tagging, and i18n regressions
-        run: node --test apps/chrome-extension/tests/*.test.cjs
+        run: node --test apps/chrome-extension/tests/*.test.cjs apps/chrome-extension/tests/*.test.js

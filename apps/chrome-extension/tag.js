@@ -433,7 +433,9 @@ async function startConversation(outline) {
 
   $("picker").hidden = true;
   $("top-actions").hidden = false;
-  $("save").textContent = ctx.kind === "repo" ? T("tag.save_to_github") : ctx.kind === "zip" ? T("tag.download_tagged_zip") : T("tag.download_outline_json");
+  $("copy-folder-path").hidden = ctx.kind !== "repo";
+  $("copy-folder-link").hidden = ctx.kind !== "repo";
+  $("save").textContent = ctx.kind === "repo" ? T("tag.save_to_github") : ctx.kind === "directory" ? T("page.save_to_folder") : ctx.kind === "zip" ? T("tag.download_tagged_zip") : T("tag.download_outline_json");
   showMain();
   // 請 AI 先標一版：長對話、還沒標過的，預設打開
   renderAiPanel();
@@ -481,6 +483,21 @@ async function loadFromRepo(folder) {
   await startConversation(outline);
 }
 
+async function loadFromDirectory(handle) {
+  const source = await ATLocalFolder.read(handle,"source/conversation.jsonl");
+  const outlineRaw = await ATLocalFolder.read(handle,"outline.json",true);
+  let outline=null;
+  if(outlineRaw!==null) {
+    try { outline=JSON.parse(outlineRaw); }
+    catch(e) { throw Error("本機 outline.json 無法解析；為避免覆寫，已停止載入。"); }
+  }
+  msgs=parseJsonl(source);
+  if(!msgs.length)throw Error(T("tag.this_conversation_is_empty"));
+  ctx={kind:"directory",folder:null,fileName:handle.name,title:handle.name,
+    platform:null,revision:outline?.source?.source_revision||1,
+    localHandle:handle,localSource:source,localOutline:outlineRaw};
+  await startConversation(outline);
+}
 async function loadFromFiles(files) {
   const list = Array.from(files);
   // 檔名可能被瀏覽器改成 UUID 或失去副檔名；依檔案實際標頭辨認 ZIP。
@@ -701,6 +718,11 @@ async function save() {
             ? Object.assign({}, r, { outline_updated_at: outline.updated_at, outline_mode: outline.mode }) : r));
         });
       showStatus(T("tag.saved_to_in", config.repo, ctx.folder, OUTLINE_FILE));
+    } else if (ctx.kind === "directory") {
+      // Read the source and existing outline again immediately before writing.
+      // Another editor must never be silently overwritten.
+      ctx.localOutline = await ATLocalFolder.writeOutline(ctx.localHandle,content,ctx.localSource,ctx.localOutline);
+      showStatus(T("tag.saved_to_local_folder"));
     } else if (ctx.kind === "zip") {
       const entries = [...ctx.bundleEntries].filter(([name]) => name !== ctx.bundlePrefix + "outline.json").map(([path, data]) => ({ path, data }));
       entries.push({ path: ctx.bundlePrefix + "outline.json", data: content });
@@ -1355,6 +1377,18 @@ $("view-time").addEventListener("click", () => { UI.view = "time"; render(); });
 $("view-topic").addEventListener("click", () => { UI.view = "topic"; render(); });
 $("flow-name").addEventListener("input", (e) => { S.single.name = e.target.value; changed(false); });
 $("flow-note").addEventListener("input", (e) => { S.single.note = e.target.value; changed(false); });
+function currentGitHubFolderLink(){
+  if(!ctx||ctx.kind!=="repo"||!config?.repo)return null;
+  return "https://github.com/"+config.repo+"/tree/"+encodeURIComponent(branch)+"/"+ctx.folder.split("/").filter(Boolean).map(encodeURIComponent).join("/");
+}
+async function copyCurrentLocation(link){
+  if(!ctx||ctx.kind!=="repo")return;
+  const value=link?currentGitHubFolderLink():config.repo+" (branch: "+branch+")\n"+ctx.folder;
+  try{await navigator.clipboard.writeText(value);showStatus(T("tag.copied"))}
+  catch(e){showStatus(T("tag.could_not_copy",e.message),true)}
+}
+$("copy-folder-path").addEventListener("click",()=>copyCurrentLocation(false));
+$("copy-folder-link").addEventListener("click",()=>copyCurrentLocation(true));
 $("save").addEventListener("click", save);
 $("copy-output").addEventListener("click", async () => {
   try { await navigator.clipboard.writeText(outputText()); showStatus(T("tag.copied")); }

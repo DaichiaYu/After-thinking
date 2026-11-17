@@ -27,6 +27,8 @@
       <span id="mode-label" class="mode-label"></span>
       <a id="back-list" class="secondary btn-link" href="tag.html" data-i18n="page.back_to_list">回清單</a>
       <button id="change-mode" class="secondary" data-i18n="page.change_mode">改整理方式</button>
+      <button id="copy-folder-path" class="secondary" data-i18n="page.copy_folder_path" hidden>複製對話路徑</button>
+      <button id="copy-folder-link" class="secondary" data-i18n="page.copy_folder_link" hidden>複製 GitHub 連結</button>
       <button id="save" data-i18n="page.save">儲存</button>
     </div>
   </div>
@@ -63,6 +65,7 @@
     <div id="backfill" class="banner" hidden></div>
     <div id="convos" class="convos"></div>
     <div class="file-open">
+      <div id="local-folder-actions" class="row wrap-row" hidden><button type="button" id="choose-local-folder" class="secondary" data-i18n="page.choose_local_folder">連接本機對話資料夾</button><button type="button" id="reopen-local-folder" class="secondary" data-i18n="page.reopen_local_folder" hidden>重新開啟上次資料夾</button></div>
       <p class="muted" data-i18n="page.not_using_github_or_want_to">沒有用 GitHub，或想標記下載下來的檔案：</p>
       <label class="file-btn"><span data-i18n="page.open_an_at_zip_or_conversation">從電腦開啟 AT ZIP 或 conversation.jsonl</span>
         <input id="file" type="file" multiple>
@@ -239,6 +242,7 @@
 <script src="capture.js"></script>
 <script src="guide.js"></script>
 <script src="offline-bundle.js"></script>
+<script src="local-folder.js"></script>
 <script src="tag.js"></script>
 <script src="tag-ai.js"></script>
 <script src="labels.js"></script>

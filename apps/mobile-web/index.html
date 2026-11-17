@@ -36,12 +36,13 @@
         <button type="submit" id="connect-button" class="primary full">連接 GitHub 並開啟對話庫 <span aria-hidden="true">→</span></button>
       </form>
       <div class="offline-option"><span>或</span><label for="local-files" class="text-action">使用本機 conversation.jsonl＋outline.json</label><input id="local-files" type="file" accept=".jsonl,.json" multiple hidden></div>
+      <div class="folder-option" id="folder-option" hidden><button type="button" class="secondary" id="choose-local-folder">連接本機對話資料夾</button><button type="button" class="ghost" id="reopen-local-folder" hidden>重新開啟上次資料夾</button><p class="small muted">桌面 Chrome／Edge：選擇含 source/conversation.jsonl 的對話資料夾；授權後可直接讀取和儲存 outline.json。</p></div>
       <details class="explain"><summary>為什麼需要 Token？</summary><p>勾選「記住這台裝置」後，Token 只存在這個瀏覽器的本機儲存空間，不會上傳到任何地方；隨時可以在「更多」裡忘記這台裝置。也可以改讓手機的密碼管理員記住它。</p><p>GitHub Pages 是靜態網站，不能在公開前端安全保存 OAuth Client Secret。此版本採用只授權使用者指定倉庫的 Token；未來可以透過獨立 GitHub App 授權服務取代手動輸入。</p></details>
     </section>
     <div id="workspace" hidden>
       <section id="library-page" data-page="library" hidden>
         <div class="title-row"><div><p class="eyebrow">CONVERSATION LIBRARY</p><h1>選擇對話</h1></div><button id="change-repo" class="ghost">切換倉庫</button></div>
-        <div id="repo-info" class="small muted"></div>
+        <div id="repo-info" class="small muted"></div><div class="location-actions" id="library-location-actions" hidden><button id="library-copy-path" class="secondary" type="button">複製倉庫路徑</button><button id="library-copy-link" class="secondary" type="button">複製 GitHub 連結</button></div>
         <div class="search-row"><label class="sr-only" for="search">搜尋對話</label><input id="search" type="search" placeholder="搜尋對話標題或提問…"><label class="sr-only" for="sort">排序</label><select id="sort"><option value="conversation">對話時間</option><option value="capture">擷取時間</option><option value="tagged">最後標記時間</option><option value="labels">標籤順序</option></select></div>
         <div class="filter-strip" aria-label="對話篩選" role="group"><button data-filter="all" class="active">全部</button><button data-filter="todo">未處理</button><button data-filter="done">已整理</button><button data-filter="skip">不用整理</button><button data-filter="untagged">還沒標記</button></div>
         <div id="library-list"></div>
@@ -100,7 +101,7 @@
           <div class="reader-title-block"><h1 id="reader-title">對話標記</h1><div class="reader-subline"><p id="reader-info" class="small muted"></p><button id="reader-mode" class="reader-mode-link" type="button"></button></div></div>
           <span id="reader-dirty" class="reader-dirty"></span><button id="reader-save" type="button" class="compact primary">儲存</button><button id="reader-more" type="button" class="icon-button" aria-label="更多">⋯</button>
         </div>
-        <div class="reader-toolbar">
+        <div class="location-actions" id="reader-location-actions" hidden><button id="reader-copy-path" class="secondary" type="button">複製對話路徑</button><button id="reader-copy-link" class="secondary" type="button">複製 GitHub 連結</button></div><div class="reader-toolbar">
           <div class="reader-filters" role="group" aria-label="快速索引">
             <button data-kind="all" class="active" type="button">全部 <span id="count-all"></span></button>
             <button data-kind="pending" type="button">待確認 <span id="count-pending"></span></button>
@@ -109,9 +110,9 @@
           </div>
           <div class="reader-toolbar-actions"><button id="reader-review" class="toolbar-link" type="button">審查</button><button id="open-topics" class="toolbar-link" type="button">主題</button><div class="reader-arrows"><button id="prev-item" aria-label="上一項">↑</button><button id="next-item" aria-label="下一項">↓</button><span id="position" class="small muted">—</span></div></div>
         </div>
-        <div id="source-warning" class="warning" hidden></div>
+        <div class="reader-layout"><div class="reader-main"><div id="source-warning" class="warning" hidden></div>
         <div id="message-list" class="message-list"></div>
-        <button id="load-more" class="load-more" hidden>繼續載入對話</button>
+        <button id="load-more" class="load-more" hidden>繼續載入對話</button></div><aside id="desktop-rail" class="desktop-rail" aria-label="對話快速索引"></aside></div>
       </section>
       <section id="topics-page" data-page="topics" hidden>
         <div class="title-row"><div><p class="eyebrow">DISCUSSION STRUCTURE</p><h1>主題總覽</h1></div><button id="new-topic" class="ghost">＋ 新增</button></div>
@@ -152,6 +153,7 @@
   <script src="./core.js" defer></script>
   <script src="./github.js" defer></script>
   <script src="./device.js" defer></script>
-  <script src="./app.js" defer></script>
+  <script src="./local-folder.js" defer></script>
+   <script src="./app.js" defer></script>
 </body>
 </html>

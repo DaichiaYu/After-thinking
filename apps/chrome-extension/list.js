@@ -60,6 +60,19 @@ async function showPicker() {
     $("error").hidden = true;
     try { await loadFromFiles(e.target.files); } catch (err) { showError(err.message); }
   });
+  if (typeof ATLocalFolder!=="undefined" && ATLocalFolder.supported()){
+    $("local-folder-actions").hidden=false;
+    const choose=async (restore)=>{
+      try{
+        const handle=restore?await ATLocalFolder.restore():await ATLocalFolder.pick();
+        if(handle)await loadFromDirectory(handle);
+        $("reopen-local-folder").hidden=false;
+      }catch(e){if(e.name!=="AbortError")showError(e.message)}
+    };
+    $("choose-local-folder").addEventListener("click",()=>choose(false));
+    $("reopen-local-folder").addEventListener("click",()=>choose(true));
+    ATLocalFolder.getStored().then(handle=>{$("reopen-local-folder").hidden=!handle}).catch(()=>{});
+  }
   if (!config || !config.repo || !config.token) {
     $("repo-line").textContent = T("list.github_is_not_set_up_yet");
     return;

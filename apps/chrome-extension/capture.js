@@ -164,10 +164,14 @@ async function captureViaApi(platform) {
       const card = id ? cards[id] : null;
       const url = card ? (card.url || (card.webSearchResult && card.webSearchResult.url) || null) : null;
       const n = url ? reg.add(url, (card && card.title) || titleOf(url), true) : null;
+      cite.tags++;
       if (!n) cite.unresolved++;
       return reg.mark([n]);
     };
     cite.unresolved = 0;
+    cite.tags = 0;
+    cite.results = results.length;
+    cite.cards = Object.keys(cards).length;
     cite.listAll = () => results.forEach((x) => reg.add(x.url, x.title || null, false));
     return cite;
   };
@@ -623,6 +627,8 @@ async function captureViaApi(platform) {
       let markupCleaned = 0;
       // 診斷用：只有數字和欄位名稱，沒有對話內容
       const probe = { citation_tags: 0, unresolved: 0, cards: 0, web_results: 0, response_keys: new Set() };
+      const grokStats = { answers: 0, cite_tags: 0, unresolved: 0, cards: 0, web_results: 0 };
+      const grokKeys = new Set();
       path.forEach((id) => {
         const r = byId[id];
         if (!r) { note("response_" + id.slice(0, 8), "missing"); return; }
@@ -635,8 +641,13 @@ async function captureViaApi(platform) {
           const cite = grokCiter(r, reg);
           const c = cleanGrokMarkup(text, cite);
           if (c.changed) { text = c.text; markupCleaned++; }
-          // 有引用對不到網址時，把這則回應的搜尋結果清單整份留下，至少查得到
-          if (cite.unresolved) cite.listAll();
+          // Grok 常常不在句子裡放引用，只在回答底下列「參考了哪些網頁」。
+          // 句子裡沒有對到任何網址（或有引用對不到）時，把這份清單留下，至少查得到。
+          if (cite.unresolved || !reg.list.length) cite.listAll();
+          grokStats.answers++;
+          grokStats.cite_tags += cite.tags; grokStats.unresolved += cite.unresolved;
+          grokStats.web_results += cite.results; grokStats.cards += cite.cards;
+          Object.keys(r).forEach((k) => grokKeys.add(k));
           probe.citation_tags += (text.match(/\[來源[ ：]/g) || []).length;
           probe.unresolved += cite.unresolved;
           probe.cards += Array.isArray(r.cardAttachmentsJson) ? r.cardAttachmentsJson.length : 0;
@@ -653,6 +664,10 @@ async function captureViaApi(platform) {
           platform_message_id: r.responseId, timestamp: isoOf(id), attachments: atts,
           ...(reg.list.length ? { sources: reg.list } : {}) });
       });
+
+      // 診斷用：只有數字和欄位名稱，沒有對話內容
+      log.source_refs = { ...grokStats, saved: items.reduce((n, i) => n + (i.sources ? i.sources.length : 0), 0),
+        response_keys: Array.from(grokKeys).sort().slice(0, 80) };
 
       const branchPoints = Object.values(children).filter((k) => k.length > 1).length;
       const created = ids.map(timeOf).filter(Boolean).sort((a, b) => a - b)[0];
@@ -1188,6 +1203,8 @@ function buildMetadata(kept, detected, platform, page, mode) {
     "  source_links: {total: " + countSources(page.items).total + ", unresolved: " + countSources(page.items).unresolved + "}",
     // 來源網址的診斷：只有數字和資料欄位名稱，沒有對話內容
     "  source_probe: " + (page.api && page.api.source_refs ? JSON.stringify(page.api.source_refs) : "null"),
+    // 來源對照的診斷：只有數字和欄位名稱（JSON 也是合法的 YAML），方便對不上時照實際結構修
+    ...(page.api && page.api.source_refs ? ["  source_refs: " + JSON.stringify(page.api.source_refs)] : []),
     "  items_still_truncated: " + page.items.filter((i) => i.truncated).length,
     "  items_detected: " + detected,
     "  items_excluded_by_user: " + (detected - kept),

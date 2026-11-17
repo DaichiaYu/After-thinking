@@ -135,3 +135,28 @@ test('ChatGPT: <Cite ref> tags resolve through search results stored on other me
   // Without a resolver the reference id is kept, as before.
   assert.equal(api.cleanChatgptMarkup('<Cite ref="turn1search1"/>').text, '[來源：turn1search1]');
 });
+
+test('Gemini: source addresses are read from the recorded page data and kept as consulted pages', () => {
+  const fn = (name) => { const a = src.indexOf('function ' + name + '('); const b = src.indexOf('\n}\n', a); return src.slice(a, b + 3); };
+  const gem = vm.runInNewContext(fn('geminiPayloadsOf') + fn('applyGeminiSources') + '\n({ applyGeminiSources });', { URL });
+  const answer = ['rc_abc123', ['## 標題\n\n**輝達**執行長目前由財務長暫時代理。\n\n另外出口管制新規擴大到海外資料中心的算力。'],
+    [null, [[[0, 30], [1]], [[['https://news.example/a', 'News A', null, 'https://www.gstatic.com/favicon.ico']]],
+      [['https://gov.example/rule', 'Rule page']]]],
+    ['https://lh3.googleusercontent.com/img.png']];
+  const other = ['rc_zzz999', ['完全不同的另一個草稿內容，跟畫面不一樣的文字很多很多。'], [['https://other.example/']]];
+  const payload = JSON.stringify([[null, [answer, other]]]);
+  const raw = ")]}'\n\n123\n" + JSON.stringify([['wrb.fr', 'hNvQHb', payload, null, null, null, 'generic']]) + '\n';
+  const page = { recorder: 'active', items: [
+    { speaker: 'author', text: '問題' },
+    { speaker: 'assistant', text: '標題\n\n輝達執行長目前由財務長暫時代理。[來源：未取得網址]\n\n另外出口管制新規擴大到海外資料中心的算力。[來源：未取得網址]' }] };
+  const probe = gem.applyGeminiSources(page, [raw]);
+  assert.deepEqual(plain(page.items[1].consulted), [
+    { url: 'https://news.example/a', title: 'News A' }, { url: 'https://gov.example/rule', title: 'Rule page' }]);
+  assert.equal(probe.payloads, 1);
+  assert.equal(probe.candidates, 2);
+  assert.equal(probe.matched, 1);
+  assert.equal(probe.kept, 2);
+  assert.equal(probe.urls, 4);
+  assert.ok(!JSON.stringify(probe).includes('example'), 'probe carries no URLs or text');
+  assert.equal(gem.applyGeminiSources({ items: [{ speaker: 'assistant', text: 'x' }] }, []).payloads, 0);
+});

@@ -1265,7 +1265,7 @@ function buildMetadata(kept, detected, platform, page, mode) {
     "  source_links: {total: " + countSources(page.items).total + ", consulted: " + countSources(page.items).consulted +
       ", unresolved: " + countSources(page.items).unresolved + "}",
     // 來源網址的診斷：只有數字和資料欄位名稱，沒有對話內容
-    "  source_probe: " + (page.api && page.api.source_refs ? JSON.stringify(page.api.source_refs) : "null"),
+    "  source_probe: " + (page.source_probe ? JSON.stringify(page.source_probe) : page.api && page.api.source_refs ? JSON.stringify(page.api.source_refs) : "null"),
     "  items_still_truncated: " + page.items.filter((i) => i.truncated).length,
     "  items_detected: " + detected,
     "  items_excluded_by_user: " + (detected - kept),
@@ -1441,6 +1441,107 @@ function parseGeminiRecorded(raws) {
   };
   payloads.forEach((p) => walk(p.data, 0));
   return { conversations, turns, payloads: payloads.length };
+}
+
+// ── Gemini 來源網址 ──
+// 畫面上的來源小卡沒有網址，但 Gemini 載入對話時向 Google 要的資料（記錄器旁聽到的 batchexecute 回應）裡有。
+// 做法：在那份資料裡找出每則回答（rc_ 開頭的回答編號），用回答文字對回畫面上抓到的訊息，
+// 再把那則回答資料裡出現的網頁網址收下來。
+// 目前還不知道網址和小卡怎麼一一對應，所以先存到「參考網頁」獨立檔案（不對到句子）；
+// 小卡位置照舊寫「未取得網址」。另外記一份只有數字、欄位位置和型別的診斷（沒有內容），之後照它把對應做準。
+function geminiPayloadsOf(raws) {
+  const payloads = [];
+  (raws || []).forEach((raw) => {
+    String(raw || "").replace(/^\)\]\}'\s*/, "").split("\n").forEach((line) => {
+      const l = line.trim();
+      if (!l.startsWith("[")) return;
+      let arr;
+      try { arr = JSON.parse(l); } catch (e) { return; }
+      (Array.isArray(arr) ? arr : []).forEach((e) => {
+        if (Array.isArray(e) && e[0] === "wrb.fr" && typeof e[2] === "string") {
+          try { payloads.push({ rpc: e[1], data: JSON.parse(e[2]) }); } catch (err) {}
+        }
+      });
+    });
+  });
+  return payloads;
+}
+
+function applyGeminiSources(page, raws) {
+  const payloads = geminiPayloadsOf(raws);
+  const probe = { recorder: page.recorder || null, payloads: payloads.length,
+    rpcs: Array.from(new Set(payloads.map((p) => String(p.rpc)))).slice(0, 10),
+    candidates: 0, answers: 0, matched: 0, urls: 0, kept: 0, url_paths: {}, url_parents: {} };
+  // 只留字母和數字（含中文），用來比對畫面文字和原始 Markdown
+  const squash = (s) => String(s || "").replace(/\[來源[^\]]*\]/g, "").replace(/[^\p{L}\p{N}]+/gu, "").toLowerCase();
+  const isRc = (n) => Array.isArray(n) && typeof n[0] === "string" && /^rc_[0-9a-z]+$/i.test(n[0]);
+  const textOf = (n) => {
+    const out = [];
+    const go = (x, d) => { if (d > 3) return; if (typeof x === "string") out.push(x); else if (Array.isArray(x)) x.forEach((y) => go(y, d + 1)); };
+    go(n[1], 0);
+    return out.join("\n");
+  };
+  const candidates = [];
+  const seen = new Set();
+  const walk = (n, depth) => {
+    if (!Array.isArray(n) || depth > 40) return;
+    if (isRc(n)) {
+      const key = n[0] + ":" + textOf(n).length;
+      if (!seen.has(key)) { seen.add(key); candidates.push({ node: n, flat: squash(textOf(n)) }); }
+      return;
+    }
+    n.forEach((c) => walk(c, depth + 1));
+  };
+  payloads.forEach((p) => walk(p.data, 0));
+  probe.candidates = candidates.length;
+
+  // 不是來源的網址：小圖示、圖片、Google 自己的資源
+  const NOT_SOURCE = /(^https?:\/\/[^/]*(gstatic\.com|googleusercontent\.com|ggpht\.com|encrypted-tbn\d*\.)|\/s2\/favicons|faviconV2|\.(png|jpe?g|gif|webp|svg|ico)(\?|$))/i;
+  const typeSig = (arr) => arr.slice(0, 12).map((x) => x === null ? "0" : Array.isArray(x) ? "a" : typeof x === "string" ? (/^https?:\/\//.test(x) ? "u" : "s") : typeof x === "number" ? "n" : typeof x === "boolean" ? "b" : "o").join("");
+  const bump = (obj, k) => { if (Object.keys(obj).length < 30 || obj[k]) obj[k] = (obj[k] || 0) + 1; };
+  const urlsIn = (root) => {
+    const found = [];
+    const go = (n, path, depth) => {
+      if (!Array.isArray(n) || depth > 30) return;
+      n.forEach((x, k) => {
+        if (typeof x === "string" && /^https?:\/\//i.test(x)) {
+          probe.urls++;
+          bump(probe.url_paths, path.concat(k).join("."));
+          bump(probe.url_parents, typeSig(n));
+          if (NOT_SOURCE.test(x)) return;
+          // 標題：同一層裡第一個不是網址、長度合理的文字
+          const title = n.find((y) => typeof y === "string" && y !== x && !/^https?:\/\//i.test(y) && y.trim().length > 1 && y.length <= 300) || null;
+          found.push({ url: x, title });
+        } else if (Array.isArray(x)) go(x, path.concat(k), depth + 1);
+      });
+    };
+    go(root, [], 0);
+    return found;
+  };
+
+  page.items.forEach((item) => {
+    if (item.speaker !== "assistant") return;
+    probe.answers++;
+    const flat = squash(item.text !== undefined ? item.text : item.content);
+    if (flat.length < 8) return;
+    const probes = [flat.slice(0, 40), flat.slice(Math.floor(flat.length / 2), Math.floor(flat.length / 2) + 40), flat.slice(-40)];
+    const hit = candidates.find((c) => probes.filter((p) => p.length >= 8 && c.flat.includes(p)).length >= 2);
+    if (!hit) return;
+    probe.matched++;
+    const already = new Set((item.sources || []).map((s) => s.url));
+    const list = item.consulted || [];
+    urlsIn(hit.node).forEach((f) => {
+      let href;
+      try { href = new URL(f.url).href; } catch (e) { return; }
+      if (already.has(href)) return;
+      const known = list.find((x) => x.url === href);
+      if (known) { if (!known.title && f.title) known.title = f.title.replace(/\s+/g, " ").trim(); return; }
+      list.push({ url: href, title: f.title ? f.title.replace(/\s+/g, " ").trim() : null });
+    });
+    if (list.length) { item.consulted = list; probe.kept += list.length; }
+  });
+  page.source_probe = probe;
+  return probe;
 }
 
 // 把時間對到畫面上抓到的訊息：用提問文字比對，同樣的文字（例如「繼續」）依時間先後分配
@@ -1628,9 +1729,10 @@ async function finalizeCapture(tabId, platform, page) {
     try {
       const [inj] = await chrome.scripting.executeScript({ target: { tabId }, world: "MAIN", func: readGeminiRecorded });
       const raws = inj && inj.result;
-      page.recorder = raws ? "active" : "not_loaded";
+      page.recorder = raws ? (raws.length ? "active" : "active_empty") : "not_loaded";
       if (raws && raws.length) applyGeminiTimes(page, conversationId, parseGeminiRecorded(raws));
-    } catch (e) { page.recorder = "error"; }
+      try { applyGeminiSources(page, raws || []); } catch (e) { page.source_probe = { recorder: page.recorder, error: String(e && e.message || e).slice(0, 120) }; }
+    } catch (e) { page.recorder = "error"; page.source_probe = { recorder: "error" }; }
   }
   const dl = await downloadAttachments(tabId, page.items);
   files = dl.files;

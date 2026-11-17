@@ -402,7 +402,7 @@ Web addresses the AI cited are now kept in the captured record, so a claim can b
 | ChatGPT | `<Cite ref>` tags and hidden citation markers, resolved through the conversation's search results | footnote-style source lists |
 | Claude | `citations` on each text block | — |
 | Grok | citation cards (`cardAttachmentsJson`) | the answer's web search results (often dozens) |
-| Gemini | source chips, when the page exposes their address | — |
+| Gemini | source chips, when the page exposes their address (rare) | addresses found in the page data Gemini loads for that answer (read by the local recorder; the page must be reloaded after the extension is installed or updated) |
 
 - **Two places, on purpose.** Lists of pages an answer merely consulted can be larger than the conversation itself, so they are kept out of `conversation.jsonl`; the message only records `consulted_sources` (a count). The separate file is created only when there is something to put in it.
 - When text has to be read from the screen (Gemini always; other platforms as a fallback), links that were part of the answer are kept in `sources` with `inline: false` and no marker.

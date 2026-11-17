@@ -9,9 +9,17 @@ After-thinking Capture is the Chrome extension for [After-thinking](../../README
 1. **Capture** — copy a whole ChatGPT, Claude, Gemini, or Grok conversation into After-thinking source files (`conversation.jsonl` and `metadata.yaml`), uploaded to your own private GitHub repository or downloaded to your computer.
 2. **Tag** — before handing the conversation to an AI for analysis, decide its skeleton yourself: group it into topics, mark key points, key segments, turns, and notes. The result is saved as `outline.json`, and After-thinking's Stages 1–2 follow it instead of re-segmenting the conversation. For long conversations, an AI of your choice can draft the tags first (`outline.ai.json`); you review them, and every tag keeps a record of whether it came from you or from the AI.
 
-The extension reads the current tab only when you click its icon (`manual_click` mode); it never listens in the background. Conversations go only to the GitHub repository you configure, with no other server in between.
+Single-conversation capture is user-initiated when you click the extension. **Gemini exception:** after first use the extension registers a local page recorder for subsequent Gemini pages to recover original timestamps; this does not upload conversations by itself. Conversations are sent to your configured GitHub repository only when you initiate a repository upload.
 
-The extension's interface is in Traditional Chinese. Button and label names below are quoted in Chinese with an English gloss.
+The conversation library and desktop tagging workspace support Traditional Chinese and English (browser-language default, manually switchable). Popup, batch capture, Agent capture, options and mobile Pages remain Traditional Chinese. Older instructions below quote Chinese control labels.
+
+## Current integration status (2026-11-17)
+
+- **Capture and tagging:** ChatGPT, Claude, Gemini and Grok single-chat capture; desktop conversation library/tagging supports **繁體中文 / English**. The stored `outline.json` summary remains in Traditional Chinese for cross-device comparability.
+- **Agent route:** a separate "指定對話網址 → 上傳 GitHub" control validates an original private conversation URL and reports upload success only after the configured GitHub write succeeds. Chrome permission and real-site capture tests remain necessary.
+- **Batch capture:** Gemini sidebar **and experimental ChatGPT Projects (one Project at a time)**. ChatGPT Project discovery depends partly on undocumented website data and could break after site updates. See [Project batch guide](PROJECT-BATCH.md).
+- **Not fully internationalized:** popup, settings, batch/Agent pages and mobile Pages currently remain Traditional Chinese.
+- **Historical notes:** version-specific paragraphs below describing Gemini as the *only* batch-supported platform refer to the earlier release at which they were written.
 
 ## Attachment preview while tagging (v0.9.1 candidate)
 
@@ -109,7 +117,7 @@ v0.8.0 brings **both parallel developments into one extension**: (1) preview-fir
 | Item | Support |
 |---|---|
 | Platforms | ChatGPT, Claude, Gemini, Grok (`grok.com`; Grok inside X is not supported) (batch capture and recovered original times are Gemini-only for now) |
-| Extension interface | Traditional Chinese only, for now |
+| Extension interface | Library/tagging: Traditional Chinese and English. Popup, batch, Agent, settings, mobile Pages: Traditional Chinese for now |
 | Conversation content | Any language. Text is copied as-is, never translated or rewritten |
 | Site interface language | Traditional Chinese, Simplified Chinese, English. The extension must recognize the site's "Show more" / "Show less" buttons to expand collapsed long messages, and Gemini batch capture must recognize the sidebar's "Show more". If the site is set to another language (e.g. Japanese): ChatGPT, Claude, and Grok are read from the site's own data first and are unaffected; on Gemini, or whenever scroll reading is used, collapsed long messages may stay collapsed and may not be detected — check message lengths after capturing |
 | "Possible turn" hints on the tagging page | Traditional Chinese, Simplified Chinese, English, Japanese — for your wording and for the AI's response (word lists under "Tagging conversations") |
@@ -120,7 +128,7 @@ v0.8.0 brings **both parallel developments into one extension**: (1) preview-fir
 1. Unzip to get the `after-thinking-capture` folder.
 2. Go to `chrome://extensions`.
 3. Turn on "Developer mode" (top right).
-4. Click "Load unpacked" and choose the `after-thinking-capture` folder.
+4. Click "Load unpacked" and choose this repository's `apps/chrome-extension` folder (or `after-thinking-capture` if using a separately packaged extension ZIP).
 5. Optionally pin After-thinking Capture from the puzzle-piece icon in the toolbar.
 
 ## GitHub setup (first time)
@@ -476,7 +484,7 @@ v0.8.0 將**兩套平行開發成果合在同一個擴充功能**：（1）先�
 | 項目 | 支援 |
 |---|---|
 | 平台 | ChatGPT、Claude、Gemini、Grok（`grok.com`；X 裡面的 Grok 不支援）（批量擷取、補原始時間目前只有 Gemini） |
-| 擴充功能的介面 | 繁體中文（目前只有這個） |
+| 擴充功能的介面 | 桌面對話庫與標記工作台支援繁體中文、英文；擷取彈窗、批次、Agent、設定及手機 Pages 目前仍是繁體中文 |
 | 對話內容 | 任何語言都可以，原文照抄，不翻譯也不改寫 |
 | 網站本身的介面語言 | 繁體中文、簡體中文、英文。擴充功能要認得網站上「顯示更多」「顯示較少」之類的按鈕，才能自動展開摺疊的長訊息，Gemini 批量擷取也要認得側邊欄的「顯示更多」。網站設成其他語言（例如日文）時：ChatGPT、Claude、Grok 優先直接讀網站資料，不受影響；但 Gemini，以及改用捲動讀取的時候，摺疊的長訊息可能沒展開、也不一定偵測得到，擷取後請檢查訊息長度 |
 | 標記頁的「可能轉向」提示 | 繁體中文、簡體中文、英文、日文，看你的用詞和 AI 的回應（提示詞見下方「標記對話」） |

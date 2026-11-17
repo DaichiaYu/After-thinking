@@ -1470,8 +1470,9 @@ function geminiPayloadsOf(raws) {
 function applyGeminiSources(page, raws) {
   const payloads = geminiPayloadsOf(raws);
   const probe = { recorder: page.recorder || null, payloads: payloads.length,
-    rpcs: Array.from(new Set(payloads.map((p) => String(p.rpc)))).slice(0, 10),
-    candidates: 0, answers: 0, matched: 0, urls: 0, kept: 0, url_paths: {}, url_parents: {} };
+    rpcs: {}, candidates: 0, answers: 0, matched: 0, urls: 0, kept: 0, url_paths: {}, url_parents: {},
+    answer_lengths: [], best_scores: [], candidate_info: [], urls_by_rpc: {} };
+  payloads.forEach((p) => { const k = String(p.rpc); if (Object.keys(probe.rpcs).length < 40 || probe.rpcs[k]) probe.rpcs[k] = (probe.rpcs[k] || 0) + 1; });
   // 只留字母和數字（含中文），用來比對畫面文字和原始 Markdown
   const squash = (s) => String(s || "").replace(/\[來源[^\]]*\]/g, "").replace(/[^\p{L}\p{N}]+/gu, "").toLowerCase();
   const isRc = (n) => Array.isArray(n) && typeof n[0] === "string" && /^rc_[0-9a-z]+$/i.test(n[0]);
@@ -1487,12 +1488,15 @@ function applyGeminiSources(page, raws) {
     if (!Array.isArray(n) || depth > 40) return;
     if (isRc(n)) {
       const key = n[0] + ":" + textOf(n).length;
-      if (!seen.has(key)) { seen.add(key); candidates.push({ node: n, flat: squash(textOf(n)) }); }
+      if (!seen.has(key)) { seen.add(key); candidates.push({ node: n, flat: squash(textOf(n)), rpc: walk.rpc }); }
       return;
     }
     n.forEach((c) => walk(c, depth + 1));
   };
-  payloads.forEach((p) => walk(p.data, 0));
+  payloads.forEach((p) => { walk.rpc = String(p.rpc); walk(p.data, 0); });
+  // 每個 rpc 的資料裡總共有幾個網址（只算數量），用來判斷網址在不在記錄到的資料裡
+  const countUrls = (n, d) => !Array.isArray(n) || d > 60 ? 0 : n.reduce((a, x) => a + (typeof x === "string" && /^https?:\/\//i.test(x) ? 1 : countUrls(x, d + 1)), 0);
+  payloads.forEach((p) => { const c = countUrls(p.data, 0); if (c) probe.urls_by_rpc[p.rpc] = (probe.urls_by_rpc[p.rpc] || 0) + c; });
   probe.candidates = candidates.length;
 
   // 不是來源的網址：小圖示、圖片、Google 自己的資源
@@ -1524,9 +1528,18 @@ function applyGeminiSources(page, raws) {
     probe.answers++;
     const flat = squash(item.text !== undefined ? item.text : item.content);
     if (flat.length < 8) return;
-    const probes = [flat.slice(0, 40), flat.slice(Math.floor(flat.length / 2), Math.floor(flat.length / 2) + 40), flat.slice(-40)];
-    const hit = candidates.find((c) => probes.filter((p) => p.length >= 8 && c.flat.includes(p)).length >= 2);
-    if (!hit) return;
+    probe.answer_lengths.push(flat.length);
+    // 把回答切成每段 12 字，看每個候選含了幾成；取最高的，過半才算同一則
+    const pieces = [];
+    for (let k = 0; k + 12 <= flat.length; k += 12) pieces.push(flat.slice(k, k + 12));
+    let hit = null, best = 0;
+    candidates.forEach((c) => {
+      const score = pieces.length ? pieces.filter((p) => c.flat.includes(p)).length / pieces.length : 0;
+      c.best = Math.max(c.best || 0, score);
+      if (score > best) { best = score; hit = c; }
+    });
+    probe.best_scores.push(Math.round(best * 100) / 100);
+    if (!hit || best < 0.5) return;
     probe.matched++;
     const already = new Set((item.sources || []).map((s) => s.url));
     const list = item.consulted || [];
@@ -1540,6 +1553,8 @@ function applyGeminiSources(page, raws) {
     });
     if (list.length) { item.consulted = list; probe.kept += list.length; }
   });
+  // 候選回答的概況（只有長度、分數、網址數，沒有內容），最多 40 個
+  probe.candidate_info = candidates.slice(0, 40).map((c) => [c.rpc, c.flat.length, Math.round((c.best || 0) * 100) / 100, countUrls(c.node, 0)]);
   page.source_probe = probe;
   return probe;
 }

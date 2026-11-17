@@ -64,4 +64,9 @@ This is a production-data-connected **candidate**; end-to-end testing on a separ
 - 儲存前核對來源及標記檔版本，遇到衝突不覆蓋。私人資料不要提交到公開 AT。
 - Token 預設關閉分頁就清除；勾選「記住這台裝置」才會存在該瀏覽器，可隨時忘記。未儲存的標記會自動留草稿在本機。
 - 網站需在 AT 倉庫的 Settings → Pages → Source 選 GitHub Actions，合併及部署成功後才能正式取得網址。
-\n## Desktop workbench and captured attachments (2026-11)\n\n- The browser-only desktop workbench reuses the same outline v6 schema; manual multi-message key ranges remain part of `outline.json`. AI review and summary are available without switching away from the source reader.\n- Per-message attachments are preserved in memory from `conversation.jsonl`. The browser makes an authenticated GitHub or permissioned local folder request **only when the user opens a saved attachment**. File size and path limits apply; image and plain text previews are supported, otherwise download is offered. Missing source files are explicitly reported.\n- Test automation checks source metadata, path handling and model serialization. Real browser visual and permission testing, including different screen widths, remains a separate acceptance check.\n
+
+## Desktop workbench and captured attachments (2026-11)
+
+- The browser-only desktop workbench reuses the same outline v6 schema; manual multi-message key ranges remain part of `outline.json`. AI review and summary are available without switching away from the source reader.
+- Per-message attachments are preserved in memory from `conversation.jsonl`. The browser makes an authenticated GitHub or permissioned local folder request **only when the user opens a saved attachment**. File size and path limits apply; image and plain text previews are supported, otherwise download is offered. Missing source files are explicitly reported.
+- Test automation checks source metadata, path handling and model serialization. Real browser visual and permission testing, including different screen widths, remains a separate acceptance check.

@@ -206,3 +206,35 @@ test("local folder binding verifies original data and refuses to overwrite concu
  source+="changed";
  await assert.rejects(LF.writeOutline(root,'{"outline_version":6,"new":true}',source.slice(0,-7),saved),/其他程式修改/);
 });
+
+test("desktop workbench key ranges survive save, reload, and review decisions",()=>{
+  const C=core(),msgs=messages(C),m=C.makeModel(msgs,null,{title:"fixture"});
+  C.addKeyRange(m,msgs[0].id,msgs[2].id);
+  assert.equal(m.keyRanges.length,1);
+  assert.equal(m.dirty,true);
+  assert.throws(()=>C.addKeyRange(m,msgs[1].id,msgs[3].id),/重疊/);
+  const doc=C.makeOutline(m);
+  assert.deepEqual(doc.key_ranges.map(x=>x.origin),["user"]);
+  assert.equal(doc.summary.includes("關鍵段落"),true);
+  const restored=C.makeModel(msgs,doc,{title:"fixture"});
+  assert.equal(restored.keyRanges.length,1);
+  C.removeKeyRange(restored,msgs[0].id,msgs[2].id);
+  assert.equal(C.makeOutline(restored).key_ranges.length,0);
+});
+test("desktop review decisions update the same keyRanges used for saved outline",()=>{
+ const C=core(),msgs=messages(C),m=C.makeModel(msgs,null,{title:"fixture"});
+ m.keyRanges=[{from_message_id:msgs[0].id,to_message_id:msgs[1].id,origin:"ai_unreviewed"}];
+ const p=C.pending(m).find(x=>x.type==="range");
+ assert.ok(p);C.decide(m,p,true);
+ assert.equal(C.makeOutline(m).key_ranges[0].origin,"ai_confirmed");
+ m.keyRanges[0].origin="ai_unreviewed";
+ C.decide(m,C.pending(m).find(x=>x.type==="range"),false);
+ assert.equal(C.makeOutline(m).key_ranges.length,0);
+});
+test("web editor exposes desktop topic, search, inspector, and summary controls",()=>{
+ for(const id of ["desktop-topic-tree","desktop-add-topic","desktop-find","desktop-find-results","desktop-inspector-body","desktop-rail"])assert.match(js.html,new RegExp('id="'+id+'"'));
+ for(const view of ["message","review","summary"])assert.match(js.html,new RegExp('data-inspector-view="'+view+'"'));
+ assert.match(js.app,/function renderWorkBench\(/);
+ assert.match(js.app,/function renderWorkbenchReview\(/);
+ assert.match(js.app,/function renderWorkbenchSummary\(/);
+});

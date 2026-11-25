@@ -1,6 +1,8 @@
 # 這個倉庫是什麼
 
-這是用 After-thinking Capture（Chrome 擴充功能）擷取下來的 AI 對話原文，私人存放。
+這是使用者自行掌控的思考資料倉庫，由 After-thinking Capture 保存 AI 對話原文與標記，供後續 AI 交接、開發、研究及寫作重複利用；六階段分析是選用的深度加工流程。
+
+This user-controlled repository stores captured conversations and annotations as reusable thinking assets for AI handoff, development, research and writing. The six-stage analysis is optional.
 整理方法來自 After-thinking：https://github.com/DaichiaYu/After-thinking
 
 > 這個檔案由擴充功能自動產生，擴充功能更新時會一起更新。想自己寫指引的話，刪掉第一行的標記，之後就不會再被覆蓋。

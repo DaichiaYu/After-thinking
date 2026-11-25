@@ -1,13 +1,15 @@
 # After-thinking Capture v0.9.1 (candidate)
 
-> **Capture ChatGPT, Claude, Gemini, and Grok conversations as After-thinking source files, then tag them yourself before any AI analysis.**
+> **Capture, annotate, and reuse human–AI conversations as portable thinking assets.**
 
 [繁體中文版](#繁體中文版)
 
-After-thinking Capture is the Chrome extension for [After-thinking](../../README.md). It handles the first two steps of the workflow:
+After-thinking Capture is the Chrome extension for [After-thinking](../../README.md). It provides a complete capture-and-annotation workflow that can be used independently of the optional six-stage analysis:
 
 1. **Capture** — copy a whole ChatGPT, Claude, Gemini, or Grok conversation into After-thinking source files (`conversation.jsonl` and `metadata.yaml`), uploaded to your own private GitHub repository or downloaded to your computer.
-2. **Tag** — before handing the conversation to an AI for analysis, decide its skeleton yourself: group it into topics, mark key points, key segments, turns, and notes. The result is saved as `outline.json`, and After-thinking's Stages 1–2 follow it instead of re-segmenting the conversation. For long conversations, an AI of your choice can draft the tags first (`outline.ai.json`); you review them, and every tag keeps a record of whether it came from you or from the AI.
+2. **Tag** — record the structure that matters to you before handing it to another AI or tool: group it into topics, mark key points, key segments, turns, and notes. The result is saved as `outline.json`, and After-thinking's Stages 1–2 follow it instead of re-segmenting the conversation. For long conversations, an AI of your choice can draft the tags first (`outline.ai.json`); you review them, and every tag keeps a record of whether it came from you or from the AI.
+
+The original source and saved `outline.json` form a reusable handoff package for another AI, a coding agent, research, or writing. Stages 1–6 are optional deeper processing, not a requirement for using the captured material.
 
 Single-conversation capture is user-initiated when you click the extension. **Gemini exception:** after first use the extension registers a local page recorder for subsequent Gemini pages to recover original timestamps; this does not upload conversations by itself. Conversations are sent to your configured GitHub repository only when you initiate a repository upload.
 
@@ -370,10 +372,12 @@ ChatGPT replies can contain its own layout markup (`<box>`, `<row>`, `<text>`, `
 
 # 繁體中文版
 
-After-thinking Capture 是 [After-thinking](../../README.md) 的 Chrome 擴充功能，負責整理流程最前面的兩步：
+After-thinking Capture 是 [After-thinking](../../README.md) 的 Chrome 擴充功能，提供可獨立使用的擷取與標記工作流，將人機共同思考保存為可追溯、可重複利用的資料資產：
 
 1. **擷取**：把 ChatGPT、Claude、Gemini 或 Grok 網頁上的對話完整抓下來，存成 After-thinking 的原文檔（`conversation.jsonl` 和 `metadata.yaml`），上傳到你自己的私人 GitHub 倉庫，或下載到電腦。
-2. **標記**：在交給 AI 分析之前，自己先決定這段對話的骨架：分主題，標出關鍵、關鍵段落、轉向和備註。結果存成 `outline.json`，After-thinking 的第一、二階段會照它分析，不再自己重新切分。對話太長時，可以先請你喜歡的 AI 標一版（`outline.ai.json`），你再檢查；每個標記都會記下是你標的還是 AI 標的。
+2. **標記**：在交給其他 AI 或工具之前，先記錄你認為重要的對話骨架：分主題，標出關鍵、關鍵段落、轉向和備註。結果存成 `outline.json`，After-thinking 的第一、二階段會照它分析，不再自己重新切分。對話太長時，可以先請你喜歡的 AI 標一版（`outline.ai.json`），你再檢查；每個標記都會記下是你標的還是 AI 標的。
+
+原文與正式保存的 `outline.json` 即可作為交接資料，供其他 AI、程式開發 Agent、研究或寫作使用，不必先執行六階段。六階段是選用的深度資料加工流程。
 
 只有你按下擴充功能圖示時才會讀取目前這個分頁（「按圖示模式」，manual_click），不會在背景監聽。對話只會送到你自己設定的 GitHub 倉庫，不經過其他伺服器。
 

@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "After-thinking Capture",
   "version": "0.9.1",
-  "description": "把 ChatGPT、Claude、Gemini 或 Grok 的對話擷取成 After-thinking 的原文檔，並上傳到你自己的私人 GitHub 倉庫。",
+  "description": "Capture, annotate and reuse AI conversations as thinking assets. 擷取、標記並重複利用 AI 對話，保存可追溯的思考資產。",
   "permissions": [
     "activeTab",
     "scripting",

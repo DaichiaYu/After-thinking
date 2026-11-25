@@ -1,4 +1,14 @@
-# After-thinking 網頁標記工作台（手機與桌面）
+# After-thinking — Browser annotation workspace (mobile and desktop)
+
+Preserve and annotate AI conversations as reusable thinking assets. This responsive browser workspace edits the same AT `outline.json` used by the Chrome extension, without requiring the extension. Save your source-linked annotations in your own GitHub repository or supported local files, then reuse them for AI handoff, development, research or writing. Deeper AT analysis is optional; article composition belongs to display-AT.
+
+[繁體中文版](#繁體中文版)
+
+# 繁體中文版
+
+## After-thinking 網頁標記工作台（手機與桌面）
+
+將 AI 對話整理成可保存、可追溯、可重複利用的思考資產。在自己的 GitHub 倉庫或支援的本機檔案保存與原文對應的標記，再交給其他 AI 或工具，用於接續討論、開發、研究或寫作，不必先執行六階段分析。
 
 這是 **AT 主倉庫**的 GitHub Pages 響應式標記網頁，桌面可直接連接 GitHub 使用，**不必安裝 Chrome 插件**。與桌面插件共用 outline.json 第 6 版資料格式；小螢幕使用觸控版佈局，寬螢幕有三欄標記工作台。
 文章轉換功能屬於另外的 display-AT 專案，本頁不負責文章生成。

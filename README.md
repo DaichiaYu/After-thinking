@@ -1,23 +1,38 @@
-# After-thinking: Turn AI conversations into traceable thinking records
+# After-thinking (AT) — Turn AI conversations into reusable thinking assets
 
-> Turn long conversations from ChatGPT, Claude, Gemini, Grok, and other AI tools into traceable records of how the thinking developed: which ideas came from you, which came from AI, what changed, and what you ultimately adopted.
+> Preserve, trace, and reuse the thinking developed through human–AI conversations, across models, sessions, and downstream workflows.
 
-If all you need is the conclusion, a normal summary is usually enough. After-thinking is for the cases where **how you got there** is worth keeping too.
+Valuable ideas, decisions, and reasoning often remain buried in long AI chats. After-thinking (AT) is an open-source, user-controlled workflow and data format for turning those conversations into reusable thinking assets. Keep the original evidence, mark what matters, and hand the material to another AI or tool without having to reconstruct the entire discussion from scratch.
 
-It reconstructs where a discussion started, how it branched, where the reasoning materially changed, who introduced important ideas, whether you adopted them, and what remains unfinished. The source can be the conversation you are already in, or captured conversation files. Thoughts that never appeared in the available source are not treated as known facts.
+A summary is useful when you only need the conclusion. AT is for when the path to that conclusion also matters: what changed, who introduced an idea, what the author adopted or rejected, and what remains unresolved. The same record can support project development, research, writing, or a later discussion.
 
 [繁體中文版](#繁體中文版)
 
+## How AT works
+
+| Layer | What it produces | Why it matters |
+| --- | --- | --- |
+| Source | `source/conversation.jsonl`, metadata, available attachments | Preserve the original evidence independently of the chat platform |
+| Annotation | `outline.json` | Record topics, key passages, reasoning turns, cross-topic links and author notes |
+| Structured reconstruction | Stages 1–3 | Reconstruct scope, reasoning trajectory, provenance and author uptake |
+| Derived analysis | Stages 4–6 | Identify supported cognitive patterns, gaps and useful follow-up directions |
+
+The capture-and-annotation workflow is useful on its own: you can stop at the source and outline, share them with a coding agent, resume a discussion in another AI, or process them with your own tools. A deeper reconstruction is available when needed. The current official six-stage workflow remains sequential, with explicit dependencies; the later stages are not yet independently packaged skills.
+
+AT does not provide a universal context-injection service or a one-click autonomous analysis engine. It provides portable files, a capture and annotation interface, and documented analysis contracts that an AI executor can follow.
+
 ## When is it useful?
 
+- You want to turn a product discussion into reusable project context for a coding agent without treating every AI suggestion as a decision.
+- You want to supply different tools with the same evidence: for example, [display-AT](https://github.com/DaichiaYu/display-AT) for writing, or an AI executor for research and development.
 - A long AI conversation contains useful ideas, but finding one again would mean rereading the whole thing.
 - You want to revisit why a hypothesis was abandoned or why a project narrowed into its current direction.
 - You want another AI session or collaborator to inherit not only the conclusion, but how the discussion got there.
 - You later want to write or publish from the discussion while still knowing which ideas were yours and which came from AI.
 
-## What does it produce?
+## Optional deeper reconstruction: the six-stage workflow
 
-After-thinking uses six stages, with one output file for each stage:
+When you need a deeper record beyond the source and annotations, After-thinking's official analysis workflow uses six stages, with one output file for each stage:
 
 1. **Scope & Origin** — what material is included, what the original question was, why the discussion started, and where you initially stood
 2. **Topic Map & Reasoning Trajectory** — how the discussion divides into topics and where meaningful changes in direction occurred
@@ -47,7 +62,9 @@ See the complete small example in [`examples/simple-discussion/`](examples/simpl
 
 ## Getting started
 
-After-thinking currently provides the method specification, templates, examples, and a capture extension. There is not yet a one-click analysis program; the six stages are carried out by the AI tool you choose according to the repository rules.
+For capture, annotation and handoff, use [After-thinking Capture](apps/chrome-extension/) and the [responsive annotation workspace](apps/mobile-web/). Save the source and outline to your own repository or local files. Hand off only the material your next task needs; no six-stage analysis is required for this use.
+
+If you want the official deeper reconstruction, the six stages are carried out by the AI tool you choose according to the repository rules.
 
 You can start in **two ways**:
 
@@ -122,6 +139,13 @@ If you later add omitted messages or rerun an analysis, existing stable IDs are 
 
 Implementation details and formal rules live in [`docs/`](docs/) and [`specs/`](specs/).
 
+## Browser annotation workspace (mobile and desktop)
+
+The [responsive browser tagging editor](apps/mobile-web/) is a static GitHub Pages client for the existing AT annotation format. It is intended to connect directly to a **repository selected by each user**, with GitHub read/write permission granted in that user's browser. The published AT repository contains **only application code**, not private conversation records or repository-specific credentials.
+
+It preserves the captured conversation's original title, supports expandable question previews, and edits the same `outline.json` v6 records **without installing the Chrome extension**. On desktop, the browser provides a three-column workbench with topic management, source search, inline message marking, a contextual inspector, AI review, key ranges, and an export summary; on phones, it keeps the touch-oriented layout. Captured attachment metadata and authorized previews remain tied to each original message. See the [mobile editor setup, privacy model, and limitations](docs/mobile-web.md). The Pages link is provided only after deployment completes. The article-generation project remains separate.
+
+
 ## Feedback
 
 Questions, bugs, and suggestions are welcome through [GitHub Issues](../../issues).
@@ -132,24 +156,39 @@ You can also find me on X: [@daisyyu0214](https://x.com/daisyyu0214).
 
 # 繁體中文版
 
-## After-thinking：把 AI 對話整理成可追溯的思考紀錄
+## After-thinking（AT）：讓 AI 對話成為可重複利用的思考資產
 
-> 把 ChatGPT、Claude、Gemini、Grok 上的長篇 AI 對話，整理成可追溯的思考紀錄：哪些想法是你的、哪些來自 AI、討論在哪裡轉了方向，以及你最後真正採納了什麼。
+> 讓人類與 AI 共同產生的思考過程，成為可保存、可追溯、可重複利用的資料資產，跨模型、跨工作階段、跨不同應用延續使用。
 
-如果只需要結論，一般摘要通常就夠了。After-thinking 是給「怎麼想到這裡」也值得留下的時候用的。
+有價值的想法、決策與推理，常常散落在冗長的 AI 對話裡。After-thinking（AT）是一套開源、由使用者掌控的工作流與資料格式，將這些對話轉化成可以反覆利用的思考資產。保留原始證據，標出重要內容，再交給其他 AI 或工具使用，不必每次重新解釋整段討論。
 
-它會根據對話紀錄，還原討論從哪裡開始、如何分支、在哪裡改變方向，以及重要觀點是由誰提出、你最後是否採納，還有哪些問題沒有走完。分析來源可以是你正在使用的這個對話框，也可以是另外擷取下來的對話檔案；沒有出現在可用來源裡的想法，它不會當成已知事實。
+如果只需要結論，一般摘要通常就夠了。AT 更關心「怎麼想到這裡」：討論在哪裡轉向、誰提出觀點、作者採納或拒絕了什麼，以及還有哪些問題沒有解決。同一份資料可以用於專案開發、研究、文章創作或延續討論。
+
+## AT 怎麼運作
+
+| 資料層級 | 產出 | 用途 |
+| --- | --- | --- |
+| 原始資料 | `source/conversation.jsonl`、來源資訊、可取得的附件 | 脫離原平台保存原始證據 |
+| 標記資料 | `outline.json` | 記錄主題、關鍵段落、推理轉向、跨主題關聯與作者備註 |
+| 結構化思考紀錄 | 第 1–3 階段 | 還原討論起點、推理軌跡、觀點來源與採納狀態 |
+| 衍生分析 | 第 4–6 階段 | 分析有證據支持的認知模式、討論缺口與後續方向 |
+
+擷取與標記本身就是一套可獨立使用的完整工作流。你可以在保存原文與標記後停止，直接交給程式開發 Agent、換一個 AI 接續討論，或用自己的工具處理。需要更深入的結構化資料時，再執行分析。目前官方六階段工作流仍依序執行，具有明確的階段依賴；後三階段尚未封裝成可獨立呼叫的技能模組。
+
+AT 目前提供的是可攜式檔案、擷取與標記介面，以及供 AI 執行的分析規格，並不是通用的自動上下文注入服務，也沒有一鍵自主分析引擎。
 
 ## 什麼時候用得上
 
+- 把產品討論交給程式開發 Agent 接手，不必重新說明背景，也不必把每個 AI 建議都當成已確定需求。
+- 同一份思考資料交給不同工具使用，例如 [display-AT](https://github.com/DaichiaYu/display-AT) 轉成文章，或交給 AI 執行研究與開發任務。
 - 長篇 AI 對話累積了很多有用內容，之後想找某個想法時，不想重新把整串對話讀一遍
 - 回頭查當初為什麼放棄某個假設、為什麼縮小到現在這個方向
 - 把一段討論交給另一個 AI 或合作者接手，連同「怎麼走到這裡」一起交出去
 - 之後要寫成文章或其他內容時，仍然分得清哪些是自己的想法、哪些來自 AI
 
-## 會產出什麼
+## 選用的深度整理：六階段分析工作流
 
-分六個階段，每個階段產出一個檔案：
+需要比原文與標記更深入的思考紀錄時，可以執行 AT 官方六階段分析工作流，每個階段產出一個檔案：
 
 1. **分析範圍＋討論起點**：這段分析涵蓋哪些內容、一開始想問什麼、討論為什麼開始，以及你原本站在哪裡
 2. **主題地圖＋推理軌跡**：分成哪些主題，哪幾處真的改變了方向
@@ -179,7 +218,9 @@ You can also find me on X: [@daisyyu0214](https://x.com/daisyyu0214).
 
 ## 開始使用
 
-目前提供的是方法規格、範本、範例和擷取擴充功能，還沒有一鍵執行的分析程式；六個階段由你選用的 AI 按照倉庫規格執行。
+如果只需要擷取、標記及交接，可以使用 [After-thinking Capture 擴充功能](apps/chrome-extension/) 與[響應式標記工作台](apps/mobile-web/)，將原文與標記保存到自己的倉庫或本機，再依下一個任務的需求交接資料，不必執行六階段分析。
+
+如果需要官方的深度整理流程，六個階段由你選用的 AI 按照倉庫規格執行。
 
 你有 **兩種開始方式**：
 
@@ -258,10 +299,7 @@ After-thinking 本身沒有中央伺服器在背後接收你的對話內容。�
 
 使用上的問題、錯誤回報或建議，歡迎開 [issue](../../issues)，或在 X 找我：[@daisyyu0214](https://x.com/daisyyu0214)。
 
-## Mobile annotation web app (in development)
+## 網頁標記工作台（手機與電腦）
 
-The [responsive browser tagging editor](apps/mobile-web/) is a static GitHub Pages client for the existing AT annotation format. It is intended to connect directly to a **repository selected by each user**, with GitHub read/write permission granted in that user's browser. The published AT repository contains **only application code**, not private conversation records or repository-specific credentials.
+AT 響應式標記網頁（手機與電腦皆可使用、不必安裝插件）會部署在 AT 的 GitHub Pages，讓使用者自行連接自己的對話資料倉庫。公開倉庫只放程式，不預設私人倉庫或儲存對話及憑證；正式部署方式及使用限制請見[手機版說明](docs/mobile-web.md)。
 
-It preserves the captured conversation's original title, supports expandable question previews, and edits the same `outline.json` v6 records **without installing the Chrome extension**. On desktop, the browser provides a three-column workbench with topic management, source search, inline message marking, a contextual inspector, AI review, key ranges, and an export summary; on phones, it keeps the touch-oriented layout. Captured attachment metadata and authorized previews remain tied to each original message. See the [mobile editor setup, privacy model, and limitations](docs/mobile-web.md). The Pages link is provided only after deployment completes. The article-generation project remains separate.
-
-**繁中：** AT 響應式標記網頁（手機與電腦皆可使用、不必安裝插件）會部署在 AT 的 GitHub Pages，讓使用者自行連接自己的對話資料倉庫。公開倉庫只放程式，不預設私人倉庫或儲存對話及憑證；正式部署方式及使用限制請見[手機版說明](docs/mobile-web.md)。

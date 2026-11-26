@@ -17,7 +17,7 @@ const api = vm.runInNewContext(block('source-links') + block('grok-markup') +
   block('chatgpt-markup') +
   '\n({ makeSources, chatgptSources, chatgptRefIndex, cleanChatgptMarkup, claudeBlockText, grokCiter, cleanGrokMarkup, SOURCE_UNRESOLVED });', { URL, Map, Set });
 const topLevel = vm.runInNewContext(src.slice(src.indexOf('// 來源網址統計')).split('\nfunction buildCaptureEntry')[0] +
-  src.slice(src.indexOf('function buildJsonl')).split('\nfunction buildMetadata')[0] + '\n({ countSources, buildJsonl, buildConsultedJsonl, consultedFileEntries });', {});
+  src.slice(src.indexOf('function buildJsonl')).split('\nfunction buildMetadata')[0] + '\n({ countSources, buildJsonl, buildConsultedJsonl, consultedFileEntries, readableSourceLines });', {});
 const plain = (x) => JSON.parse(JSON.stringify(x));
 
 test('sources are numbered once per URL and reject non-web links', () => {
@@ -173,4 +173,53 @@ test('Gemini: answers found outside rc_ nodes, including page init scripts, stil
   assert.equal(probe.init_scripts, 1);
   assert.equal(probe.fallback, 1);
   assert.deepEqual(plain(page.items[0].consulted), [{ url: 'https://rule.example/x', title: 'Rule' }]);
+});
+
+test('ChatGPT: reference ids restart every turn, so each turn gets its own index (issue #45)', () => {
+  const search = (id, entries) => ({ id, message: { author: { role: 'tool' }, content: {}, metadata: { search_result_groups: [{ entries }] } } });
+  const nodes = [
+    search('t1', [{ url: 'https://first.example/a', title: 'First A', ref_id: 'turn0search0' },
+      { url: 'https://first.example/b', title: 'First B', ref_id: 'turn0search1' }]),
+    search('t2', [{ url: 'https://second.example/a', title: 'Second A', ref_id: 'turn0search0' },
+      { url: 'https://second.example/only', title: 'Only here', ref_id: 'turn0search7' }]),
+    search('alt', [{ url: 'https://abandoned.example/', title: 'Regenerated branch', ref_id: 'turn0search0' }])
+  ];
+  const conv = { mapping: Object.fromEntries(nodes.map((n) => [n.id, n])) };
+  // Whole mapping (old behaviour): the first turn wins and the later reply would point at the wrong site.
+  assert.equal(api.chatgptRefIndex(conv).map.turn0search0.url, 'https://first.example/a');
+  // Per turn: each turn resolves its own numbering.
+  assert.equal(api.chatgptRefIndex(conv, [nodes[0]]).map.turn0search0.url, 'https://first.example/a');
+  assert.equal(api.chatgptRefIndex(conv, [nodes[1]]).map.turn0search0.url, 'https://second.example/a');
+  // Path-wide index flags ids that point at different sites, so they are never used across turns.
+  const whole = api.chatgptRefIndex(conv, nodes.slice(0, 2));
+  assert.ok(whole.conflicts.has('turn0search0'));
+  assert.ok(!whole.conflicts.has('turn0search7'));
+  assert.ok(!whole.conflicts.has('turn0search1'));
+});
+
+test('ChatGPT: every searched address of a turn is listed so uncited ones can be kept as consulted (issue #47)', () => {
+  const node = { message: { author: { role: 'tool' }, content: {}, metadata: { search_result_groups: [{ entries: [
+    { url: 'https://cited.example/', title: 'Cited', ref_id: 'turn0search0' },
+    { url: 'https://www.langchain.com/blog/series-c', title: 'More one', ref_id: 'turn0search1' },
+    { url: 'https://no-ref.example/', title: 'No reference id' }] }] } } };
+  const idx = api.chatgptRefIndex({ mapping: {} }, [node]);
+  assert.deepEqual(plain(idx.urls).map((u) => u.url), ['https://cited.example/', 'https://www.langchain.com/blog/series-c']);
+  const reg = api.makeSources();
+  reg.add(idx.map.turn0search0.url, idx.map.turn0search0.title, true);
+  idx.urls.forEach((u) => reg.add(u.url, u.title, false));
+  assert.deepEqual(plain(reg.list).map((s) => s.url), ['https://cited.example/']);
+  assert.deepEqual(plain(reg.extra), [{ url: 'https://www.langchain.com/blog/series-c', title: 'More one' }]);
+});
+
+test('reading version lists each message\'s sources under it (issue #46)', () => {
+  assert.deepEqual(plain(topLevel.readableSourceLines({ content: 'x' })), []);
+  const lines = topLevel.readableSourceLines({ sources: [
+    { n: 1, url: 'https://a.example/x', title: 'A [beta] page' },
+    { n: 2, url: 'https://b.example/(paren)', title: null }],
+    consulted: [{ url: 'https://c.example/' }, { url: 'https://d.example/' }] });
+  assert.deepEqual(plain(lines), [
+    '來源：', '',
+    '- [來源 1] [A \\[beta\\] page](<https://a.example/x>)',
+    '- [來源 2] [https://b.example/(paren)](<https://b.example/(paren)>)', '',
+    '另外參考過 2 個網頁（沒有對到特定句子），清單在 source/consulted-sources.jsonl。', '']);
 });

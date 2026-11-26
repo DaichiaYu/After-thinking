@@ -462,6 +462,7 @@ async function main() {
       kept.forEach((m, i) => {
         const no = String(i+1).padStart(3, "0");
         readable.push("## " + no + " · " + (m.speaker === "author" ? "你" : "AI"), "", m.content || "", "");
+        readable.push(...readableSourceLines(m));
         quick.push("## " + no + " · " + (m.speaker === "author" ? "你" : "AI"), "");
         if (m.speaker === "author") quick.push(m.content || "", "");
         else { const hs = String(m.content || "").split("\n").filter(line => /^#{1,6}\s+\S/.test(line));

@@ -109,10 +109,14 @@ async function captureViaApi(platform) {
     return out;
   };
   // ChatGPT 的另一種引用：回答文字裡是 <Cite ref="turn12search3"/>，網址放在別則（搜尋工具）訊息的資料裡。
-  // 這裡把整段對話資料掃一遍，凡是同時帶「引用編號」和 url 的物件都記下來：編號 → 網址。
+  // 這裡把給定的訊息節點掃一遍，凡是同時帶「引用編號」和 url 的物件都記下來：編號 → 網址。
+  // 引用編號（turn0search3）每一輪重新數，所以要「每一輪」各建一份（issue #45）：
+  //   nodes 傳該輪的節點；不傳就掃整個 mapping（含沒選用的分支，只適合診斷）。
+  // conflicts：同一個編號在掃過的範圍裡指到不同網址 → 不能拿來跨輪對。
+  // urls：掃到的所有「有編號的網址」，沒被引用的當成「參考過」（issue #47）。
   // paths 只記欄位路徑（不含任何內容），對不到時寫進診斷報告，方便照實際結構修正。
-  const chatgptRefIndex = (conv) => {
-    const map = {}, paths = new Set(), keys = new Set();
+  const chatgptRefIndex = (conv, nodes) => {
+    const map = {}, conflicts = new Set(), urls = [], paths = new Set(), keys = new Set();
     const idOf = (r) => {
       if (typeof r === "string") return /^turn\d+[a-z_]+\d+$/i.test(r) ? r : null;
       if (r && typeof r === "object" && r.turn_index !== undefined && r.ref_type !== undefined && r.ref_index !== undefined) {
@@ -129,16 +133,22 @@ async function captureViaApi(platform) {
       if (o.ref_id !== undefined) { ids.push(idOf(o.ref_id)); paths.add(path + ".ref_id"); }
       if (Array.isArray(o.refs)) { o.refs.forEach((r) => ids.push(idOf(r))); paths.add(path + ".refs"); }
       if (typeof o.url !== "string" || !o.url) return;
-      ids.filter(Boolean).forEach((id) => { if (!map[id]) map[id] = { url: o.url, title: typeof o.title === "string" ? o.title : null }; });
+      const title = typeof o.title === "string" ? o.title : null;
+      const own = ids.filter(Boolean);
+      if (own.length) urls.push({ url: o.url, title });
+      own.forEach((id) => {
+        if (!map[id]) map[id] = { url: o.url, title };
+        else if (map[id].url !== o.url) conflicts.add(id);
+      });
     };
-    Object.values((conv && conv.mapping) || {}).forEach((node) => {
+    (Array.isArray(nodes) ? nodes : Object.values((conv && conv.mapping) || {})).forEach((node) => {
       const m = node && node.message;
       if (!m) return;
       Object.keys(m.metadata || {}).forEach((k) => keys.add(k));
       walk(m.metadata, "metadata", 0);
       if (m.author && m.author.role === "tool") walk(m.content, "tool_content", 0);
     });
-    return { map, paths: Array.from(paths).slice(0, 40), keys: Array.from(keys).sort().slice(0, 80) };
+    return { map, conflicts, urls, paths: Array.from(paths).slice(0, 40), keys: Array.from(keys).sort().slice(0, 80) };
   };
   // Claude：引用掛在文字區塊的 citations，位置用 end_index 標在該區塊文字裡。
   const claudeBlockText = (block, reg) => {
@@ -574,6 +584,15 @@ async function captureViaApi(platform) {
         if (role === "assistant" && msg.recipient && msg.recipient !== "all") return false;
         return msg.content.content_type === "text" || msg.content.content_type === "multimodal_text";
       };
+      // 一輪 = 一則看得見的使用者訊息，到下一則之前（中間的搜尋工具訊息、AI 回答都算這輪）
+      let turnNo = 0;
+      const turns = {};
+      path.forEach((node) => {
+        const msg = node.message;
+        if (msg && msg.author && msg.author.role === "user" && visible(node)) turnNo++;
+        node.__turn = turnNo;
+        (turns[turnNo] = turns[turnNo] || []).push(node);
+      });
       const items = [];
       const isImagePart = (x) => x && typeof x === "object" && /image/.test(x.content_type || "");
       const pointerId = (x) => String((x && x.asset_pointer) || "").replace(/^[a-z-]+:\/\//i, "") || null;
@@ -620,6 +639,7 @@ async function captureViaApi(platform) {
           return;
         }
         items.push({ speaker, text, platform_message_id: msg.id, timestamp: iso(msg.create_time), attachments: atts, __reg: reg,
+          __turn: node.__turn,
           ...(speaker === "assistant" && typeof msg.metadata?.model_slug === "string" ? { model: msg.metadata.model_slug } : {}) });
       });
       if (pendingGenerated.length) {
@@ -627,15 +647,21 @@ async function captureViaApi(platform) {
         if (last) last.attachments = last.attachments.concat(pendingGenerated);
       }
       let markupCleaned = 0, visualsConverted = 0, templatesKept = 0;
-      const refIndex = chatgptRefIndex(conv);
-      const citeStats = { indexed: Object.keys(refIndex.map).length, cited: 0, unresolved: 0 };
+      // 只看畫面上這條路線（不含重新生成後沒選的分支），而且每輪各對各的：
+      // 引用編號每輪重新數，全對話共用一張表會把後面的引用對到前面某輪的網址（issue #45）。
+      // 這輪找不到就標「未取得網址」，不拿別輪同編號的網址來補：編號每輪重數，別輪的幾乎一定是錯的。
+      // other_turn 只是診斷：這個編號在別輪有網址（如果常出現，代表 ChatGPT 其實會跨輪引用，再回來調整）。
+      const refIndex = chatgptRefIndex(conv, path);
+      const citeStats = { indexed: Object.keys(refIndex.map).length, cited: 0, unresolved: 0, other_turn: 0 };
+      const turnIndex = {};
       items.forEach((i) => {
         if (i.speaker !== "assistant") return;
+        const local = turnIndex[i.__turn] || (turnIndex[i.__turn] = chatgptRefIndex(conv, turns[i.__turn] || []));
         const cite = (ids) => {
           const ns = ids.map((id) => {
-            const hit = refIndex.map[id];
             citeStats.cited++;
-            if (!hit) { citeStats.unresolved++; return null; }
+            const hit = local.map[id];
+            if (!hit) { citeStats.unresolved++; if (refIndex.map[id]) citeStats.other_turn++; return null; }
             return i.__reg.add(hit.url, hit.title, true);
           });
           return i.__reg.mark(ns);
@@ -644,6 +670,20 @@ async function captureViaApi(platform) {
         if (c.changed) { i.text = c.text; markupCleaned++; }
         if (c.visuals) visualsConverted += c.visuals;
         if (c.unresolved) templatesKept += c.unresolved;
+      });
+      // 這輪搜尋過、但內文沒有引用的網址 → 「參考過」，另存 consulted-sources.jsonl（issue #47）。
+      // 一輪有好幾則 AI 回覆時放在這輪最後一則；已被引用的網址 add 會自動略過。
+      const lastOfTurn = {};
+      items.forEach((i) => { if (i.speaker === "assistant") lastOfTurn[i.__turn] = i; });
+      Object.keys(lastOfTurn).forEach((t) => {
+        const i = lastOfTurn[t];
+        const cited = new Set();
+        items.forEach((x) => { if (x.__turn === i.__turn && x.__reg) x.__reg.list.forEach((s) => cited.add(s.url)); });
+        (turnIndex[t] || chatgptRefIndex(conv, turns[t] || [])).urls.forEach((u) => {
+          let href = u.url;
+          try { href = new URL(u.url).href; } catch (e) {}
+          if (!cited.has(href)) i.__reg.add(u.url, u.title, false);
+        });
       });
       // 診斷用：只有數字和欄位路徑，沒有對話內容
       // 圖示、模板：只記數量；templates_kept 大於 0 代表有模板資料讀不懂、原樣留在文字裡
@@ -655,6 +695,7 @@ async function captureViaApi(platform) {
         if (i.__reg && i.__reg.list.length) i.sources = i.__reg.list;
         if (i.__reg && i.__reg.extra.length) i.consulted = i.__reg.extra;
         delete i.__reg;
+        delete i.__turn;
       });
 
       // 附件原檔：先向網站要下載網址（要帶登入的 token），真正下載在擷取後統一處理
@@ -1461,6 +1502,21 @@ function buildConsultedJsonl(items) {
     }));
   });
   return lines.length ? lines.join("\n") + "\n" : null;
+}
+// 對話閱讀版.md 用：每則訊息後面附上它的來源清單，[來源 n] 才對得到網址（issue #46）。
+// 「參考過」的網頁不列出來（常常幾十個），只說有幾個、放在哪個檔案。沒有來源就回傳空陣列。
+function readableSourceLines(item) {
+  const lines = [];
+  const md = (s) => String(s).replace(/([\[\]])/g, "\\$1");
+  const list = Array.isArray(item && item.sources) ? item.sources : [];
+  if (list.length) {
+    lines.push("來源：", "");
+    list.forEach((s) => lines.push("- [來源 " + s.n + "] [" + md(s.title || s.url) + "](<" + s.url + ">)"));
+    lines.push("");
+  }
+  const seen = Array.isArray(item && item.consulted) ? item.consulted.length : 0;
+  if (seen) lines.push("另外參考過 " + seen + " 個網頁（沒有對到特定句子），清單在 source/" + CONSULTED_FILE + "。", "");
+  return lines;
 }
 // 寫檔用：有清單就回傳一個檔案項目（key 是 "content" 或 ZIP 用的 "data"），沒有就是空陣列
 function consultedFileEntries(prefix, items, key) {

@@ -97,3 +97,23 @@ test('plain prose with braces is left alone', () => {
   const raw = '一般文字 {不是模板}、JSON 範例 {"a": 1}，還有單獨的 { 括號。\n<box>卡片</box>';
   assert.equal(clean(raw), '一般文字 {不是模板}、JSON 範例 {"a": 1}，還有單獨的 { 括號。\n卡片');
 });
+
+// Issue #44: connector svgs whose attributes use JS template strings were left as raw source.
+test('svg with template-string attributes is still converted (issue #44)', () => {
+  const a = '前\n<svg viewBox="0 0 300 40"><g stroke="currentColor"><path d="M150 0V13"/></g>\n<path d={`M${38-4} 26L${38} 32`} fill="none"/></svg>\n後';
+  assert.equal(clean(a), '前\n\n後');
+  const labelled = '<svg><path d={`M${10} 0`}/><text x="5">有字</text></svg>';
+  assert.equal(clean(labelled), '[圖示]\n- 有字');
+});
+
+test('{#each} leaves ${…} inside template strings alone (issue #44)', () => {
+  const e = '前\n{#each [38,113] as x}<svg viewBox="0 0 300 40"><path d={`M${x-4} 26L${x} 32L${x+4} 26`}/></svg>{/each}\n後';
+  assert.equal(clean(e), '前\n\n後');
+  const kept = '{#each [1] as x}<path d={`M${x} 0`}/>{/each}';
+  assert.match(cleanChatgptMarkup(kept).text, /\$\{x\}/);
+});
+
+test('svg inside inline code next to a real svg on the same line', () => {
+  const raw = '範例 `<svg><text>code</text></svg>` 和 <svg><text>真的圖</text></svg>';
+  assert.equal(clean(raw), '範例 `<svg><text>code</text></svg>` 和 \n[圖示]\n- 真的圖');
+});

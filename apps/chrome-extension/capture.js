@@ -387,6 +387,7 @@ async function captureViaApi(platform) {
         const close = /[@#:/]/.test(s[open + 1] || "") ? braceEnd(s, open) : simple ? open + simple[0].length : -1;
         if (close < 0) { out += "{"; k = open + 1; continue; }
         const tag = s.slice(open, close);
+        if (s[open - 1] === "$") { out += tag; k = close; continue; }   // JS 模板字串裡的 ${…}（例如 d={`M${x-4} 26`}）：不是網站模板，不替換
         const def = DEF.exec(tag);
         if (def) {
           const lit = readLiteral(tag, def[0].length);
@@ -484,27 +485,36 @@ async function captureViaApi(platform) {
       if (!lines.length && !title) return "";
       return "\n[圖示" + (title ? "：" + title : "") + "]\n" + lines.map((t) => "- " + t).join("\n") + "\n";
     };
-    const convertSvgSeg = (seg, stats) => {
+    // 不能先用反引號切出行內程式碼：<svg> 的屬性也會用 JS 模板字串（d={`M${x-4} 26`}），會把一張圖切斷。
+    // 改成逐一找 <svg>，只有它前面同一行的反引號是奇數個（真的在 `…` 裡）才跳過。
+    const convertSvg = (seg, stats) => {
+      if (!/<svg\b/i.test(seg)) return seg;
       let out = "", k = 0;
       const re = /<svg\b|<\/svg\s*>/gi;
       for (;;) {
         re.lastIndex = k;
         let m = re.exec(seg);
         while (m && m[0][1] === "/") m = re.exec(seg);   // 前面多出來的 </svg> 不算
-        if (!m) { out += seg.slice(k); return out; }
+        if (!m) return out + seg.slice(k);
         const start = m.index;
+        const lineStart = Math.max(k, seg.lastIndexOf("\n", start - 1) + 1);
+        if ((seg.slice(lineStart, start).match(/`/g) || []).length % 2) {
+          const tick = seg.indexOf("`", start), nl = seg.indexOf("\n", start);
+          const stop = tick >= 0 && (nl < 0 || tick < nl) ? tick + 1 : nl < 0 ? seg.length : nl;
+          out += seg.slice(k, stop);
+          k = stop;
+          continue;
+        }
         let depth = 1, end = -1;
         while (depth && (m = re.exec(seg))) {
           if (m[0][1] === "/") { if (--depth === 0) end = m.index + m[0].length; }
           else depth++;   // 圖裡還有一層 <svg>：取到最外層的結尾
         }
-        if (end < 0) { out += seg.slice(k); return out; }   // 沒有結尾：不是完整的圖，原樣保留
+        if (end < 0) return out + seg.slice(k);   // 沒有結尾：不是完整的圖，原樣保留
         out += seg.slice(k, start) + svgOut(seg.slice(start, end), stats);
         k = end;
       }
     };
-    const convertSvg = (part, stats) => /<svg\b/i.test(part)
-      ? part.split(/(`[^`\n]*`)/).map((seg, j) => j % 2 ? seg : convertSvgSeg(seg, stats)).join("") : part;
     const stats = { data: 0, expanded: 0, kept: 0, visuals: 0 };
     const prepared = prepareInteractive(text, stats);
     const cleaned = prepared.split(/(```[\s\S]*?```)/).map((part, k) => (k % 2 ? part : cleanPart(convertSvg(part, stats)))).join("")

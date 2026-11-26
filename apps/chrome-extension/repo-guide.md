@@ -126,6 +126,8 @@ AI 依使用者的要求先標的一版，格式是 `after-thinking/outline-sugg
 
 ChatGPT 回覆裡的版面語法在擷取時已經轉成一般文字（`metadata.yaml` 的 `capture.cleaning` 有 `chatgpt_ui_markup`），留下這些記號：`[來源 n]`（引用來源，網址在同一則訊息的 `sources`；較早擷取的只有 `[來源]`，網址沒有保留）、`[引用記憶]`（ChatGPT 用了它對使用者的記憶）、`[引用附件第 a–b 行]`、`[網路圖片：搜尋詞]`、`[圖表：標題]`；`（文字）` 原本是標籤。較早擷取的對話可能還留著 `<box>`、`<Cite/>` 這類原始語法。
 
+ChatGPT 用 `<svg>` 畫的圖示存成 `[圖示]`（或 `[圖示：標題]`），下面每行 `- ` 是圖裡的一段文字，照原本順序；圖的版面（框線、箭頭的走向）沒有保留，要看排列請點回原對話（`metadata.yaml` 的 `capture.cleaning` 有 `chatgpt_svg_visuals`）。`[重複區塊：資料未能還原]` 代表這裡原本重複好幾次的內容，資料沒能讀出來，只留一份。較早擷取的對話可能有 `{item.t}`、`{s}` 這類空殼：那是圖示裡的文字當時沒抓到，重新擷取可以補回來。
+
 Grok 回覆裡的 `<grok:render …>` 標籤在擷取時也已拿掉（`capture.cleaning` 有 `grok_render_markup`），引用換成 `[來源 n]`（較早擷取的只有 `[來源]`，網址沒有保留）。Grok 有分支時，`capture.branch_captured` 記下抓的是哪一條路線（`on_screen_path`、`on_screen_path_then_latest`、`url_rid_path`、`latest_path`）。
 
 ## AI 引用的來源網址

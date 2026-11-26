@@ -347,6 +347,8 @@ ChatGPT replies can contain its own layout markup (`<box>`, `<row>`, `<text>`, `
 - Citations become short markers: `[來源 n]` (source, numbered against the message's `sources` list; see [Source links](#source-links)), `[引用記憶]` (from memory), `[引用附件第 133–168 行]` (attachment lines 133–168).
 - `<AsyncImage query="…"/>` → `[網路圖片：…]` (web image); `<Chart/>` → `[圖表：title]` (chart).
 - Only these tag names are touched; any other `<…>`, code blocks, and inline code are left as they are. `metadata.yaml` lists `chatgpt_ui_markup` under `capture.cleaning` when this happened.
+- Diagrams ChatGPT draws as `<svg>` become a `[圖示]` block (`[圖示：title]` when the drawing has a title) followed by one `- ` line per text label, in drawing order. Drawings with no text (arrows, connectors) are dropped. `metadata.yaml` lists `chatgpt_svg_visuals` under `capture.cleaning`, and `capture.visuals` counts them.
+- Labels that ChatGPT keeps in template data (`{@body const items = […]}` with `{#each items as item}…{item.t}…{/each}`) are filled in, read with a literal-only parser — no page code is run. Template data that can't be read is left as it was (counted in `capture.visuals.templates_kept`); a list whose data can't be read is kept once under `[重複區塊：資料未能還原]`. Earlier versions dropped these labels and left placeholders such as `{item.t}`.
 - Conversations captured before this version still contain the markup; re-capture them to clean it (see the tip under "What gets saved" first).
 
 ## Grok notes (v0.8.0)
@@ -721,6 +723,8 @@ ChatGPT 的回覆裡會夾著它自己的版面語法（`<box>`、`<row>`、`<te
 - 引用留簡短記號：`[來源]`、`[引用記憶]`、`[引用附件第 133–168 行]`。
 - `<AsyncImage query="…"/>` → `[網路圖片：…]`；`<Chart/>` → `[圖表：標題]`。
 - 只處理這些標籤名稱，其他 `<…>`、程式碼區塊、行內程式碼都不動。有處理時，`metadata.yaml` 的 `capture.cleaning` 會記 `chatgpt_ui_markup`。
+- ChatGPT 用 `<svg>` 畫的圖示，換成 `[圖示]`（圖有標題時是 `[圖示：標題]`），下面照圖裡的順序，每段文字一行 `- `。沒有文字的純裝飾圖（箭頭、連接線）整段拿掉。有轉換時 `capture.cleaning` 會記 `chatgpt_svg_visuals`，`capture.visuals` 記數量。
+- ChatGPT 放在模板資料裡的文字（`{@body const items = […]}` 配 `{#each items as item}…{item.t}…{/each}`）會填回去；只用字面值解析器讀資料，不執行網頁的程式。讀不懂的模板資料原樣留著（數量記在 `capture.visuals.templates_kept`）；資料讀不懂的重複區塊留一份內容，前面標 `[重複區塊：資料未能還原]`。較早的版本會把這些文字丟掉，只剩 `{item.t}` 這類空殼。
 - 這一版以前擷取的對話還留著這些語法，重新擷取就會清掉（重新擷取前先看「存成什麼」的提醒）。
 
 ## Grok 說明（v0.8.0）

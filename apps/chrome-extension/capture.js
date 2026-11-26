@@ -195,7 +195,7 @@ async function captureViaApi(platform) {
     const NAMES = "box|row|col|column|stack|grid|grid-item|list|list-item|text|caption|title|badge|card|icon|favicon|divider|spacer|Cite|MemoryCite|FileCite|Entity|Link|AsyncImage|Image|Chart|checkbox|button|input|select|radio|radio-group|slider|date-picker|textarea|segmented-control|pressable|label|bold|italic|escape";
     const KNOWN = new RegExp("^(" + NAMES + ")$");
     const CONTAINERS = /^(box|row|col|column|stack|grid|grid-item|list|list-item|text|caption|title|badge|card|checkbox|button|pressable|label|bold|italic|escape|radio|radio-group)$/;
-    if (!new RegExp("</?(" + NAMES + ")[\\s/>]").test(text) && !text.includes("{@body") && !text.includes("{#each")) return { text, changed: false };
+    if (!new RegExp("</?(" + NAMES + ")[\\s/>]").test(text) && !/\{@body|\{@const|\{#each|\{#if|<svg\b/i.test(text)) return { text, changed: false };
     const str = (raw, name) => { const m = raw.match(new RegExp("\\b" + name + "=\"([^\"]*)\"")); return m ? m[1] : ""; };
     const num = (raw, name) => { const m = raw.match(new RegExp("\\b" + name + "=\\{\\s*(\\d+)\\s*\\}")); return m ? m[1] : ""; };
     const jsonStr = (raw, key) => { const m = raw.match(new RegExp("\"" + key + "\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"")); return m ? m[1] : ""; };
@@ -263,28 +263,253 @@ async function captureViaApi(platform) {
       }
       return out;
     };
-    // 只轉換顯示層的動態模板，不執行任何 JavaScript；無法還原的值留下明確說明。
-    const prepareInteractive = (raw) => {
-      let out = raw;
-      const arrays = new Map();
-      out = out.replace(/^\s*\{@body\s+const\s+(\w+)\s*=\s*(\[[^\n;]*\])\s*\}\s*$/gm, (whole, name, array) => {
-        try { const v = JSON.parse(array); if (Array.isArray(v) && v.every(x => typeof x === "string")) arrays.set(name, v); } catch (e) {}
-        return "";
-      });
-      out = out.replace(/^\s*\{@body[^\n]*\}\s*$/gm, "");
-      out = out.replace(/\{#each\s+(\w+)\s+as\s+(\w+)(?:,\s*\w+)?\}([\s\S]*?)\{\/each\}/g, (whole, name, value, body) => {
-        const vals = arrays.get(name);
-        if (!vals) return "[互動式清單：原始選項未能還原]";
-        return vals.map(x => "- [ ] " + x).join("\n");
-      });
-      out = out.replace(/\{#(?:if|each)[^\n]*\}/g, "").replace(/\{\/(?:if|each)\}/g, "");
-      out = out.replace(/\{(?:selected|value|checked)\.[^}]*\}/g, "[互動值未保存]");
+    // 只轉換顯示層的動態模板，不執行任何 JavaScript：資料只用下面的字面值解析器讀（陣列、物件、字串、數字），
+    // 讀不懂的就原樣留著，不刪掉，免得圖示裡的文字整段消失。
+    // ChatGPT 畫圖示時常把文字放在 {@body const items = [{t:"…", s:"…"}]} 裡，再用 {#each items as item}…{item.t}…{/each} 展開。
+    const readLiteral = (s, at) => {
+      let k = at;
+      const ws = () => {
+        for (;;) {
+          while (k < s.length && /\s/.test(s[k])) k++;
+          if (s.startsWith("//", k)) { while (k < s.length && s[k] !== "\n") k++; continue; }
+          if (s.startsWith("/*", k)) { const e = s.indexOf("*/", k + 2); k = e < 0 ? s.length : e + 2; continue; }
+          return;
+        }
+      };
+      const fail = () => { throw new Error("literal"); };
+      const quoted = () => {
+        const q = s[k++];
+        let out = "";
+        while (k < s.length) {
+          const c = s[k++];
+          if (c === q) return out;
+          if (q === "`" && c === "$" && s[k] === "{") fail();   // 模板字串裡的運算式不展開
+          if (c !== "\\") { out += c; continue; }
+          const e = s[k++];
+          if (e === "u" && /^[0-9a-f]{4}$/i.test(s.slice(k, k + 4))) { out += String.fromCharCode(parseInt(s.slice(k, k + 4), 16)); k += 4; }
+          else out += e === "n" ? "\n" : e === "t" ? "\t" : e === "\n" ? "" : e;
+        }
+        fail();
+      };
+      const value = (depth) => {
+        if (depth > 24) fail();
+        ws();
+        const c = s[k];
+        if (c === "[") {
+          k++;
+          const arr = [];
+          for (;;) {
+            ws();
+            if (s[k] === "]") { k++; return arr; }
+            arr.push(value(depth + 1));
+            ws();
+            if (s[k] === ",") { k++; continue; }
+            if (s[k] === "]") { k++; return arr; }
+            fail();
+          }
+        }
+        if (c === "{") {
+          k++;
+          const obj = Object.create(null);
+          for (;;) {
+            ws();
+            if (s[k] === "}") { k++; return obj; }
+            let key;
+            if (s[k] === "\"" || s[k] === "'") key = quoted();
+            else { const m = /^[A-Za-z_$][\w$]*/.exec(s.slice(k, k + 200)); if (!m) fail(); key = m[0]; k += key.length; }
+            ws();
+            if (s[k] !== ":") fail();
+            k++;
+            obj[key] = value(depth + 1);
+            ws();
+            if (s[k] === ",") { k++; continue; }
+            if (s[k] === "}") { k++; return obj; }
+            fail();
+          }
+        }
+        if (c === "\"" || c === "'" || c === "`") return quoted();
+        const m = /^-?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?/i.exec(s.slice(k, k + 40));
+        if (m) { k += m[0].length; return Number(m[0]); }
+        for (const [w, v] of [["true", true], ["false", false], ["null", null]]) {
+          if (s.startsWith(w, k) && !/[\w$]/.test(s[k + w.length] || "")) { k += w.length; return v; }
+        }
+        fail();
+      };
+      try { const v = value(0); ws(); return { value: v, end: k }; } catch (e) { return null; }
+    };
+    // 從 at 的「{」找到對應的「}」：引號裡的括號不算
+    const braceEnd = (s, at) => {
+      let depth = 0, quote = null;
+      for (let k = at; k < s.length; k++) {
+        const c = s[k];
+        if (quote) { if (c === "\\") k++; else if (c === quote) quote = null; continue; }
+        if (c === "\"" || c === "'" || c === "`") { quote = c; continue; }
+        if (c === "{") depth++;
+        else if (c === "}" && --depth === 0) return k + 1;
+      }
+      return -1;
+    };
+    const lookup = (expr, scope) => {
+      const m = /^\s*([A-Za-z_$][\w$]*)((?:\s*(?:\.\s*[A-Za-z_$][\w$]*|\[\s*(?:\d+|"[^"]*"|'[^']*')\s*\]))*)\s*$/.exec(expr);
+      if (!m || !(m[1] in scope)) return undefined;
+      let v = scope[m[1]];
+      const steps = m[2].match(/\.\s*[A-Za-z_$][\w$]*|\[\s*(?:\d+|"[^"]*"|'[^']*')\s*\]/g) || [];
+      for (const st of steps) {
+        if (v === null || typeof v !== "object") return undefined;
+        const key = st[0] === "." ? st.slice(1).trim() : st.slice(1, -1).trim().replace(/^["']|["']$/g, "");
+        if (!Object.prototype.hasOwnProperty.call(v, key)) return undefined;
+        v = v[key];
+      }
+      return v;
+    };
+    const shown = (v) => typeof v === "string" ? v : typeof v === "number" || typeof v === "boolean" ? String(v) : undefined;
+    const DEF = /^\{@(?:body|const)\s+(?:(?:const|let|var)\s+)?([A-Za-z_$][\w$]*)\s*=\s*/;
+    const EACH = /^\{#each\s+([\s\S]+?)\s+as\s+(\{[^}]*\}|\[[^\]]*\]|[A-Za-z_$][\w$]*)\s*(?:,\s*([A-Za-z_$][\w$]*))?\s*(?:\([^)]*\))?\s*\}$/;
+    // 找出跟這個 {#each} 配對的 {/each}（中間可能還有一層 {#each}）
+    const eachBlock = (s, at) => {
+      let depth = 0;
+      const re = /\{#each\b|\{\/each\}/g;
+      re.lastIndex = at;
+      for (let m; (m = re.exec(s));) {
+        if (m[0] === "{#each") depth++;
+        else if (--depth === 0) return { bodyEnd: m.index, end: m.index + m[0].length };
+      }
+      return null;
+    };
+    const expand = (s, scope, stats) => {
+      let out = "";
+      for (let k = 0; k < s.length;) {
+        const open = s.indexOf("{", k);
+        if (open < 0) { out += s.slice(k); break; }
+        out += s.slice(k, open);
+        // 模板語法（{@…}、{#…}、{:…}、{/…}）才照括號配對讀到底；一般的 {…} 只看同一行最近的 }
+        const simple = /^\{[^{}\n]*\}/.exec(s.slice(open, open + 400));
+        const close = /[@#:/]/.test(s[open + 1] || "") ? braceEnd(s, open) : simple ? open + simple[0].length : -1;
+        if (close < 0) { out += "{"; k = open + 1; continue; }
+        const tag = s.slice(open, close);
+        const def = DEF.exec(tag);
+        if (def) {
+          const lit = readLiteral(tag, def[0].length);
+          if (lit && /^;?\s*\}$/.test(tag.slice(lit.end))) {
+            scope[def[1]] = lit.value;
+            stats.data++;
+            out = out.replace(/[ \t]*$/, "");
+            k = close;
+            if (s[k] === "\n" && /(^|\n)$/.test(out)) k++;   // 獨佔一行的定義：連同換行拿掉
+            continue;
+          }
+          out += tag; k = close; stats.kept++;            // 不是單純資料（例如計算式）：原樣保留
+          continue;
+        }
+        if (tag.startsWith("{#each")) {
+          const head = EACH.exec(tag), block = eachBlock(s, open);
+          if (!head || !block) { out += tag; k = close; stats.kept++; continue; }
+          const body = s.slice(close, block.bodyEnd);
+          let list = lookup(head[1], scope);
+          if (list === undefined) { const lit = readLiteral(head[1], 0); if (lit && lit.end === head[1].length) list = lit.value; }
+          if (!Array.isArray(list)) {
+            // 資料來源看不懂：內容照留一份，標明重複的資料沒有還原
+            out += "[重複區塊：資料未能還原]\n" + expand(body, scope, stats);
+            stats.kept++;
+            k = block.end;
+            continue;
+          }
+          // 舊式互動清單：選項是字串、內容是勾選框，照舊列成勾選清單
+          if (/<(checkbox|radio)\b/.test(body) && list.every((x) => typeof x === "string")) {
+            out += list.map((x) => "- [ ] " + x).join("\n");
+            k = block.end;
+            continue;
+          }
+          out += list.map((item, idx) => {
+            const inner = Object.assign(Object.create(null), scope);
+            const name = head[2];
+            if (/^[{[]/.test(name)) {
+              const keys = name.slice(1, -1).split(",").map((x) => x.split(/[:=]/)[0].trim()).filter(Boolean);
+              keys.forEach((key, j) => { inner[key] = name[0] === "[" ? (Array.isArray(item) ? item[j] : undefined) : (item && typeof item === "object" ? item[key] : undefined); });
+            } else inner[name] = item;
+            if (head[3]) inner[head[3]] = idx;
+            return expand(body, inner, stats);
+          }).join("");
+          stats.expanded++;
+          k = block.end;
+          continue;
+        }
+        if (/^\{[#:/](?:if|else|each)\b/.test(tag) || /^\{:else\b/.test(tag)) { k = close; continue; }   // 條件分支：每一支的內容都留著
+        if (/^\{(?:selected|value|checked)\./.test(tag)) { out += "[互動值未保存]"; k = close; continue; }
+        const v = shown(lookup(tag.slice(1, -1), scope));
+        const plus = /^\{\s*([A-Za-z_$][\w$]*)\s*\+\s*(\d+)\s*\}$/.exec(tag);
+        if (v !== undefined) out += v;
+        else if (plus && typeof scope[plus[1]] === "number") out += String(scope[plus[1]] + Number(plus[2]));
+        else out += tag;
+        k = close;
+      }
       return out;
     };
-    const prepared = prepareInteractive(text);
-    const cleaned = prepared.split(/(```[\s\S]*?```)/).map((part, k) => (k % 2 ? part : cleanPart(part))).join("")
+    const prepareInteractive = (raw, stats) => {
+      if (!/\{@body|\{@const|\{#each|\{#if/.test(raw)) return raw;
+      return raw.split(/(```[\s\S]*?```)/).map((part, k) => (k % 2 ? part : expand(part, Object.create(null), stats))).join("");
+    };
+    // <svg> 圖示：網站畫成流程圖、示意圖，存成文字時只剩一堆座標。
+    // 換成 [圖示] 加上圖裡的文字（每個 <text> 一行，照原本順序）；沒有文字的純裝飾圖（箭頭、連接線）整段拿掉。
+    const ENTITY = { amp: "&", lt: "<", gt: ">", quot: "\"", apos: "'", nbsp: " " };
+    const decode = (t) => t.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (all, e) => e[0] === "#"
+      ? String.fromCodePoint(parseInt(e[1].toLowerCase() === "x" ? e.slice(2) : e.slice(1), e[1].toLowerCase() === "x" ? 16 : 10))
+      : (ENTITY[e.toLowerCase()] !== undefined ? ENTITY[e.toLowerCase()] : all));
+    const svgText = (svg) => {
+      const lines = [];
+      let cur = "", skip = 0, title = "";
+      const flush = () => { const t = decode(cur).replace(/\s+/g, " ").trim(); if (t) lines.push(t); cur = ""; };
+      const re = /<(\/?)([A-Za-z][\w:-]*)((?:"[^"]*"|'[^']*'|\{[^}]*\}|[^>"'{])*)>|([^<]+)/g;
+      let titleNext = false;
+      for (let m; (m = re.exec(svg));) {
+        if (m[4] !== undefined) {
+          if (skip) continue;
+          if (titleNext && !title) { title = decode(m[4]).replace(/\s+/g, " ").trim(); continue; }
+          cur += m[4];
+          continue;
+        }
+        const closing = m[1] === "/", name = m[2].toLowerCase(), self = /\/\s*$/.test(m[3]);
+        if (name === "style" || name === "script") { if (!self) skip += closing ? -1 : 1; continue; }
+        if (name === "title" && !self) { titleNext = !closing; if (!closing) flush(); continue; }
+        if (name === "tspan" && !closing && /\b(?:dy|y|x)\s*=/.test(m[3])) { flush(); continue; }
+        if (name === "tspan") continue;
+        flush();   // 其他元素的邊界（<text>、<g>…）都當成換行
+      }
+      flush();
+      return { title, lines };
+    };
+    const svgOut = (svg, stats) => {
+      const { title, lines } = svgText(svg);
+      stats.visuals++;
+      if (!lines.length && !title) return "";
+      return "\n[圖示" + (title ? "：" + title : "") + "]\n" + lines.map((t) => "- " + t).join("\n") + "\n";
+    };
+    const convertSvgSeg = (seg, stats) => {
+      let out = "", k = 0;
+      const re = /<svg\b|<\/svg\s*>/gi;
+      for (;;) {
+        re.lastIndex = k;
+        let m = re.exec(seg);
+        while (m && m[0][1] === "/") m = re.exec(seg);   // 前面多出來的 </svg> 不算
+        if (!m) { out += seg.slice(k); return out; }
+        const start = m.index;
+        let depth = 1, end = -1;
+        while (depth && (m = re.exec(seg))) {
+          if (m[0][1] === "/") { if (--depth === 0) end = m.index + m[0].length; }
+          else depth++;   // 圖裡還有一層 <svg>：取到最外層的結尾
+        }
+        if (end < 0) { out += seg.slice(k); return out; }   // 沒有結尾：不是完整的圖，原樣保留
+        out += seg.slice(k, start) + svgOut(seg.slice(start, end), stats);
+        k = end;
+      }
+    };
+    const convertSvg = (part, stats) => /<svg\b/i.test(part)
+      ? part.split(/(`[^`\n]*`)/).map((seg, j) => j % 2 ? seg : convertSvgSeg(seg, stats)).join("") : part;
+    const stats = { data: 0, expanded: 0, kept: 0, visuals: 0 };
+    const prepared = prepareInteractive(text, stats);
+    const cleaned = prepared.split(/(```[\s\S]*?```)/).map((part, k) => (k % 2 ? part : cleanPart(convertSvg(part, stats)))).join("")
       .replace(/^[ \t]+$/gm, "").replace(/\n{3,}/g, "\n\n").trim();
-    return { text: cleaned, changed: cleaned !== text };
+    return { text: cleaned, changed: cleaned !== text, visuals: stats.visuals, unresolved: stats.kept };
   };
   // </chatgpt-markup>
   // <grok-markup>
@@ -391,7 +616,7 @@ async function captureViaApi(platform) {
         const last = items.filter((i) => i.speaker === "assistant").pop();
         if (last) last.attachments = last.attachments.concat(pendingGenerated);
       }
-      let markupCleaned = 0;
+      let markupCleaned = 0, visualsConverted = 0, templatesKept = 0;
       const refIndex = chatgptRefIndex(conv);
       const citeStats = { indexed: Object.keys(refIndex.map).length, cited: 0, unresolved: 0 };
       items.forEach((i) => {
@@ -407,8 +632,12 @@ async function captureViaApi(platform) {
         };
         const c = cleanChatgptMarkup(i.text, cite);
         if (c.changed) { i.text = c.text; markupCleaned++; }
+        if (c.visuals) visualsConverted += c.visuals;
+        if (c.unresolved) templatesKept += c.unresolved;
       });
       // 診斷用：只有數字和欄位路徑，沒有對話內容
+      // 圖示、模板：只記數量；templates_kept 大於 0 代表有模板資料讀不懂、原樣留在文字裡
+      if (visualsConverted || templatesKept) log.visuals = { svg: visualsConverted, templates_kept: templatesKept };
       log.source_refs = citeStats.unresolved ? { ...citeStats, paths: refIndex.paths, metadata_keys: refIndex.keys } : citeStats;
       items.forEach((i) => { i.content = withMarkers(i.text, i.attachments, i.speaker); });
       // __reg 帶著函式，不能傳回擴充功能；只留清單
@@ -445,7 +674,7 @@ async function captureViaApi(platform) {
         if (kids.length > 1) branchPoints++;
       });
       return result(items, { strategy: "chatgpt:backend-api", branches: branchPoints, created: iso(conv.create_time),
-        cleaning: markupCleaned ? ["chatgpt_ui_markup"] : [] });
+        cleaning: [].concat(markupCleaned ? ["chatgpt_ui_markup"] : [], visualsConverted ? ["chatgpt_svg_visuals"] : []) });
     }
 
     if (platform === "claude") {
@@ -1266,6 +1495,8 @@ function buildMetadata(kept, detected, platform, page, mode) {
       ", unresolved: " + countSources(page.items).unresolved + "}",
     // 來源網址的診斷：只有數字和資料欄位名稱，沒有對話內容
     "  source_probe: " + (page.source_probe ? JSON.stringify(page.source_probe) : page.api && page.api.source_refs ? JSON.stringify(page.api.source_refs) : "null"),
+    // ChatGPT 圖示：轉成文字的 <svg> 數量；templates_kept 是讀不懂、原樣留在文字裡的模板資料數量
+    ...(page.api && page.api.visuals ? ["  visuals: {svg: " + page.api.visuals.svg + ", templates_kept: " + page.api.visuals.templates_kept + "}"] : []),
     "  items_still_truncated: " + page.items.filter((i) => i.truncated).length,
     "  items_detected: " + detected,
     "  items_excluded_by_user: " + (detected - kept),

@@ -243,6 +243,7 @@
       const files = [
         ...validAttachments.map((f) => ({ path: folder + "source/" + f.path, base64: f.base64 })),
         { path: folder + "source/conversation.jsonl", content: buildJsonl(page.items) },
+        ...consultedFileEntries(folder, page.items),
         { path: folder + "source/metadata.yaml", content: buildMetadata(page.items.length, page.items.length, target.platform, page, "agent_url") },
         { path: folder + "state.yaml", content: buildState(config, id) },
         { path: folder + "corrections.yaml", content: CORRECTIONS_TEMPLATE },

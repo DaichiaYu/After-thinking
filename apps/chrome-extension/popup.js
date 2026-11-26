@@ -412,6 +412,7 @@ async function main() {
       const files = [
         ...filesFor(kept).map((f) => ({ path: folder + "source/" + f.path, base64: f.base64 })),
         { path: folder + "source/conversation.jsonl", content: buildJsonl(kept) },
+        ...consultedFileEntries(folder, kept),
         { path: folder + "source/metadata.yaml", content: buildMetadata(kept.length, items.length, platform, page) },
         { path: folder + "state.yaml", content: buildState(config, id) },
         { path: folder + "corrections.yaml", content: CORRECTIONS_TEMPLATE }
@@ -469,6 +470,7 @@ async function main() {
       const entries = [
         { path: root + "README-請先看.md", data: guide },
         { path: root + "source/conversation.jsonl", data: buildJsonl(kept) },
+        ...consultedFileEntries(root, kept, "data"),
         { path: root + "source/metadata.yaml", data: buildMetadata(kept.length, items.length, platform, page) },
         { path: root + "對話閱讀版.md", data: readable.join("\n") },
         { path: root + "對話快速導覽.md", data: quick.join("\n") }

@@ -38,11 +38,160 @@ async function captureViaApi(platform) {
     if (!text) return marks;
     return speaker === "author" ? marks + "\n\n" + text : text + "\n\n" + marks;
   };
+  // <source-links>
+  // AI 回答引用的網址：存成每則訊息的 sources 清單（編號、網址、標題），
+  // 文字裡的引用記號改成 [來源 n]，n 對得上同一則訊息的清單。
+  // 網站沒給網址時寫 [來源：未取得網址]，不留看不出是什麼的空白記號。
+  // 分兩種：
+  //   list  = 文字裡有記號指到的（被引用的），跟著訊息存在 conversation.jsonl
+  //   extra = 網站列出「這則回答參考過」但沒對到特定句子的網頁（常常幾十個），另外存成獨立檔案，
+  //           不塞進對話原文，免得原文被網址清單撐大
+  const SOURCE_UNRESOLVED = "[來源：未取得網址]";
+  const makeSources = () => {
+    const list = [], extra = [];
+    const add = (url, title, inline) => {
+      let href = null;
+      try { const u = new URL(String(url || "")); if (u.protocol === "https:" || u.protocol === "http:") href = u.href; } catch (e) {}
+      if (!href) return null;
+      const t = typeof title === "string" ? title.replace(/\s+/g, " ").trim().slice(0, 300) : "";
+      let s = list.find((x) => x.url === href);
+      const k = extra.findIndex((x) => x.url === href);
+      if (s) { if (!s.title && t) s.title = t; return s.n; }
+      if (!inline) {
+        if (k < 0) extra.push({ url: href, title: t || null });
+        else if (!extra[k].title && t) extra[k].title = t;
+        return null;
+      }
+      // 被引用了：如果先前只列在「參考過」，移過來
+      const moved = k >= 0 ? extra.splice(k, 1)[0] : null;
+      s = { n: list.length + 1, url: href, title: t || (moved && moved.title) || null, inline: true };
+      list.push(s);
+      return s.n;
+    };
+    const mark = (ns) => {
+      const u = (ns || []).filter((n, k, all) => n && all.indexOf(n) === k);
+      return u.length ? "[來源 " + u.join("、") + "]" : SOURCE_UNRESOLVED;
+    };
+    return { list, extra, add, mark };
+  };
+  // ChatGPT：引用資料在 metadata.content_references，文字裡是一串看不見的記號（matched_text）。
+  const chatgptSources = (text, metadata, reg) => {
+    const md = metadata || {};
+    let out = text;
+    (Array.isArray(md.content_references) ? md.content_references : []).forEach((ref) => {
+      if (!ref || typeof ref !== "object") return;
+      const type = String(ref.type || "");
+      const found = [];
+      const push = (o) => { if (o && typeof o === "object" && o.url) found.push([o.url, o.title || o.attribution || null]); };
+      push(ref);
+      (Array.isArray(ref.items) ? ref.items : []).forEach((it) => {
+        push(it);
+        (Array.isArray(it && it.supporting_websites) ? it.supporting_websites : []).forEach(push);
+      });
+      (Array.isArray(ref.sources) ? ref.sources : []).forEach(push);
+      const matched = typeof ref.matched_text === "string" ? ref.matched_text : "";
+      // 只替換網站自己的隱藏記號；matched_text 是一般文字時不動原文，只把網址收進清單
+      const anchored = /[\ue000-\uf8ff]/.test(matched) && out.includes(matched);
+      const swap = (to) => { out = out.split(matched).join(to); };
+      if (/image|video|product/i.test(type)) { if (anchored && typeof ref.alt === "string") swap(ref.alt); return; }
+      const ns = found.map((f) => reg.add(f[0], f[1], anchored)).filter(Boolean);
+      if (!anchored) return;
+      if (ns.length) swap(reg.mark(ns));
+      else if (typeof ref.alt === "string" && ref.alt.trim()) swap(ref.alt);
+      else if (/cit|webpage|source/i.test(type)) swap(SOURCE_UNRESOLVED);
+      else if (ref.alt === "") swap("");
+    });
+    // 舊格式：metadata.citations
+    (Array.isArray(md.citations) ? md.citations : []).forEach((c) => {
+      const m = c && c.metadata;
+      if (m && m.url) reg.add(m.url, m.title || null, false);
+    });
+    return out;
+  };
+  // ChatGPT 的另一種引用：回答文字裡是 <Cite ref="turn12search3"/>，網址放在別則（搜尋工具）訊息的資料裡。
+  // 這裡把整段對話資料掃一遍，凡是同時帶「引用編號」和 url 的物件都記下來：編號 → 網址。
+  // paths 只記欄位路徑（不含任何內容），對不到時寫進診斷報告，方便照實際結構修正。
+  const chatgptRefIndex = (conv) => {
+    const map = {}, paths = new Set(), keys = new Set();
+    const idOf = (r) => {
+      if (typeof r === "string") return /^turn\d+[a-z_]+\d+$/i.test(r) ? r : null;
+      if (r && typeof r === "object" && r.turn_index !== undefined && r.ref_type !== undefined && r.ref_index !== undefined) {
+        return "turn" + r.turn_index + r.ref_type + r.ref_index;
+      }
+      return null;
+    };
+    const walk = (o, path, depth) => {
+      if (!o || typeof o !== "object" || depth > 14) return;
+      if (Array.isArray(o)) { o.forEach((x) => walk(x, path + "[]", depth + 1)); return; }
+      // 先走到最裡面：越裡面的物件，網址和編號的對應越精確
+      Object.keys(o).forEach((k) => walk(o[k], path + "." + k, depth + 1));
+      const ids = [];
+      if (o.ref_id !== undefined) { ids.push(idOf(o.ref_id)); paths.add(path + ".ref_id"); }
+      if (Array.isArray(o.refs)) { o.refs.forEach((r) => ids.push(idOf(r))); paths.add(path + ".refs"); }
+      if (typeof o.url !== "string" || !o.url) return;
+      ids.filter(Boolean).forEach((id) => { if (!map[id]) map[id] = { url: o.url, title: typeof o.title === "string" ? o.title : null }; });
+    };
+    Object.values((conv && conv.mapping) || {}).forEach((node) => {
+      const m = node && node.message;
+      if (!m) return;
+      Object.keys(m.metadata || {}).forEach((k) => keys.add(k));
+      walk(m.metadata, "metadata", 0);
+      if (m.author && m.author.role === "tool") walk(m.content, "tool_content", 0);
+    });
+    return { map, paths: Array.from(paths).slice(0, 40), keys: Array.from(keys).sort().slice(0, 80) };
+  };
+  // Claude：引用掛在文字區塊的 citations，位置用 end_index 標在該區塊文字裡。
+  const claudeBlockText = (block, reg) => {
+    let text = block.text;
+    const cites = (Array.isArray(block.citations) ? block.citations : []).map((c) => {
+      if (!c || typeof c !== "object") return null;
+      const d = (c.details && typeof c.details === "object") ? c.details : {};
+      const m = (c.metadata && typeof c.metadata === "object") ? c.metadata : {};
+      const src = (c.source && typeof c.source === "object") ? c.source : {};
+      const end = Number.isInteger(c.end_index) && c.end_index >= 0 && c.end_index <= text.length ? c.end_index : text.length;
+      return { url: c.url || d.url || m.url || src.url || null, title: c.title || m.title || d.title || src.title || null, end };
+    }).filter(Boolean);
+    if (!cites.length) return text;
+    cites.sort((a, b) => a.end - b.end);
+    const at = new Map();
+    cites.forEach((c) => { if (!at.has(c.end)) at.set(c.end, []); at.get(c.end).push(reg.add(c.url, c.title, true)); });
+    Array.from(at.keys()).sort((a, b) => b - a).forEach((end) => {
+      text = text.slice(0, end) + reg.mark(at.get(end)) + text.slice(end);
+    });
+    return text;
+  };
+  // Grok：引用標籤帶 card_id，網址在同一則回應的 cardAttachmentsJson。
+  // 回傳給 cleanGrokMarkup 用的函式；對不到網址的引用會計數，之後把搜尋結果清單補進來。
+  const grokCiter = (r, reg) => {
+    const cards = {};
+    (Array.isArray(r.cardAttachmentsJson) ? r.cardAttachmentsJson : []).forEach((raw) => {
+      try { const c = typeof raw === "string" ? JSON.parse(raw) : raw; if (c && c.id) cards[c.id] = c; } catch (e) {}
+    });
+    const results = [].concat(Array.isArray(r.citedWebSearchResults) ? r.citedWebSearchResults : [],
+      Array.isArray(r.webSearchResults) ? r.webSearchResults : []).filter((x) => x && x.url);
+    const titleOf = (url) => { const hit = results.find((x) => x.url === url); return hit ? hit.title || null : null; };
+    const cite = (tag) => {
+      const id = (tag.match(/\bcard_id="([^"]+)"/) || [])[1];
+      const card = id ? cards[id] : null;
+      const url = card ? (card.url || (card.webSearchResult && card.webSearchResult.url) || null) : null;
+      const n = url ? reg.add(url, (card && card.title) || titleOf(url), true) : null;
+      cite.tags++;
+      if (!n) cite.unresolved++;
+      return reg.mark([n]);
+    };
+    cite.unresolved = 0;
+    cite.tags = 0;
+    cite.results = results.length;
+    cite.cards = Object.keys(cards).length;
+    cite.listAll = () => results.forEach((x) => reg.add(x.url, x.title || null, false));
+    return cite;
+  };
+  // </source-links>
   // <chatgpt-markup>
   // ChatGPT 的回覆夾著它自己的版面語法（<box>、<row>、<text>、<Cite/>、<Link/>…），網站上畫成卡片，
   // 存成文字就是雜訊。轉成一般文字：容器標籤拿掉、連結變 [標題](網址)、引用留簡短記號、圖表留標題。
   // 只認得下面列的標籤名稱，其他 <...> 原樣保留；``` 程式碼區塊和 `行內程式碼` 都不動。
-  const cleanChatgptMarkup = (text) => {
+  const cleanChatgptMarkup = (text, cite) => {
     const NAMES = "box|row|col|column|stack|grid|grid-item|list|list-item|text|caption|title|badge|card|icon|favicon|divider|spacer|Cite|MemoryCite|FileCite|Entity|Link|AsyncImage|Image|Chart|checkbox|button|input|select|radio|radio-group|slider|date-picker|textarea|segmented-control|pressable|label|bold|italic|escape";
     const KNOWN = new RegExp("^(" + NAMES + ")$");
     const CONTAINERS = /^(box|row|col|column|stack|grid|grid-item|list|list-item|text|caption|title|badge|card|checkbox|button|pressable|label|bold|italic|escape|radio|radio-group)$/;
@@ -77,7 +226,12 @@ async function captureViaApi(platform) {
         return n === "badge" ? "（" : n === "list-item" ? "- " : "";
       }
       if (n === "Link") { const u = str(raw, "url"), ti = str(raw, "title"); return u && ti ? "[" + ti + "](" + u + ")" : (u || ti || "[動態連結，網址未保留]"); }
-      if (n === "Cite") { const ref = str(raw, "ref") || str(raw, "refs") || (raw.match(/\brefs?=\{([^}]+)\}/) || [])[1] || ""; return ref ? "[來源：" + ref + "]" : "[來源（原始引用標記）]"; }
+      if (n === "Cite") {
+        const ref = str(raw, "ref") || str(raw, "refs") || (raw.match(/\brefs?=\{([^}]+)\}/) || [])[1] || "";
+        // 有對照表時換成 [來源 n]；沒有（或這個編號查不到網址）就明講沒取得
+        if (cite) return cite(ref.match(/turn\d+[a-z_]+\d+/gi) || []);
+        return ref ? "[來源：" + ref + "]" : "[來源（原始引用標記）]";
+      }
       if (n === "MemoryCite") return "[引用記憶]";
       if (n === "FileCite") { const a = num(raw, "line_range_start"), b = num(raw, "line_range_end"); return a && b ? "[引用附件第 " + a + "–" + b + " 行]" : "[引用附件]"; }
       if (n === "Entity") return str(raw, "value");
@@ -135,15 +289,16 @@ async function captureViaApi(platform) {
   // </chatgpt-markup>
   // <grok-markup>
   // Grok 的回答夾著 <grok:render …>…</grok:render> 這種標籤（網站上畫成引用小卡等）。
-  // 引用換成 [來源]，其他整段拿掉；``` 程式碼區塊和 `行內程式碼` 都不動。
-  const cleanGrokMarkup = (text) => {
+  // 引用換成 [來源 n]（網址收進這則訊息的 sources），其他整段拿掉；``` 程式碼區塊和 `行內程式碼` 都不動。
+  const cleanGrokMarkup = (text, cite) => {
+    const citeOf = cite || (() => SOURCE_UNRESOLVED);
     if (!/<grok:[a-z_]+/i.test(text)) return { text, changed: false };
     const cleanPart = (part) => part.split(/(`[^`\n]*`)/).map((seg, k) => k % 2 ? seg : seg
-      .replace(/<grok:([a-z_]+)\b[^>]*?\/>/gi, (all) => /citation/i.test(all) ? "[來源]" : "")
-      .replace(/<grok:([a-z_]+)\b([^>]*)>[\s\S]*?<\/grok:\1>/gi, (all, name, attrs) => /citation/i.test(attrs) ? "[來源]" : "")
+      .replace(/<grok:([a-z_]+)\b[^>]*?\/>/gi, (all) => /citation/i.test(all) ? citeOf(all) : "")
+      .replace(/<grok:([a-z_]+)\b([^>]*)>[\s\S]*?<\/grok:\1>/gi, (all, name, attrs) => /citation/i.test(attrs) ? citeOf(all) : "")
     ).join("");
     const cleaned = text.split(/(```[\s\S]*?```)/).map((part, k) => (k % 2 ? part : cleanPart(part))).join("")
-      .replace(/[ \t]+\[來源\]/g, "[來源]").replace(/^[ \t]+$/gm, "").replace(/\n{3,}/g, "\n\n").trim();
+      .replace(/[ \t]+(\[來源[ ：])/g, "$1").replace(/^[ \t]+$/gm, "").replace(/\n{3,}/g, "\n\n").trim();
     return { text: cleaned, changed: cleaned !== text };
   };
   // </grok-markup>
@@ -204,8 +359,13 @@ async function captureViaApi(platform) {
         if (!visible(node)) return;
         const msg = node.message;
         const parts = Array.isArray(msg.content.parts) ? msg.content.parts : [];
-        const text = parts.filter((x) => typeof x === "string").join("\n").trim();
         const speaker = msg.author.role === "user" ? "author" : "assistant";
+        const prev = items[items.length - 1];
+        const joins = !!(prev && prev.speaker === "assistant" && speaker === "assistant");
+        // 同一輪被拆成好幾段時共用同一份來源清單，編號才不會重複
+        const reg = joins && prev.__reg ? prev.__reg : makeSources();
+        let text = parts.filter((x) => typeof x === "string").join("\n").trim();
+        if (speaker === "assistant") text = chatgptSources(text, msg.metadata, reg).trim();
         let atts = [];
         const listed = (msg.metadata && Array.isArray(msg.metadata.attachments)) ? msg.metadata.attachments : [];
         if (listed.length) {
@@ -216,16 +376,15 @@ async function captureViaApi(platform) {
             platform_file_id: pointerId(x) }));
         }
         if (speaker === "assistant" && pendingGenerated.length) { atts = atts.concat(pendingGenerated); pendingGenerated = []; }
-        if (!text && !atts.length) return;
-        const prev = items[items.length - 1];
+        if (!text && !atts.length && !(joins && reg.list.length)) return;
         // 同一輪回答被網站拆成好幾段時，合併成一則
-        if (prev && prev.speaker === "assistant" && speaker === "assistant") {
+        if (joins) {
           prev.text = (prev.text + "\n\n" + text).trim();
           prev.platform_message_id += " " + msg.id;
           prev.attachments = prev.attachments.concat(atts);
           return;
         }
-        items.push({ speaker, text, platform_message_id: msg.id, timestamp: iso(msg.create_time), attachments: atts,
+        items.push({ speaker, text, platform_message_id: msg.id, timestamp: iso(msg.create_time), attachments: atts, __reg: reg,
           ...(speaker === "assistant" && typeof msg.metadata?.model_slug === "string" ? { model: msg.metadata.model_slug } : {}) });
       });
       if (pendingGenerated.length) {
@@ -233,10 +392,31 @@ async function captureViaApi(platform) {
         if (last) last.attachments = last.attachments.concat(pendingGenerated);
       }
       let markupCleaned = 0;
+      const refIndex = chatgptRefIndex(conv);
+      const citeStats = { indexed: Object.keys(refIndex.map).length, cited: 0, unresolved: 0 };
       items.forEach((i) => {
-        if (i.speaker === "assistant") { const c = cleanChatgptMarkup(i.text); if (c.changed) { i.text = c.text; markupCleaned++; } }
+        if (i.speaker !== "assistant") return;
+        const cite = (ids) => {
+          const ns = ids.map((id) => {
+            const hit = refIndex.map[id];
+            citeStats.cited++;
+            if (!hit) { citeStats.unresolved++; return null; }
+            return i.__reg.add(hit.url, hit.title, true);
+          });
+          return i.__reg.mark(ns);
+        };
+        const c = cleanChatgptMarkup(i.text, cite);
+        if (c.changed) { i.text = c.text; markupCleaned++; }
       });
+      // 診斷用：只有數字和欄位路徑，沒有對話內容
+      log.source_refs = citeStats.unresolved ? { ...citeStats, paths: refIndex.paths, metadata_keys: refIndex.keys } : citeStats;
       items.forEach((i) => { i.content = withMarkers(i.text, i.attachments, i.speaker); });
+      // __reg 帶著函式，不能傳回擴充功能；只留清單
+      items.forEach((i) => {
+        if (i.__reg && i.__reg.list.length) i.sources = i.__reg.list;
+        if (i.__reg && i.__reg.extra.length) i.consulted = i.__reg.extra;
+        delete i.__reg;
+      });
 
       // 附件原檔：先向網站要下載網址（要帶登入的 token），真正下載在擷取後統一處理
       const auth = { Authorization: "Bearer " + session.accessToken };
@@ -298,17 +478,18 @@ async function captureViaApi(platform) {
         path = conv.chat_messages.slice().sort((a, b) => (a.index || 0) - (b.index || 0));
       }
 
-      const textOf = (msg) => {
+      const textOf = (msg, reg) => {
         if (Array.isArray(msg.content) && msg.content.length) {
           return msg.content.filter((b) => b && b.type === "text" && typeof b.text === "string")
-            .map((b) => b.text).join("\n\n").trim();
+            .map((b) => claudeBlockText(b, reg)).join("\n\n").trim();
         }
         return (msg.text || "").trim();
       };
       const items = [];
       path.forEach((msg) => {
         if (msg.sender !== "human" && msg.sender !== "assistant") return;
-        const text = textOf(msg);
+        const reg = makeSources();
+        const text = textOf(msg, reg);
         const speaker = msg.sender === "human" ? "author" : "assistant";
         // attachments：網站只留抽出來的文字（貼上的長文、文字檔），存成文字檔
         // files_v2：圖片和 PDF 等原檔，依序試預覽、文件、縮圖的網址
@@ -322,7 +503,8 @@ async function captureViaApi(platform) {
               .filter((u, k, all) => all.indexOf(u) === k) })));
         if (!text && !atts.length) return;
         items.push({ speaker, text, content: withMarkers(text, atts, speaker),
-          platform_message_id: msg.uuid, timestamp: iso(msg.created_at), attachments: atts });
+          platform_message_id: msg.uuid, timestamp: iso(msg.created_at), attachments: atts,
+          ...(speaker === "assistant" && reg.list.length ? { sources: reg.list } : {}) });
       });
 
       const childCount = {};
@@ -458,6 +640,9 @@ async function captureViaApi(platform) {
       };
       const items = [];
       let markupCleaned = 0;
+      // 診斷用：只有數字和欄位名稱，沒有對話內容
+      const grokStats = { answers: 0, cite_tags: 0, unresolved: 0, cards: 0, web_results: 0 };
+      const grokKeys = new Set();
       path.forEach((id) => {
         const r = byId[id];
         if (!r) { note("response_" + id.slice(0, 8), "missing"); return; }
@@ -465,9 +650,18 @@ async function captureViaApi(platform) {
         if (sender !== "human" && sender !== "assistant") return;
         const speaker = sender === "human" ? "author" : "assistant";
         let text = typeof r.message === "string" ? r.message.trim() : "";
+        const reg = makeSources();
         if (speaker === "assistant") {
-          const c = cleanGrokMarkup(text);
+          const cite = grokCiter(r, reg);
+          const c = cleanGrokMarkup(text, cite);
           if (c.changed) { text = c.text; markupCleaned++; }
+          // Grok 常常不在句子裡放引用，只在回答底下列「參考了哪些網頁」（一則可能幾十個）。
+          // 這份清單一律留下，存到獨立檔案；句子裡有引用到的不重複列。
+          cite.listAll();
+          grokStats.answers++;
+          grokStats.cite_tags += cite.tags; grokStats.unresolved += cite.unresolved;
+          grokStats.web_results += cite.results; grokStats.cards += cite.cards;
+          Object.keys(r).forEach((k) => { const v = r[k]; if (v !== null && v !== undefined && v !== "" && !(Array.isArray(v) && !v.length)) grokKeys.add(k); });
         }
         let atts = fileAtts(r);
         if (speaker === "assistant") {
@@ -476,8 +670,15 @@ async function captureViaApi(platform) {
         }
         if (!text && !atts.length) return;
         items.push({ speaker, text, content: withMarkers(text, atts, speaker),
-          platform_message_id: r.responseId, timestamp: isoOf(id), attachments: atts });
+          platform_message_id: r.responseId, timestamp: isoOf(id), attachments: atts,
+          ...(reg.list.length ? { sources: reg.list } : {}),
+          ...(reg.extra.length ? { consulted: reg.extra } : {}) });
       });
+
+      // 診斷用：只有數字和欄位名稱，沒有對話內容
+      log.source_refs = { ...grokStats, saved: items.reduce((n, i) => n + (i.sources ? i.sources.length : 0), 0),
+        consulted: items.reduce((n, i) => n + (i.consulted ? i.consulted.length : 0), 0),
+        response_keys: Array.from(grokKeys).sort().slice(0, 80) };
 
       const branchPoints = Object.values(children).filter((k) => k.length > 1).length;
       const created = ids.map(timeOf).filter(Boolean).sort((a, b) => a - b)[0];
@@ -539,11 +740,35 @@ async function captureConversation(platform) {
   // 做法：複製一份放到畫面外，拿掉這些元素後再讀文字，原本的頁面不受影響。
   const GEMINI_NOISE = ".code-block-decoration, mat-icon, button, .cdk-visually-hidden, " +
     "sources-carousel-inline, source-inline-chip, .source-inline-chip-container";
-  function geminiText(node) {
+  // 來源小卡：畫面上只是一顆按鈕，網址通常要點開才看得到。
+  // 先試著從小卡的屬性找網址；找不到就在原位置寫「未取得網址」，不讓引用無聲消失。
+  const GEMINI_CHIPS = "sources-carousel-inline, source-inline-chip, .source-inline-chip-container";
+  function geminiChipMarker(chip, src) {
+    const urls = [];
+    [chip].concat(Array.from(chip.querySelectorAll("*"))).forEach((el) => {
+      if (el.tagName === "IMG") return;   // 小圖示的網址不是來源
+      Array.from(el.attributes || []).forEach((at) => {
+        const v = String(at.value || "");
+        if (/^https?:\/\//i.test(v) && !/favicon|gstatic\.com/i.test(v) && urls.indexOf(v) < 0) urls.push(v);
+      });
+    });
+    if (!src || !urls.length) return "[來源：未取得網址]";
+    const ns = urls.map((u) => {
+      let s = src.find((x) => x.url === u);
+      if (!s) { s = { n: src.length + 1, url: u, title: null, inline: true }; src.push(s); }
+      s.inline = true;
+      return s.n;
+    });
+    return "[來源 " + ns.join("、") + "]";
+  }
+  function geminiText(node, src) {
     if (!node.querySelector(GEMINI_NOISE)) return node.innerText;
     const box = document.createElement("div");
     box.style.cssText = "position:fixed;left:-100000px;top:0;width:" + Math.max(300, node.clientWidth) + "px;";
     const copy = node.cloneNode(true);
+    outermost(Array.from(copy.querySelectorAll(GEMINI_CHIPS))).forEach((chip) => {
+      chip.replaceWith(document.createTextNode(geminiChipMarker(chip, src)));
+    });
     copy.querySelectorAll(GEMINI_NOISE).forEach((el) => el.remove());
     box.appendChild(copy);
     document.body.appendChild(box);
@@ -640,6 +865,34 @@ async function captureConversation(platform) {
     return atts;
   }
 
+  // <dom-source-links>
+  // 讀畫面時 innerText 只剩文字，連結的網址會不見；這裡把 AI 回答裡指向站外的連結收成 sources 清單。
+  // 畫面上看不出哪個連結對哪一句，所以都是 inline: false，文字不加記號。
+  function domLinks(node) {
+    const list = [];
+    if (!node || !node.querySelectorAll) return list;
+    node.querySelectorAll("a[href]").forEach((a) => {
+      try {
+        if (a.closest("model-thoughts")) return;
+        let u = new URL(a.getAttribute("href"), location.href);
+        // Google 的轉址連結：取出真正的目的地
+        if (/(^|\.)google\.[a-z.]+$/.test(u.hostname) && u.pathname === "/url") {
+          const q = u.searchParams.get("q") || u.searchParams.get("url");
+          if (q) u = new URL(q);
+        }
+        if (u.protocol !== "https:" && u.protocol !== "http:") return;
+        if (u.hostname === location.hostname) return;
+        const title = (a.innerText || a.getAttribute("aria-label") || a.getAttribute("title") || "").replace(/\s+/g, " ").trim().slice(0, 300);
+        if (!title && a.querySelector("img")) return;   // 純圖片連結多半是附件或縮圖
+        const known = list.find((x) => x.url === u.href);
+        if (known) { if (!known.title && title && title !== u.href) known.title = title; return; }
+        list.push({ n: list.length + 1, url: u.href, title: title && title !== u.href ? title : null, inline: false });
+      } catch (e) {}
+    });
+    return list;
+  }
+  // </dom-source-links>
+
   let strategy = "none";
 
   // 讀取目前網頁上「已經產生」的訊息，依畫面順序回傳
@@ -689,8 +942,9 @@ async function captureConversation(platform) {
           // 只拿回答本文；思考過程（model-thoughts）不在這個區塊裡
           const body = r.querySelector(".model-response-text .markdown") || r.querySelector("message-content .markdown") ||
             r.querySelector(".model-response-text") || r.querySelector("message-content");
-          if (body) out.push({ node: body, speaker: "assistant", raw: geminiText(body), platform_message_id: null,
-            attachments: geminiResponseImages(r),
+          const src = domLinks(r);
+          if (body) out.push({ node: body, speaker: "assistant", raw: geminiText(body, src), platform_message_id: null,
+            attachments: geminiResponseImages(r), sources: src,
             key: turnKey ? "turn:" + turnKey + ":r" : null });
         }
       });
@@ -717,7 +971,8 @@ async function captureConversation(platform) {
       const text = clean(stripButtons(m.raw));
       const content = withMarkers(text, atts, m.speaker);
       return { node: m.node, speaker: m.speaker, content, text, platform_message_id: m.platform_message_id, key: m.key || null,
-        attachments: atts, truncated: TRUNCATED_TAIL.test(text) };
+        attachments: atts, truncated: TRUNCATED_TAIL.test(text),
+        sources: m.sources || (m.speaker === "assistant" ? domLinks(m.node) : []) };
     }).filter((m) => m.content.length > 0);
   }
 
@@ -845,7 +1100,8 @@ async function captureConversation(platform) {
 
   return {
     items: acc.map((m) => ({ speaker: m.speaker, content: m.content, text: m.text, platform_message_id: m.platform_message_id,
-      attachments: m.attachments || [], truncated: m.truncated })),
+      attachments: m.attachments || [], truncated: m.truncated,
+      ...(m.sources && m.sources.length ? { sources: m.sources } : {}) })),
     strategy,
     cleaning: Array.from(cleaning),
     title: document.title,
@@ -881,6 +1137,18 @@ function previewQuestions(items) {
 }
 
 // 擷取紀錄（inbox/index.jsonl）的一行
+// 來源網址統計：total = 跟著訊息存的網址數；consulted = 另存在獨立檔案的參考網頁數；
+// unresolved = 文字裡標了「未取得網址」的引用數
+function countSources(items) {
+  let total = 0, unresolved = 0, consulted = 0;
+  (items || []).forEach((i) => {
+    if (Array.isArray(i.sources)) total += i.sources.length;
+    if (Array.isArray(i.consulted)) consulted += i.consulted.length;
+    if (i.speaker === "assistant" && typeof i.content === "string") unresolved += i.content.split("[來源：未取得網址]").length - 1;
+  });
+  return { total, consulted, unresolved };
+}
+
 function buildCaptureEntry(platform, conversationId, title, url, folder, items, page, mode) {
   const warnings = [];
   if (page.scroll && page.scroll.timed_out) warnings.push("timed_out");
@@ -901,6 +1169,9 @@ function buildCaptureEntry(platform, conversationId, title, url, folder, items, 
     attachments,
     attachments_saved: allAtts.filter((a) => a.file).length,
     attachments_missing: allAtts.filter((a) => a.missing).length,
+    sources: countSources(items).total,
+    sources_consulted: countSources(items).consulted,
+    sources_unresolved: countSources(items).unresolved,
     started_at: page.conversation_created_at || null,
     updated_at: page.conversation_updated_at || null,
     warnings,
@@ -930,8 +1201,32 @@ function buildJsonl(items) {
     timestamp: item.timestamp || null,
     platform_message_id: item.platform_message_id,
     ...(item.model ? { model: item.model } : {}),
-    ...(Array.isArray(item.attachments) && item.attachments.length ? { attachments: item.attachments } : {})
+    ...(Array.isArray(item.attachments) && item.attachments.length ? { attachments: item.attachments } : {}),
+    ...(Array.isArray(item.sources) && item.sources.length ? { sources: item.sources } : {}),
+    // 「參考過但沒對到句子」的網頁另存在 consulted-sources.jsonl，這裡只留數量當指標
+    ...(Array.isArray(item.consulted) && item.consulted.length ? { consulted_sources: item.consulted.length } : {})
   })).join("\n") + "\n";
+}
+
+// AI 回答時參考過、但沒對到特定句子的網頁清單：一行一則訊息，用 message_id 對回對話原文。
+// 沒有任何這類清單時回傳 null（不建立檔案）。
+const CONSULTED_FILE = "consulted-sources.jsonl";
+function buildConsultedJsonl(items) {
+  const lines = [];
+  (items || []).forEach((item, i) => {
+    if (!Array.isArray(item.consulted) || !item.consulted.length) return;
+    lines.push(JSON.stringify({
+      message_id: "msg-" + String(i + 1).padStart(6, "0"),
+      platform_message_id: item.platform_message_id || null,
+      sources: item.consulted.map((s) => ({ url: s.url, title: s.title || null }))
+    }));
+  });
+  return lines.length ? lines.join("\n") + "\n" : null;
+}
+// 寫檔用：有清單就回傳一個檔案項目（key 是 "content" 或 ZIP 用的 "data"），沒有就是空陣列
+function consultedFileEntries(prefix, items, key) {
+  const text = buildConsultedJsonl(items);
+  return text ? [{ path: prefix + "source/" + CONSULTED_FILE, [key || "content"]: text }] : [];
 }
 
 function buildMetadata(kept, detected, platform, page, mode) {
@@ -944,6 +1239,7 @@ function buildMetadata(kept, detected, platform, page, mode) {
     "source_files:",
     "  - path: source/conversation.jsonl",
     "    role: primary",
+    ...(countSources(page.items).consulted ? ["  - path: source/" + CONSULTED_FILE, "    role: consulted_sources"] : []),
     'message_id_scheme: "msg-000001"',
     "message_id_counter: " + kept,
     "order_field: order",
@@ -966,6 +1262,10 @@ function buildMetadata(kept, detected, platform, page, mode) {
     "  auto_scroll: " + (page.scroll ? "{down_steps: " + page.scroll.down_steps + ", gaps: " + page.scroll.gaps + ", timed_out: " + page.scroll.timed_out + "}" : "null"),
     "  attachments: " + (page.attachment_report ? "{total: " + page.attachment_report.total + ", saved: " + page.attachment_report.saved +
       ", missing: " + Object.values(page.attachment_report.missing).reduce((a, b) => a + b, 0) + "}" : "null"),
+    "  source_links: {total: " + countSources(page.items).total + ", consulted: " + countSources(page.items).consulted +
+      ", unresolved: " + countSources(page.items).unresolved + "}",
+    // 來源網址的診斷：只有數字和資料欄位名稱，沒有對話內容
+    "  source_probe: " + (page.source_probe ? JSON.stringify(page.source_probe) : page.api && page.api.source_refs ? JSON.stringify(page.api.source_refs) : "null"),
     "  items_still_truncated: " + page.items.filter((i) => i.truncated).length,
     "  items_detected: " + detected,
     "  items_excluded_by_user: " + (detected - kept),
@@ -1141,6 +1441,173 @@ function parseGeminiRecorded(raws) {
   };
   payloads.forEach((p) => walk(p.data, 0));
   return { conversations, turns, payloads: payloads.length };
+}
+
+// ── Gemini 來源網址 ──
+// 畫面上的來源小卡沒有網址，但 Gemini 載入對話時向 Google 要的資料（記錄器旁聽到的 batchexecute 回應）裡有。
+// 做法：在那份資料裡找出每則回答（rc_ 開頭的回答編號），用回答文字對回畫面上抓到的訊息，
+// 再把那則回答資料裡出現的網頁網址收下來。
+// 目前還不知道網址和小卡怎麼一一對應，所以先存到「參考網頁」獨立檔案（不對到句子）；
+// 小卡位置照舊寫「未取得網址」。另外記一份只有數字、欄位位置和型別的診斷（沒有內容），之後照它把對應做準。
+function geminiPayloadsOf(raws) {
+  const payloads = [];
+  (raws || []).forEach((raw) => {
+    String(raw || "").replace(/^\)\]\}'\s*/, "").split("\n").forEach((line) => {
+      const l = line.trim();
+      if (!l.startsWith("[")) return;
+      let arr;
+      try { arr = JSON.parse(l); } catch (e) { return; }
+      (Array.isArray(arr) ? arr : []).forEach((e) => {
+        if (Array.isArray(e) && e[0] === "wrb.fr" && typeof e[2] === "string") {
+          try { payloads.push({ rpc: e[1], data: JSON.parse(e[2]) }); } catch (err) {}
+        }
+      });
+    });
+  });
+  return payloads;
+}
+
+// 重新整理頁面時，Gemini 可能把對話直接放在網頁本身的 <script>（AF_initDataCallback）裡，
+// 不經過 batchexecute，記錄器就聽不到。這裡也從那些 script 讀。
+function geminiInitPayloadsOf(texts) {
+  const out = [];
+  (texts || []).forEach((t) => {
+    const re = /AF_initDataCallback\(\{key:\s*'([^']+)'[\s\S]*?data:([\s\S]*?),\s*sideChannel:/g;
+    let m;
+    while ((m = re.exec(String(t || "")))) {
+      try { out.push({ rpc: "init:" + m[1], data: JSON.parse(m[2]) }); } catch (e) {}
+    }
+  });
+  return out;
+}
+
+// 注入到 Gemini 頁面：取出網頁本身帶的初始資料 script（只讀，不執行）
+function readGeminiInitScripts() {
+  const LIMIT = 40 * 1024 * 1024;
+  let total = 0;
+  return Array.from(document.querySelectorAll("script")).map((el) => el.textContent || "")
+    .filter((t) => t.includes("AF_initDataCallback") && (total += t.length) <= LIMIT);
+}
+
+function applyGeminiSources(page, raws, initTexts) {
+  const payloads = geminiPayloadsOf(raws).concat(geminiInitPayloadsOf(initTexts));
+  const probe = { recorder: page.recorder || null, payloads: payloads.length,
+    rpcs: {}, candidates: 0, answers: 0, matched: 0, urls: 0, kept: 0, url_paths: {}, url_parents: {},
+    answer_lengths: [], best_scores: [], candidate_info: [], urls_by_rpc: {}, init_scripts: (initTexts || []).length,
+    payload_scores: [], fallback: 0 };
+  payloads.forEach((p) => { const k = String(p.rpc); if (Object.keys(probe.rpcs).length < 40 || probe.rpcs[k]) probe.rpcs[k] = (probe.rpcs[k] || 0) + 1; });
+  // 只留字母和數字（含中文），用來比對畫面文字和原始 Markdown
+  const squash = (s) => String(s || "").replace(/\[來源[^\]]*\]/g, "").replace(/[^\p{L}\p{N}]+/gu, "").toLowerCase();
+  const isRc = (n) => Array.isArray(n) && typeof n[0] === "string" && /^rc_[0-9a-z]+$/i.test(n[0]);
+  const textOf = (n) => {
+    const out = [];
+    const go = (x, d) => { if (d > 3) return; if (typeof x === "string") out.push(x); else if (Array.isArray(x)) x.forEach((y) => go(y, d + 1)); };
+    go(n[1], 0);
+    return out.join("\n");
+  };
+  // 一段資料裡所有文字接起來（不含網址），用來算相似度
+  const allText = (n) => {
+    const out = [];
+    const go = (x, d) => { if (d > 60) return; if (typeof x === "string") { if (!/^https?:\/\//i.test(x)) out.push(x); } else if (Array.isArray(x)) x.forEach((y) => go(y, d + 1)); };
+    go(n, 0);
+    return out.join("\n");
+  };
+  const candidates = [];
+  const seen = new Set();
+  const walk = (n, depth) => {
+    if (!Array.isArray(n) || depth > 40) return;
+    if (isRc(n)) {
+      const key = n[0] + ":" + textOf(n).length;
+      if (!seen.has(key)) { seen.add(key); candidates.push({ node: n, flat: squash(textOf(n)), rpc: walk.rpc }); }
+      return;
+    }
+    n.forEach((c) => walk(c, depth + 1));
+  };
+  payloads.forEach((p) => { walk.rpc = String(p.rpc); walk(p.data, 0); });
+  // 每個 rpc 的資料裡總共有幾個網址（只算數量），用來判斷網址在不在記錄到的資料裡
+  const countUrls = (n, d) => !Array.isArray(n) || d > 60 ? 0 : n.reduce((a, x) => a + (typeof x === "string" && /^https?:\/\//i.test(x) ? 1 : countUrls(x, d + 1)), 0);
+  payloads.forEach((p) => { const c = countUrls(p.data, 0); if (c) probe.urls_by_rpc[p.rpc] = (probe.urls_by_rpc[p.rpc] || 0) + c; });
+  probe.candidates = candidates.length;
+
+  // 不是來源的網址：小圖示、圖片、Google 自己的資源
+  const NOT_SOURCE = /(^https?:\/\/[^/]*(gstatic\.com|googleusercontent\.com|ggpht\.com|encrypted-tbn\d*\.)|\/s2\/favicons|faviconV2|\.(png|jpe?g|gif|webp|svg|ico)(\?|$))/i;
+  const typeSig = (arr) => arr.slice(0, 12).map((x) => x === null ? "0" : Array.isArray(x) ? "a" : typeof x === "string" ? (/^https?:\/\//.test(x) ? "u" : "s") : typeof x === "number" ? "n" : typeof x === "boolean" ? "b" : "o").join("");
+  const bump = (obj, k) => { if (Object.keys(obj).length < 30 || obj[k]) obj[k] = (obj[k] || 0) + 1; };
+  const urlsIn = (root) => {
+    const found = [];
+    const go = (n, path, depth) => {
+      if (!Array.isArray(n) || depth > 30) return;
+      n.forEach((x, k) => {
+        if (typeof x === "string" && /^https?:\/\//i.test(x)) {
+          probe.urls++;
+          bump(probe.url_paths, path.concat(k).join("."));
+          bump(probe.url_parents, typeSig(n));
+          if (NOT_SOURCE.test(x)) return;
+          // 標題：同一層裡第一個不是網址、長度合理的文字
+          const title = n.find((y) => typeof y === "string" && y !== x && !/^https?:\/\//i.test(y) && y.trim().length > 1 && y.length <= 300) || null;
+          found.push({ url: x, title });
+        } else if (Array.isArray(x)) go(x, path.concat(k), depth + 1);
+      });
+    };
+    go(root, [], 0);
+    return found;
+  };
+
+  page.items.forEach((item) => {
+    if (item.speaker !== "assistant") return;
+    probe.answers++;
+    const flat = squash(item.text !== undefined ? item.text : item.content);
+    if (flat.length < 8) return;
+    probe.answer_lengths.push(flat.length);
+    // 把回答切成每段 12 字，看每個候選含了幾成；取最高的，過半才算同一則
+    const pieces = [];
+    for (let k = 0; k + 12 <= flat.length; k += 12) pieces.push(flat.slice(k, k + 12));
+    let hit = null, best = 0;
+    candidates.forEach((c) => {
+      const score = pieces.length ? pieces.filter((p) => c.flat.includes(p)).length / pieces.length : 0;
+      c.best = Math.max(c.best || 0, score);
+      if (score > best) { best = score; hit = c; }
+    });
+    probe.best_scores.push(Math.round(best * 100) / 100);
+    if (!hit || best < 0.5) {
+      // 回答不在 rc_ 那種結構裡：改找「含有這則回答過半內容的最小一段資料」，網址從那裡收
+      const scoreOf = (flatText) => pieces.filter((p) => flatText.includes(p)).length / pieces.length;
+      let top = [];
+      payloads.forEach((p, k) => {
+        if (p.flat === undefined) p.flat = squash(allText(p.data));   // 每份資料只算一次
+        const sc = scoreOf(p.flat);
+        if (sc > 0) top.push([String(p.rpc), Math.round(sc * 100) / 100, k]);
+      });
+      top.sort((a, b) => b[1] - a[1]);
+      probe.payload_scores.push(top.slice(0, 3).map((t) => [t[0], t[1]]));
+      if (!top.length || top[0][1] < 0.5) return;
+      let node = payloads[top[0][2]].data;
+      for (let guard = 0; guard < 60; guard++) {
+        // 往下縮到最小、但還帶著網址的那一段（再往下就只剩文字，網址在旁邊那一層）
+        const next = Array.isArray(node) ? node.find((c) => Array.isArray(c) && countUrls(c, 0) > 0 && scoreOf(squash(allText(c))) >= 0.5) : null;
+        if (!next) break;
+        node = next;
+      }
+      hit = { node, fallback: true };
+      probe.fallback++;
+    }
+    probe.matched++;
+    const already = new Set((item.sources || []).map((s) => s.url));
+    const list = item.consulted || [];
+    urlsIn(hit.node).forEach((f) => {
+      let href;
+      try { href = new URL(f.url).href; } catch (e) { return; }
+      if (already.has(href)) return;
+      const known = list.find((x) => x.url === href);
+      if (known) { if (!known.title && f.title) known.title = f.title.replace(/\s+/g, " ").trim(); return; }
+      list.push({ url: href, title: f.title ? f.title.replace(/\s+/g, " ").trim() : null });
+    });
+    if (list.length) { item.consulted = list; probe.kept += list.length; }
+  });
+  // 候選回答的概況（只有長度、分數、網址數，沒有內容），最多 40 個
+  probe.candidate_info = candidates.slice(0, 40).map((c) => [c.rpc, c.flat.length, Math.round((c.best || 0) * 100) / 100, countUrls(c.node, 0)]);
+  page.source_probe = probe;
+  return probe;
 }
 
 // 把時間對到畫面上抓到的訊息：用提問文字比對，同樣的文字（例如「繼續」）依時間先後分配
@@ -1328,9 +1795,15 @@ async function finalizeCapture(tabId, platform, page) {
     try {
       const [inj] = await chrome.scripting.executeScript({ target: { tabId }, world: "MAIN", func: readGeminiRecorded });
       const raws = inj && inj.result;
-      page.recorder = raws ? "active" : "not_loaded";
+      page.recorder = raws ? (raws.length ? "active" : "active_empty") : "not_loaded";
       if (raws && raws.length) applyGeminiTimes(page, conversationId, parseGeminiRecorded(raws));
-    } catch (e) { page.recorder = "error"; }
+      let initTexts = [];
+      try {
+        const [ini] = await chrome.scripting.executeScript({ target: { tabId }, func: readGeminiInitScripts });
+        initTexts = (ini && ini.result) || [];
+      } catch (e) {}
+      try { applyGeminiSources(page, raws || [], initTexts); } catch (e) { page.source_probe = { recorder: page.recorder, error: String(e && e.message || e).slice(0, 120) }; }
+    } catch (e) { page.recorder = "error"; page.source_probe = { recorder: "error" }; }
   }
   const dl = await downloadAttachments(tabId, page.items);
   files = dl.files;

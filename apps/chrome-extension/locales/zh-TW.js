@@ -328,6 +328,7 @@ ATI18n.add("zh-TW", {
   "tag.clear_selection": "取消選取",
   "tag.clear_tag": "清除標籤",
   "tag.collapse": "收起",
+  "tag.sources_count": "來源網址（{0}）",
   "tag.collapse_all": "全部收起",
   "tag.confirm": "確認",
   "tag.confirm_the_ai_suggested": "確認 AI 建議的{0}",

@@ -328,6 +328,7 @@ ATI18n.add("en", {
   "tag.clear_selection": "Clear selection",
   "tag.clear_tag": "Clear tag",
   "tag.collapse": "Collapse",
+  "tag.sources_count": "Source links ({0})",
   "tag.collapse_all": "Collapse all",
   "tag.confirm": "Confirm",
   "tag.confirm_the_ai_suggested": "Confirm the AI-suggested {0}",

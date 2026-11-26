@@ -113,7 +113,7 @@ AI 依使用者的要求先標的一版，格式是 `after-thinking/outline-sugg
 
 ## source/conversation.jsonl（對話原文）
 
-每行一則訊息：`message_id`、`order`、`speaker`（`author` 是使用者，`assistant` 是 AI）、`content`、`timestamp`（找不到是 null）、`platform_message_id`，有附件時另有 `attachments`。
+每行一則訊息：`message_id`、`order`、`speaker`（`author` 是使用者，`assistant` 是 AI）、`content`、`timestamp`（找不到是 null）、`platform_message_id`，有附件時另有 `attachments`，AI 有引用網頁時另有 `sources`（見下面「AI 引用的來源網址」）。
 
 `content` 裡的附件記號：
 
@@ -124,9 +124,17 @@ AI 依使用者的要求先標的一版，格式是 `after-thinking/outline-sugg
 
 使用者上傳的附件放在那則訊息開頭，AI 生成的放在那則回答結尾。
 
-ChatGPT 回覆裡的版面語法在擷取時已經轉成一般文字（`metadata.yaml` 的 `capture.cleaning` 有 `chatgpt_ui_markup`），留下這些記號：`[來源]`（引用來源，原本的網址沒有保留）、`[引用記憶]`（ChatGPT 用了它對使用者的記憶）、`[引用附件第 a–b 行]`、`[網路圖片：搜尋詞]`、`[圖表：標題]`；`（文字）` 原本是標籤。較早擷取的對話可能還留著 `<box>`、`<Cite/>` 這類原始語法。
+ChatGPT 回覆裡的版面語法在擷取時已經轉成一般文字（`metadata.yaml` 的 `capture.cleaning` 有 `chatgpt_ui_markup`），留下這些記號：`[來源 n]`（引用來源，網址在同一則訊息的 `sources`；較早擷取的只有 `[來源]`，網址沒有保留）、`[引用記憶]`（ChatGPT 用了它對使用者的記憶）、`[引用附件第 a–b 行]`、`[網路圖片：搜尋詞]`、`[圖表：標題]`；`（文字）` 原本是標籤。較早擷取的對話可能還留著 `<box>`、`<Cite/>` 這類原始語法。
 
-Grok 回覆裡的 `<grok:render …>` 標籤在擷取時也已拿掉（`capture.cleaning` 有 `grok_render_markup`），引用換成 `[來源]`，原本的網址沒有保留。Grok 有分支時，`capture.branch_captured` 記下抓的是哪一條路線（`on_screen_path`、`on_screen_path_then_latest`、`url_rid_path`、`latest_path`）。
+Grok 回覆裡的 `<grok:render …>` 標籤在擷取時也已拿掉（`capture.cleaning` 有 `grok_render_markup`），引用換成 `[來源 n]`（較早擷取的只有 `[來源]`，網址沒有保留）。Grok 有分支時，`capture.branch_captured` 記下抓的是哪一條路線（`on_screen_path`、`on_screen_path_then_latest`、`url_rid_path`、`latest_path`）。
+
+## AI 引用的來源網址
+
+- `content` 裡的 `[來源 1]`、`[來源 1、2]`：AI 這句話引用的網頁。編號對到**同一則訊息**的 `sources` 清單（`n`、`url`、`title`）；編號只在那一則訊息內有效。
+- `sources` 裡 `inline: false` 的：回答文字裡本來就有的連結（讀畫面擷取時，文字只剩標題，網址收在這裡），沒有對應的編號記號。
+- `[來源：未取得網址]`：AI 在這裡引用了來源，但網站沒有提供網址。不要自己猜網址。
+- `source/consulted-sources.jsonl`（有才會有）：AI 回答時**參考過、但沒有對到特定句子**的網頁清單，一行一則訊息（`message_id`、`sources: [{url, title}]`）。這份清單常常很長（一則回答幾十個），所以不放在對話原文裡；對話原文那則訊息只有 `consulted_sources`（數量）。平常讀對話不用載入它，要查「這則回答可能根據哪些網頁」時才讀。它不代表 AI 的某句話出自某個網頁。
+- `metadata.yaml` 的 `capture.source_links`：`total`（跟著訊息存的）、`consulted`（獨立檔案裡的）、`unresolved`（沒取得網址的引用）。
 
 ## 怎麼找東西
 
